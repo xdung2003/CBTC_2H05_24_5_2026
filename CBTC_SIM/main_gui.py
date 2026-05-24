@@ -5524,6 +5524,7 @@ class ATSOverviewPanel(ttk.Frame):
     def __init__(self, master: tk.Widget, scale_factor: float, on_select=None, on_edit=None):
         super().__init__(master, padding=int(8 * scale_factor), style="Panel.TFrame")
         self.columnconfigure(0, weight=1)
+        self.rowconfigure(2, weight=1)
         self.on_select = on_select
         self.on_edit = on_edit
         self.selected_element: str | None = None
@@ -5539,7 +5540,7 @@ class ATSOverviewPanel(ttk.Frame):
         self.summary_var = tk.StringVar(value="")
         ttk.Label(self, textvariable=self.summary_var, style="Muted.TLabel").grid(row=1, column=0, sticky="w", pady=(int(2 * scale_factor), int(6 * scale_factor)))
         self.canvas = tk.Canvas(self, height=int(285 * scale_factor), background=APP_THEME["canvas"], highlightthickness=1, highlightbackground=APP_THEME["border"])
-        self.canvas.grid(row=2, column=0, sticky="ew")
+        self.canvas.grid(row=2, column=0, sticky="nsew")
         self.canvas.bind("<ButtonPress-1>", self._on_press)
         self.canvas.bind("<B1-Motion>", self._on_drag)
         self.canvas.bind("<ButtonRelease-1>", self._on_release)
@@ -5930,6 +5931,12 @@ class ATSOverviewPanel(ttk.Frame):
             c.create_line(x, block_y2 + 24, x, block_y2 + 32, fill=APP_THEME["muted"], dash=(2, 2))
             c.create_text(x, block_y2 + 42, text=f"{int(label)}m", fill=APP_THEME["muted"], font=("Consolas", 7))
 
+        def visible_train_span(head_x: float, tail_x: float) -> Tuple[float, float]:
+            if abs(head_x - tail_x) >= 10.0:
+                return min(tail_x, head_x), max(tail_x, head_x)
+            center_x = (tail_x + head_x) / 2.0
+            return center_x - 12.0, center_x + 12.0
+
         source_lane_count = max(
             (max(1, int(source.get("capacity", SOURCE_VISIBLE_ACTIVE_TRAINS))) for source in getattr(sim, "source_trains", [])),
             default=SOURCE_VISIBLE_ACTIVE_TRAINS,
@@ -5967,6 +5974,7 @@ class ATSOverviewPanel(ttk.Frame):
             tail = max(sim.track_min_m, train.pos - train.length)
             x1 = x_from_pos(tail)
             x2 = x_from_pos(train.pos)
+            x1, x2 = visible_train_span(x2, x1)
             if train.protection_zone_id == "SOURCE":
                 slot = source_lane_slots.get(int(train.protection_lane))
                 y = slot[2] if slot is not None and train.pos <= SOURCE_TRAIN_EXIT_M + STOP_ACCURACY_TOL_M else rail_y
@@ -5989,9 +5997,12 @@ class ATSOverviewPanel(ttk.Frame):
                     y = rail_y
             else:
                 y = rail_y
-            fault_active = train.has_active_fault()
+            dcs_fault = bool(getattr(train, "dcs_fault_active", False) or getattr(train, "dcs_muted", False))
+            atp_fault = bool(getattr(train, "atp_fault_active", False))
+            ato_fault = bool(getattr(train, "ato_fault_active", False))
+            fault_active = atp_fault or ato_fault or dcs_fault
             train_fill = "#6b7d90" if fault_active else train.color
-            train_alert_outline = APP_THEME["danger"] if train.atp_fault_active else "#ff9f1c" if train.ato_fault_active else APP_THEME["warning"] if train.dcs_loss_active else ""
+            train_alert_outline = APP_THEME["danger"] if atp_fault else "#ff9f1c" if ato_fault else APP_THEME["warning"] if dcs_fault else ""
             train_half_height = 5
             c.create_rectangle(
                 x1 - 2,
@@ -6021,7 +6032,14 @@ class ATSOverviewPanel(ttk.Frame):
                     width=2,
                 )
             c.create_text((x1 + x2) / 2, y - 22, text=f"{train.id} {train.pos:.0f}m", fill=APP_THEME["text"], font=("Consolas", 8, "bold"))
-            label_text = f"{train.id} {train.fault_state_label}" if fault_active else train.id
+            fault_labels = []
+            if atp_fault:
+                fault_labels.append("ATP")
+            if ato_fault:
+                fault_labels.append("ATO")
+            if dcs_fault:
+                fault_labels.append("DCS")
+            label_text = f"{train.id} {'/'.join(fault_labels)}" if fault_labels else train.id
             c.create_text((x1 + x2) / 2, y - 11, text=label_text, fill=train_fill, font=("Consolas", 8, "bold"))
             if train.departure_hold:
                 c.create_text((x1 + x2) / 2, y + 14, text="HOLD", fill=APP_THEME["danger"], font=("Consolas", 7, "bold"))
@@ -6051,9 +6069,14 @@ class InfrastructurePanel(ttk.Frame):
     def __init__(self, master: tk.Widget, scale_factor: float):
         super().__init__(master, padding=int(8 * scale_factor), style="Panel.TFrame")
         self.columnconfigure(0, weight=1)
+        self.rowconfigure(1, weight=1)
         ttk.Label(self, text="ATS - Infrastructure State", style="SectionTitle.TLabel").grid(row=0, column=0, sticky="w")
+        text_frame = ttk.Frame(self, style="Panel.TFrame")
+        text_frame.grid(row=1, column=0, sticky="nsew", pady=(int(6 * scale_factor), 0))
+        text_frame.columnconfigure(0, weight=1)
+        text_frame.rowconfigure(0, weight=1)
         self.text = tk.Text(
-            self,
+            text_frame,
             height=int(13 * scale_factor),
             state="disabled",
             wrap="none",
@@ -6064,8 +6087,12 @@ class InfrastructurePanel(ttk.Frame):
             highlightthickness=1,
             highlightbackground=APP_THEME["border"],
         )
-        self.text.grid(row=1, column=0, sticky="nsew", pady=(int(6 * scale_factor), 0))
-        self.rowconfigure(1, weight=1)
+        self.text.grid(row=0, column=0, sticky="nsew")
+        vscroll = ttk.Scrollbar(text_frame, orient="vertical", command=self.text.yview)
+        vscroll.grid(row=0, column=1, sticky="ns")
+        hscroll = ttk.Scrollbar(text_frame, orient="horizontal", command=self.text.xview)
+        hscroll.grid(row=1, column=0, sticky="ew")
+        self.text.configure(yscrollcommand=vscroll.set, xscrollcommand=hscroll.set)
 
     def update_data(self, sim: Simulation):
         lines = ["Asset                State                 Notes"]
@@ -6363,11 +6390,16 @@ class AnalyticsPanel(ttk.Frame):
     def __init__(self, master: tk.Widget, scale_factor: float):
         super().__init__(master, padding=int(8 * scale_factor), style="Panel.TFrame")
         self.columnconfigure(0, weight=1)
+        self.rowconfigure(2, weight=1)
         ttk.Label(self, text="Scenario Analytics", style="SectionTitle.TLabel").grid(row=0, column=0, sticky="w")
         self.summary_var = tk.StringVar(value="")
         ttk.Label(self, textvariable=self.summary_var, style="Muted.TLabel").grid(row=1, column=0, sticky="w", pady=(int(2 * scale_factor), int(6 * scale_factor)))
+        text_frame = ttk.Frame(self, style="Panel.TFrame")
+        text_frame.grid(row=2, column=0, sticky="nsew")
+        text_frame.columnconfigure(0, weight=1)
+        text_frame.rowconfigure(0, weight=1)
         self.text = tk.Text(
-            self,
+            text_frame,
             height=int(18 * scale_factor),
             state="disabled",
             wrap="none",
@@ -6378,8 +6410,12 @@ class AnalyticsPanel(ttk.Frame):
             highlightthickness=1,
             highlightbackground=APP_THEME["border"],
         )
-        self.text.grid(row=2, column=0, sticky="nsew")
-        self.rowconfigure(2, weight=1)
+        self.text.grid(row=0, column=0, sticky="nsew")
+        vscroll = ttk.Scrollbar(text_frame, orient="vertical", command=self.text.yview)
+        vscroll.grid(row=0, column=1, sticky="ns")
+        hscroll = ttk.Scrollbar(text_frame, orient="horizontal", command=self.text.xview)
+        hscroll.grid(row=1, column=0, sticky="ew")
+        self.text.configure(yscrollcommand=vscroll.set, xscrollcommand=hscroll.set)
 
     def update_data(self, sim: Simulation):
         min_headway = sim.analytics["min_headway_s"]
@@ -6891,7 +6927,7 @@ class App(tk.Tk):
         )
         self.scroll_canvas.bind(
             "<Configure>",
-            lambda event: self.scroll_canvas.itemconfig(self.scroll_canvas_frame, width=event.width),
+            lambda event: self.scroll_canvas.itemconfig(self.scroll_canvas_frame, width=event.width, height=event.height),
         )
 
         header = ttk.Frame(self.content, padding=10, style="Shell.TFrame")
@@ -6921,6 +6957,7 @@ class App(tk.Tk):
         self.add_element_btn.grid(row=1, column=0, padx=3, pady=(2, 4), sticky="ew")
         self.delete_element_btn = ttk.Button(element_group, text="Delete", command=self.delete_selected_element)
         self.delete_element_btn.grid(row=1, column=1, padx=3, pady=(2, 4), sticky="ew")
+        element_group.grid_remove()
         self.undo_edit_btn = ttk.Button(element_group, text="↶", command=self.undo_canvas_edit, width=3, style="History.TButton")
         self.undo_edit_btn.grid(row=1, column=2, padx=3, pady=(2, 4), sticky="ew")
         self.redo_edit_btn = ttk.Button(element_group, text="↷", command=self.redo_canvas_edit, width=3, style="History.TButton")
@@ -6939,6 +6976,12 @@ class App(tk.Tk):
         self.reset_sim_btn.grid_configure(column=4)
         for idx, scale in enumerate((1, 2, 5, 10, 100), start=5):
             self.time_scale_buttons[scale].grid_configure(column=idx)
+        for idx in range(10):
+            sim_group.columnconfigure(idx, weight=1)
+        for idx in range(3):
+            scenario_group.columnconfigure(idx, weight=1)
+        for idx in range(2):
+            mode_group.columnconfigure(idx, weight=1)
         self._update_edit_history_buttons()
         self._update_run_pause_buttons()
 
@@ -7001,29 +7044,107 @@ class App(tk.Tk):
         ttk.Button(headway_frame, text="Reload Values", command=self.reload_headway_block_values).grid(row=0, column=9)
         self._refresh_operation_mode_controls()
 
+        workspace = ttk.PanedWindow(self.content, orient=tk.HORIZONTAL)
+        workspace.grid(row=4, column=0, sticky="nsew", padx=6, pady=(8, 0))
+        self.workspace = workspace
+        workspace.bind("<Configure>", lambda _event: self.after_idle(self._fit_workspace_panes), add="+")
+        self.content.grid_rowconfigure(4, weight=1)
+        self.content.grid_rowconfigure(5, weight=0)
+
+        side_shell = ttk.Frame(workspace, padding=(0, 0, 6, 0), style="Shell.TFrame")
+        side_shell.columnconfigure(0, weight=1)
+        side_shell.rowconfigure(0, weight=1)
+        self.side_toolbar_canvas = tk.Canvas(side_shell, background=APP_THEME["workspace"], highlightthickness=0, width=int(190 * self.scale_factor))
+        self.side_toolbar_canvas.grid(row=0, column=0, sticky="nsew")
+        side_scrollbar = ttk.Scrollbar(side_shell, orient="vertical", command=self.side_toolbar_canvas.yview)
+        side_scrollbar.grid(row=0, column=1, sticky="ns")
+        self.side_toolbar_canvas.configure(yscrollcommand=side_scrollbar.set)
+        side_toolbar = ttk.Frame(self.side_toolbar_canvas, style="Shell.TFrame")
+        self.side_toolbar_window = self.side_toolbar_canvas.create_window((0, 0), window=side_toolbar, anchor="nw")
+        side_toolbar.bind("<Configure>", lambda _event: self.side_toolbar_canvas.configure(scrollregion=self.side_toolbar_canvas.bbox("all")))
+        self.side_toolbar_canvas.bind("<Configure>", lambda event: self.side_toolbar_canvas.itemconfigure(self.side_toolbar_window, width=event.width))
+
+        element_side = ttk.LabelFrame(side_toolbar, text="Element Editing", padding=6)
+        element_side.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        element_side.columnconfigure(0, weight=1)
+        self.add_element_btn = ttk.Button(element_side, text="Add", command=self.open_add_element_dialog)
+        self.add_element_btn.grid(row=0, column=0, sticky="ew", padx=2, pady=2)
+        self.delete_element_btn = ttk.Button(element_side, text="Delete", command=self.delete_selected_element)
+        self.delete_element_btn.grid(row=1, column=0, sticky="ew", padx=2, pady=2)
+
+        faults_side = ttk.LabelFrame(side_toolbar, text="Selected Train Faults", padding=6)
+        faults_side.grid(row=1, column=0, sticky="ew", pady=(0, 8))
+        faults_side.columnconfigure(0, weight=1)
+        ttk.Button(faults_side, text="DCS Loss", command=self.toggle_all_dcs_loss, style="Danger.TButton").grid(row=0, column=0, sticky="ew", padx=2, pady=2)
+        ttk.Button(faults_side, text="Clear Faults", command=self.clear_all_faults, style="Inactive.TButton").grid(row=1, column=0, sticky="ew", padx=2, pady=2)
+        self.emergency_fault_frame = ttk.LabelFrame(faults_side, text="Emergency Stop", padding=4)
+        self.emergency_fault_frame.grid(row=2, column=0, sticky="ew", padx=2, pady=(6, 2))
+        self.atp_fault_frame = ttk.LabelFrame(faults_side, text="ATP Fault", padding=4)
+        self.atp_fault_frame.grid(row=3, column=0, sticky="ew", padx=2, pady=2)
+        self.ato_fault_frame = ttk.LabelFrame(faults_side, text="ATO Fault", padding=4)
+        self.ato_fault_frame.grid(row=4, column=0, sticky="ew", padx=2, pady=2)
+        for frame in (self.emergency_fault_frame, self.atp_fault_frame, self.ato_fault_frame):
+            frame.columnconfigure(0, weight=1)
+        self.train_fault_buttons: Dict[str, Dict[str, ttk.Button]] = {}
+
+        workspace.add(side_shell, weight=0)
+
+        center_workspace = ttk.PanedWindow(workspace, orient=tk.VERTICAL)
+        self.center_workspace = center_workspace
+        workspace.add(center_workspace, weight=4)
+        canvas_shell = ttk.Frame(center_workspace, style="Shell.TFrame")
+        canvas_shell.columnconfigure(0, weight=1)
+        canvas_shell.rowconfigure(0, weight=1)
         self.ats_overview_panel = ATSOverviewPanel(
-            self.content,
+            canvas_shell,
             self.scale_factor,
             on_select=self.on_ats_element_selected,
             on_edit=self.open_edit_element_dialog,
         )
-        self.ats_overview_panel.grid(row=4, column=0, sticky="ew", pady=(8, 0))
+        self.ats_overview_panel.grid(row=0, column=0, sticky="nsew")
+        center_workspace.add(canvas_shell, weight=3)
 
-        self.ats_tabs = ttk.Notebook(self.content, style="Shell.TNotebook")
-        self.ats_tabs.grid(row=5, column=0, sticky="nsew", padx=0, pady=(8, 0))
+        trains_shell = ttk.Frame(center_workspace, style="Shell.TFrame")
+        self.trains_shell = trains_shell
+        self.trains_tab_collapsed = False
+        self._trains_restore_sash = None
+        trains_shell.columnconfigure(0, weight=1)
+        trains_shell.rowconfigure(0, weight=1)
+        self.ats_tabs = ttk.Notebook(trains_shell, style="Shell.TNotebook")
+        self.ats_tabs.grid(row=0, column=0, sticky="nsew")
         self.ats_tabs.enable_traversal()
-
-        infra_tab = ttk.Frame(self.ats_tabs, style="Shell.TFrame")
-        engineering_tab = ttk.Frame(self.ats_tabs, style="Shell.TFrame")
-        diagnostics_tab = ttk.Frame(self.ats_tabs, style="Shell.TFrame")
-        analytics_tab = ttk.Frame(self.ats_tabs, style="Shell.TFrame")
-        control_tab = ttk.Frame(self.ats_tabs, style="Shell.TFrame")
+        self.ats_tabs.bind("<Button-1>", self._on_trains_tab_click, add="+")
         trains_tab = ttk.Frame(self.ats_tabs, style="Shell.TFrame")
-        for tab in (infra_tab, engineering_tab, diagnostics_tab, analytics_tab, control_tab, trains_tab):
+        trains_tab.columnconfigure(0, weight=1)
+        trains_tab.rowconfigure(0, weight=1)
+        trains_tab.rowconfigure(1, weight=0)
+        self.trains_canvas = tk.Canvas(trains_tab, background=APP_THEME["workspace"], highlightthickness=0, height=360)
+        self.trains_scrollbar = ttk.Scrollbar(trains_tab, orient="horizontal", command=self.trains_canvas.xview)
+        self.trains_scrollable_frame = ttk.Frame(self.trains_canvas, style="Shell.TFrame")
+        self.trains_scrollable_frame.bind(
+            "<Configure>",
+            lambda _event: self.trains_canvas.configure(scrollregion=self.trains_canvas.bbox("all")),
+        )
+        self.trains_window = self.trains_canvas.create_window((0, 0), window=self.trains_scrollable_frame, anchor="nw")
+        self.trains_canvas.bind("<Configure>", self._resize_train_boards, add="+")
+        self.trains_canvas.configure(xscrollcommand=self.trains_scrollbar.set)
+        self._bind_train_horizontal_scroll(self.trains_canvas)
+        self._bind_train_horizontal_scroll(self.trains_scrollable_frame)
+        self.trains_canvas.grid(row=0, column=0, sticky="nsew")
+        self.trains_scrollbar.grid(row=1, column=0, sticky="ew")
+        self.ats_tabs.add(trains_tab, text="Trains")
+        center_workspace.add(trains_shell, weight=2)
+
+        dock_tabs = ttk.Notebook(workspace, style="Shell.TNotebook")
+        self.dock_tabs = dock_tabs
+        workspace.add(dock_tabs, weight=2)
+        infra_tab = ttk.Frame(dock_tabs, style="Shell.TFrame")
+        engineering_tab = ttk.Frame(dock_tabs, style="Shell.TFrame")
+        diagnostics_tab = ttk.Frame(dock_tabs, style="Shell.TFrame")
+        analytics_tab = ttk.Frame(dock_tabs, style="Shell.TFrame")
+        for tab in (infra_tab, engineering_tab, diagnostics_tab, analytics_tab):
             tab.columnconfigure(0, weight=1)
             tab.rowconfigure(0, weight=1)
-        infra_tab.rowconfigure(0, weight=1)
-
         self.infrastructure_panel = InfrastructurePanel(infra_tab, self.scale_factor)
         self.infrastructure_panel.grid(row=0, column=0, sticky="nsew", padx=int(6 * self.scale_factor), pady=(int(6 * self.scale_factor), int(3 * self.scale_factor)))
         self.engineering_panel = EngineeringPanel(engineering_tab, self.scale_factor)
@@ -7032,31 +7153,11 @@ class App(tk.Tk):
         self.diagnostics_panel.grid(row=0, column=0, sticky="nsew", padx=int(6 * self.scale_factor), pady=int(6 * self.scale_factor))
         self.analytics_panel = AnalyticsPanel(analytics_tab, self.scale_factor)
         self.analytics_panel.grid(row=0, column=0, sticky="nsew", padx=int(6 * self.scale_factor), pady=int(6 * self.scale_factor))
-        self.control_panel = ControlPanel(control_tab, self.apply_psr, self.add_tsr, self.clear_tsr, self.scale_factor)
-        self.control_panel.grid(row=0, column=0, sticky="nsew", padx=int(6 * self.scale_factor), pady=int(6 * self.scale_factor))
         self.limits_panel = SpeedLimitsPanel(infra_tab, self.scale_factor)
-
-        # Trains tab with horizontal scroll
-        self.trains_canvas = tk.Canvas(trains_tab, background=APP_THEME["bg"], highlightthickness=0, height=690)
-        self.trains_scrollbar = ttk.Scrollbar(trains_tab, orient="horizontal", command=self.trains_canvas.xview)
-        self.trains_scrollable_frame = ttk.Frame(self.trains_canvas, style="Shell.TFrame")
-
-        self.trains_scrollable_frame.bind(
-            "<Configure>",
-            lambda e: self.trains_canvas.configure(scrollregion=self.trains_canvas.bbox("all"))
-        )
-
-        self.trains_canvas.create_window((0, 0), window=self.trains_scrollable_frame, anchor="nw")
-        self.trains_canvas.configure(xscrollcommand=self.trains_scrollbar.set)
-
-        self.trains_canvas.pack(side="top", fill="both", expand=True)
-        self.trains_scrollbar.pack(side="bottom", fill="x")
-
-        self.ats_tabs.add(infra_tab, text="Infrastructure")
-        self.ats_tabs.add(engineering_tab, text="Engineering")
-        self.ats_tabs.add(diagnostics_tab, text="Diagnostics")
-        self.ats_tabs.add(analytics_tab, text="Analytics")
-        self.ats_tabs.add(trains_tab, text="Trains")
+        dock_tabs.add(infra_tab, text="Infrastructure")
+        dock_tabs.add(engineering_tab, text="Engineering")
+        dock_tabs.add(diagnostics_tab, text="Diagnostics")
+        dock_tabs.add(analytics_tab, text="Analytics")
 
         button_row = ttk.Frame(self.content, padding=(0, 8, 0, 0), style="Shell.TFrame")
         button_row.grid(row=6, column=0, sticky="ew")
@@ -7064,7 +7165,13 @@ class App(tk.Tk):
 
         self.panels: Dict[str, TrainPanel] = {}
         self._create_aux_windows()
-        self.normal_widgets = [status_row, summary_frame, headway_frame, self.ats_overview_panel, self.ats_tabs, button_row]
+        self.ats_overview_panel.update_data(self.sim)
+        self.infrastructure_panel.update_data(self.sim)
+        self.engineering_panel.update_data(self.sim)
+        self.diagnostics_panel.update_data(self.sim, self.event_log)
+        self.analytics_panel.update_data(self.sim)
+        self.limits_panel.update_limits(self.sim.track_profile, self.sim.tsr_zones)
+        self.normal_widgets = [status_row, summary_frame, headway_frame, workspace, button_row]
         self.monte_carlo_panel = MonteCarloPanel(self.content, self)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.bind_all("<MouseWheel>", self._on_global_mousewheel, add="+")
@@ -7072,12 +7179,34 @@ class App(tk.Tk):
         self.bind_all("<Button-5>", self._on_global_mousewheel, add="+")
         self.after(100, self.tick)
         self.after(100, self._update_vietnam_clock)
+        self.after_idle(self._fit_workspace_panes)
 
     def _make_button_group(self, master: tk.Widget, title: str, column: int) -> ttk.Frame:
         group = ttk.Frame(master, padding=(8, 4, 8, 4), style="ToolbarGroup.TFrame")
-        group.grid(row=0, column=column, sticky="n", padx=(0, 8))
+        group.grid(row=0, column=column, sticky="ew", padx=(0, 8))
+        master.columnconfigure(column, weight=1 if title == "Simulation Control" else 0)
         ttk.Label(group, text=title, style="ToolbarTitle.TLabel").grid(row=0, column=0, columnspan=8, sticky="w", pady=(0, 2))
         return group
+
+    def _fit_workspace_panes(self):
+        if not hasattr(self, "workspace"):
+            return
+        self.update_idletasks()
+        width = max(1, self.workspace.winfo_width())
+        height = max(1, getattr(self, "center_workspace", self.workspace).winfo_height())
+        left_w = int(210 * self.scale_factor)
+        right_w = max(int(390 * self.scale_factor), min(int(520 * self.scale_factor), int(width * 0.28)))
+        try:
+            self.workspace.sashpos(0, left_w)
+            self.workspace.sashpos(1, max(left_w + 480, width - right_w))
+        except tk.TclError:
+            pass
+        try:
+            if not getattr(self, "trains_tab_collapsed", False):
+                self.center_workspace.sashpos(0, max(int(300 * self.scale_factor), int(height * 0.52)))
+        except tk.TclError:
+            pass
+        self._resize_train_boards()
 
     def _update_vietnam_clock(self):
         vietnam_tz = timezone(timedelta(hours=7))
@@ -7321,6 +7450,27 @@ class App(tk.Tk):
         style.configure("Clock.TLabel", background=APP_THEME["accent"], foreground="#fff8ed", font=("Consolas", int(15 * self.scale_factor), "bold"))
         style.configure("ClockSmall.TLabel", background=APP_THEME["accent"], foreground="#ffe7c7", font=("Consolas", int(7 * self.scale_factor), "bold"))
         style.configure(
+            "TEntry",
+            fieldbackground=APP_THEME["log_bg"],
+            foreground=APP_THEME["text"],
+            bordercolor=APP_THEME["border"],
+            lightcolor=APP_THEME["button_hover"],
+            darkcolor=APP_THEME["border"],
+        )
+        style.configure(
+            "TCombobox",
+            fieldbackground=APP_THEME["log_bg"],
+            foreground=APP_THEME["text"],
+            background=APP_THEME["button"],
+            bordercolor=APP_THEME["border"],
+            arrowcolor=APP_THEME["border"],
+        )
+        style.map(
+            "TCombobox",
+            fieldbackground=[("readonly", APP_THEME["log_bg"])],
+            background=[("active", APP_THEME["button_hover"]), ("readonly", APP_THEME["button"])],
+        )
+        style.configure(
             "TButton",
             font=("Consolas", button_font_size, "bold"),
             padding=(9, 5),
@@ -7424,6 +7574,21 @@ class App(tk.Tk):
             "PauseHistoryActive.TButton",
             background=[("pressed", "#d8782d"), ("active", "#ffe08a"), ("!disabled", APP_THEME["pause_active"])],
             foreground=[("!disabled", APP_THEME["text"])],
+            relief=[("pressed", "sunken"), ("!pressed", "raised")],
+        )
+        style.configure(
+            "Danger.TButton",
+            font=("Consolas", button_font_size, "bold"),
+            padding=(9, 5),
+            background=APP_THEME["danger"],
+            foreground="#fff8ed",
+            bordercolor=APP_THEME["danger_pressed"],
+            relief="raised",
+        )
+        style.map(
+            "Danger.TButton",
+            background=[("pressed", APP_THEME["danger_pressed"]), ("active", "#e85d4f"), ("!disabled", APP_THEME["danger"])],
+            foreground=[("disabled", "#f0caca"), ("!disabled", "#fff8ed")],
             relief=[("pressed", "sunken"), ("!pressed", "raised")],
         )
         style.configure(
@@ -7561,7 +7726,12 @@ class App(tk.Tk):
         self.child_windows = {}
 
         self.rebuild_train_panels()
-        self.control_panel.update_track_profile(self.sim.track_profile)
+        self._update_control_track_profile()
+
+    def _update_control_track_profile(self):
+        panel = getattr(self, "control_panel", None)
+        if panel is not None:
+            panel.update_track_profile(self.sim.track_profile)
 
     def rebuild_train_panels(self):
         # Clear existing panels
@@ -7576,9 +7746,11 @@ class App(tk.Tk):
 
         for i, train in enumerate(self.sim.trains):
             wrapper = ttk.Frame(self.trains_scrollable_frame, padding=8, style="Shell.TFrame")
-            wrapper.config(width=620, height=670)
+            board_w, board_h = self._train_board_dimensions()
+            wrapper.config(width=board_w, height=board_h)
             wrapper.pack(side="left", fill="y", padx=(0, 10))
             wrapper.pack_propagate(False)
+            self._bind_train_horizontal_scroll(wrapper)
             panel = TrainPanel(
                 wrapper,
                 train.id,
@@ -7589,11 +7761,14 @@ class App(tk.Tk):
                 train.color,
                 self.scale_factor,
             )
-            panel.config(width=600, height=650)
+            panel.config(width=max(280, board_w - 20), height=max(240, board_h - 20))
             panel.pack(fill="both", expand=True)
             panel.pack_propagate(False)
+            self._bind_train_horizontal_scroll(panel)
             panel.set_track_range(self.sim.track_max_m)
             self.panels[train.id] = panel
+        self._rebuild_train_fault_buttons()
+        self._resize_train_boards()
         self._update_root_summary()
 
     def sync_train_panels(self):
@@ -7614,9 +7789,11 @@ class App(tk.Tk):
                 self.panels[train.id].set_track_range(self.sim.track_max_m)
                 continue
             wrapper = ttk.Frame(self.trains_scrollable_frame, padding=8, style="Shell.TFrame")
-            wrapper.config(width=620, height=670)
+            board_w, board_h = self._train_board_dimensions()
+            wrapper.config(width=board_w, height=board_h)
             wrapper.pack(side="left", fill="y", padx=(0, 10))
             wrapper.pack_propagate(False)
+            self._bind_train_horizontal_scroll(wrapper)
             panel = TrainPanel(
                 wrapper,
                 train.id,
@@ -7627,14 +7804,120 @@ class App(tk.Tk):
                 train.color,
                 self.scale_factor,
             )
-            panel.config(width=600, height=650)
+            panel.config(width=max(280, board_w - 20), height=max(240, board_h - 20))
             panel.pack(fill="both", expand=True)
             panel.pack_propagate(False)
+            self._bind_train_horizontal_scroll(panel)
             panel.set_track_range(self.sim.track_max_m)
             self.panels[train.id] = panel
             if train.id not in self.position_history:
                 self.position_history[train.id] = deque(maxlen=240)
+        self._rebuild_train_fault_buttons()
+        self._resize_train_boards()
         self._update_root_summary()
+
+    def _train_board_dimensions(self) -> Tuple[int, int]:
+        canvas_w = max(1, int(getattr(self, "trains_canvas", self).winfo_width() or 0))
+        canvas_h = max(1, int(getattr(self, "trains_canvas", self).winfo_height() or 0))
+        count = max(1, len(getattr(self.sim, "trains", [])))
+        visible_count = min(count, 4)
+        gap_px = int(10 * self.scale_factor)
+        available_w = max(1, canvas_w - gap_px * max(0, visible_count - 1) - int(16 * self.scale_factor))
+        board_w = max(int(320 * self.scale_factor), int(available_w / visible_count))
+        board_h = max(int(260 * self.scale_factor), canvas_h - int(6 * self.scale_factor))
+        return board_w, board_h
+
+    def _resize_train_boards(self, _event=None):
+        if not hasattr(self, "trains_scrollable_frame"):
+            return
+        board_w, board_h = self._train_board_dimensions()
+        for panel in self.panels.values():
+            wrapper = panel.master
+            try:
+                wrapper.config(width=board_w, height=board_h)
+                panel.config(width=max(280, board_w - 20), height=max(240, board_h - 20))
+            except tk.TclError:
+                continue
+        self.trains_scrollable_frame.update_idletasks()
+        self.trains_canvas.configure(scrollregion=self.trains_canvas.bbox("all"))
+
+    def _bind_train_horizontal_scroll(self, widget: tk.Widget):
+        widget.bind("<MouseWheel>", self._on_train_horizontal_mousewheel, add="+")
+        widget.bind("<Shift-MouseWheel>", self._on_train_horizontal_mousewheel, add="+")
+        widget.bind("<Button-4>", self._on_train_horizontal_mousewheel, add="+")
+        widget.bind("<Button-5>", self._on_train_horizontal_mousewheel, add="+")
+
+    def _on_train_horizontal_mousewheel(self, event):
+        if not hasattr(self, "trains_canvas"):
+            return None
+        if getattr(event, "num", None) == 4:
+            delta = -3
+        elif getattr(event, "num", None) == 5:
+            delta = 3
+        else:
+            delta_raw = getattr(event, "delta", 0)
+            delta = -int(delta_raw / 120) if delta_raw else 0
+        if delta:
+            self.trains_canvas.xview_scroll(delta * 3, "units")
+        return "break"
+
+    def _on_trains_tab_click(self, event):
+        try:
+            tab_index = self.ats_tabs.index(f"@{event.x},{event.y}")
+        except tk.TclError:
+            return None
+        if self.ats_tabs.tab(tab_index, "text") != "Trains":
+            return None
+        if tab_index == self.ats_tabs.index("current"):
+            self._toggle_trains_tab()
+            return "break"
+        return None
+
+    def _toggle_trains_tab(self):
+        if not hasattr(self, "center_workspace"):
+            return
+        try:
+            total_h = max(1, self.center_workspace.winfo_height())
+            if self.trains_tab_collapsed:
+                target = self._trains_restore_sash or int(total_h * 0.55)
+                self.center_workspace.sashpos(0, max(180, min(total_h - 180, target)))
+                self.trains_tab_collapsed = False
+            else:
+                self._trains_restore_sash = self.center_workspace.sashpos(0)
+                self.center_workspace.sashpos(0, max(120, total_h - int(34 * self.scale_factor)))
+                self.trains_tab_collapsed = True
+        except tk.TclError:
+            return
+        self.after_idle(self._resize_train_boards)
+
+    def _rebuild_train_fault_buttons(self):
+        if not hasattr(self, "emergency_fault_frame"):
+            return
+        for frame in (self.emergency_fault_frame, self.atp_fault_frame, self.ato_fault_frame):
+            for child in frame.winfo_children():
+                child.destroy()
+        self.train_fault_buttons = {}
+        for row, train in enumerate(self.sim.trains):
+            emergency_btn = ttk.Button(
+                self.emergency_fault_frame,
+                text=f"{train.id}: Stop",
+                command=lambda train_id=train.id: self.instant_stop_train(train_id),
+                style="Danger.TButton",
+            )
+            emergency_btn.grid(row=row, column=0, sticky="ew", padx=2, pady=2)
+            atp_btn = ttk.Button(
+                self.atp_fault_frame,
+                text=f"{train.id}: ATP",
+                command=lambda train_id=train.id: self.toggle_train_fault(train_id, "ATP"),
+            )
+            atp_btn.grid(row=row, column=0, sticky="ew", padx=2, pady=2)
+            ato_btn = ttk.Button(
+                self.ato_fault_frame,
+                text=f"{train.id}: ATO",
+                command=lambda train_id=train.id: self.toggle_train_fault(train_id, "ATO"),
+            )
+            ato_btn.grid(row=row, column=0, sticky="ew", padx=2, pady=2)
+            self.train_fault_buttons[train.id] = {"emergency": emergency_btn, "atp": atp_btn, "ato": ato_btn}
 
     def _hide_all_child_windows(self):
         for window in self.child_windows.values():
@@ -7715,7 +7998,7 @@ class App(tk.Tk):
         self.title(self.scenario["window_title"])
         self.scenario_var.set(f"Scenario: {self.scenario['name']}")
         self.reload_headway_block_values()
-        self.control_panel.update_track_profile(self.sim.track_profile)
+        self._update_control_track_profile()
         self._reset_runtime_buffers()
         self.edit_undo_stack.clear()
         self.edit_redo_stack.clear()
@@ -7743,7 +8026,7 @@ class App(tk.Tk):
         was_running = self.sim.running
         self.sim.stop()
         self.sim.load_scenario(self.scenario)
-        self.control_panel.update_track_profile(self.sim.track_profile)
+        self._update_control_track_profile()
         self._reset_runtime_buffers()
         self.edit_undo_stack.clear()
         self.edit_redo_stack.clear()
@@ -7797,7 +8080,7 @@ class App(tk.Tk):
         self.title(self.scenario["window_title"])
         self.scenario_var.set(f"Scenario: {self.scenario['name']}")
         self.reload_headway_block_values()
-        self.control_panel.update_track_profile(self.sim.track_profile)
+        self._update_control_track_profile()
         self._reset_runtime_buffers()
         self.rebuild_train_panels()
         self.ats_overview_panel.update_data(self.sim)
@@ -7994,7 +8277,7 @@ class App(tk.Tk):
                 self.sim.track_max_m = max(self.sim.track_max_m, self.sim.track_end_m)
                 for train in self.sim.trains:
                     train.track_profile = self.sim.track_profile
-                self.control_panel.update_track_profile(self.sim.track_profile)
+                self._update_control_track_profile()
                 self.status_var.set(f"Status: deleted track segment {index}")
             elif kind == "tsr" and 0 <= index < len(self.sim.tsr_zones):
                 self._push_edit_undo()
@@ -8036,7 +8319,7 @@ class App(tk.Tk):
                 float(data["gradient"]),
                 float(data["psr_kmh"]),
             )
-            self.control_panel.update_track_profile(self.sim.track_profile)
+            self._update_control_track_profile()
         elif kind == "tsr":
             self.sim.update_tsr(index, float(data["start_m"]), float(data["end_m"]), float(data["speed_kmh"]))
         elif kind == "line_condition":
@@ -8079,7 +8362,7 @@ class App(tk.Tk):
             self._push_edit_undo()
             if mode == "PSR":
                 self.sim.add_psr_segment(start_m, end_m, float(data["speed_kmh"]))
-                self.control_panel.update_track_profile(self.sim.track_profile)
+                self._update_control_track_profile()
             elif mode == "TSR":
                 self.sim.tsr_zones.append({"start": start_m, "end": end_m, "speed": float(data["speed_kmh"])})
             self.status_var.set(f"Status: added {mode} segment")
@@ -8122,7 +8405,7 @@ class App(tk.Tk):
                 float(data["end_m"]),
                 float(data["gradient"]),
             )
-            self.control_panel.update_track_profile(self.sim.track_profile)
+            self._update_control_track_profile()
             self.status_var.set("Status: added gradient segment")
         elif element_type == "Line Condition":
             start_m = float(data["start_m"])
@@ -8198,6 +8481,34 @@ class App(tk.Tk):
                         f"(remaining={remaining_m:.2f} m, zero_speed={'YES' if t.zero_speed_detected else 'NO'})"
                     )
                 break
+
+    def toggle_train_fault(self, train_id: str, subsystem: str):
+        subsystem = subsystem.upper()
+        for train in self.sim.trains:
+            if train.id != train_id:
+                continue
+            if subsystem == "ATP":
+                train.set_fault("ATP", not train.atp_fault_active, self.sim.sim_time_s)
+            elif subsystem == "ATO":
+                train.set_fault("ATO", not train.ato_fault_active, self.sim.sim_time_s)
+            elif subsystem == "DCS":
+                train.set_fault("DCS", not train.dcs_fault_active, self.sim.sim_time_s)
+            self.status_var.set(f"Status: toggled {subsystem} fault on {train_id}")
+            break
+
+    def toggle_all_dcs_loss(self):
+        active = not any(train.dcs_fault_active for train in self.sim.trains)
+        for train in self.sim.trains:
+            train.set_fault("DCS", active, self.sim.sim_time_s)
+        self.status_var.set("Status: DCS loss applied" if active else "Status: DCS loss cleared")
+
+    def clear_all_faults(self):
+        for train in self.sim.trains:
+            train.set_fault("DCS", False, self.sim.sim_time_s)
+            train.set_fault("ATO", False, self.sim.sim_time_s)
+            train.set_fault("ATP", False, self.sim.sim_time_s)
+            train.reset_non_emergency_stop_latches()
+        self.status_var.set("Status: cleared train faults")
 
     def apply_psr(self, segment_str: str, psr_str: str):
         try:
