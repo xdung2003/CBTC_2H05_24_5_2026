@@ -4989,13 +4989,17 @@ class TrainPanel(ttk.Frame):
         self.current_release_speed = None
 
         # Use direct frame container instead of internal scrolling so train panels show full content.
-        self.config(width=600, height=650)
+        self.config(width=600, height=420)
         self.pack_propagate(False)
+        self.grid_propagate(False)
         container = self
         self.columnconfigure(0, weight=1)
         self.columnconfigure(1, weight=1)
         self.rowconfigure(1, weight=0)
-        self.rowconfigure(2, weight=0)
+        self.rowconfigure(2, weight=1)
+        self.rowconfigure(3, weight=0)
+        self.rowconfigure(4, weight=0)
+        self.rowconfigure(5, weight=0)
         container.columnconfigure(0, weight=0, minsize=int(180 * scale_factor))
         container.columnconfigure(1, weight=1)
 
@@ -5072,12 +5076,12 @@ class TrainPanel(ttk.Frame):
 
         # Braking Curves Chart
         chart_frame = ttk.Frame(container, style="Card.TFrame")
-        chart_frame.grid(row=2, column=0, columnspan=2, sticky="ew", padx=int(10 * scale_factor), pady=(0, int(6 * scale_factor)))
+        chart_frame.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=int(10 * scale_factor), pady=(0, int(4 * scale_factor)))
         ttk.Label(chart_frame, text="Braking Curves & Speed", style="CardTitle.TLabel").pack(pady=(0, int(5 * scale_factor)))
         self.chart_canvas = tk.Canvas(
             chart_frame,
             width=int(560 * scale_factor),
-            height=int(150 * scale_factor),
+            height=int(80 * scale_factor),
             background=APP_THEME["card_alt"],
             highlightthickness=1,
             highlightbackground=APP_THEME["border"],
@@ -6935,7 +6939,7 @@ class App(tk.Tk):
         header.columnconfigure(0, weight=1)
         btns = ttk.Frame(header, style="Shell.TFrame")
         btns.grid(row=0, column=0, sticky="ew")
-        btns.columnconfigure(0, weight=1)
+        btns.columnconfigure(0, weight=5)
         sim_group = self._make_button_group(btns, "Simulation Control", 0)
         element_group = self._make_button_group(btns, "Element Editing", 1)
         scenario_group = self._make_button_group(btns, "Scenario I/O", 2)
@@ -6982,6 +6986,11 @@ class App(tk.Tk):
             scenario_group.columnconfigure(idx, weight=1)
         for idx in range(2):
             mode_group.columnconfigure(idx, weight=1)
+        scenario_group.grid_configure(column=1)
+        mode_group.grid_configure(column=2)
+        btns.columnconfigure(1, weight=1)
+        btns.columnconfigure(2, weight=0)
+        btns.columnconfigure(3, weight=0)
         self._update_edit_history_buttons()
         self._update_run_pause_buttons()
 
@@ -6998,7 +7007,7 @@ class App(tk.Tk):
         self.normal_mode_btn.grid(row=1, column=1, padx=3, pady=(2, 4), sticky="ew")
 
         clock_frame = ttk.Frame(header, padding=(10, 5, 10, 5), style="Clock.TFrame")
-        clock_frame.grid(row=0, column=2, sticky="e", padx=(8, 0))
+        clock_frame.grid(row=0, column=1, sticky="e", padx=(8, 0))
         ttk.Label(clock_frame, text="VIETNAM STANDARD TIME", style="ClockSmall.TLabel").pack(anchor="e")
         ttk.Label(clock_frame, textvariable=self.vn_clock_var, style="Clock.TLabel").pack(anchor="e")
 
@@ -7063,6 +7072,8 @@ class App(tk.Tk):
         self.side_toolbar_window = self.side_toolbar_canvas.create_window((0, 0), window=side_toolbar, anchor="nw")
         side_toolbar.bind("<Configure>", lambda _event: self.side_toolbar_canvas.configure(scrollregion=self.side_toolbar_canvas.bbox("all")))
         self.side_toolbar_canvas.bind("<Configure>", lambda event: self.side_toolbar_canvas.itemconfigure(self.side_toolbar_window, width=event.width))
+        side_toolbar.columnconfigure(0, weight=1)
+        self._bind_side_toolbar_scroll(self.side_toolbar_canvas)
 
         element_side = ttk.LabelFrame(side_toolbar, text="Element Editing", padding=6)
         element_side.grid(row=0, column=0, sticky="ew", pady=(0, 8))
@@ -7086,6 +7097,7 @@ class App(tk.Tk):
         for frame in (self.emergency_fault_frame, self.atp_fault_frame, self.ato_fault_frame):
             frame.columnconfigure(0, weight=1)
         self.train_fault_buttons: Dict[str, Dict[str, ttk.Button]] = {}
+        self._bind_side_toolbar_tree(side_toolbar)
 
         workspace.add(side_shell, weight=0)
 
@@ -7187,6 +7199,34 @@ class App(tk.Tk):
         master.columnconfigure(column, weight=1 if title == "Simulation Control" else 0)
         ttk.Label(group, text=title, style="ToolbarTitle.TLabel").grid(row=0, column=0, columnspan=8, sticky="w", pady=(0, 2))
         return group
+
+    def _bind_side_toolbar_scroll(self, widget: tk.Widget):
+        if getattr(widget, "_cbtc_side_scroll_bound", False):
+            return
+        setattr(widget, "_cbtc_side_scroll_bound", True)
+        widget.bind("<MouseWheel>", self._on_side_toolbar_mousewheel, add="+")
+        widget.bind("<Button-4>", self._on_side_toolbar_mousewheel, add="+")
+        widget.bind("<Button-5>", self._on_side_toolbar_mousewheel, add="+")
+
+    def _bind_side_toolbar_tree(self, widget: tk.Widget):
+        self._bind_side_toolbar_scroll(widget)
+        for child in widget.winfo_children():
+            self._bind_side_toolbar_tree(child)
+
+    def _on_side_toolbar_mousewheel(self, event):
+        if not hasattr(self, "side_toolbar_canvas"):
+            return None
+        if getattr(event, "num", None) == 4:
+            delta = -4
+        elif getattr(event, "num", None) == 5:
+            delta = 4
+        else:
+            delta_raw = getattr(event, "delta", 0)
+            if not delta_raw:
+                return "break"
+            delta = -4 if delta_raw > 0 else 4
+        self.side_toolbar_canvas.yview_scroll(delta, "units")
+        return "break"
 
     def _fit_workspace_panes(self):
         if not hasattr(self, "workspace"):
@@ -7761,10 +7801,10 @@ class App(tk.Tk):
                 train.color,
                 self.scale_factor,
             )
-            panel.config(width=max(280, board_w - 20), height=max(240, board_h - 20))
+            panel.config(width=max(280, board_w - 20), height=max(200, board_h - 20))
             panel.pack(fill="both", expand=True)
             panel.pack_propagate(False)
-            self._bind_train_horizontal_scroll(panel)
+            self._bind_train_horizontal_scroll_tree(wrapper)
             panel.set_track_range(self.sim.track_max_m)
             self.panels[train.id] = panel
         self._rebuild_train_fault_buttons()
@@ -7804,10 +7844,10 @@ class App(tk.Tk):
                 train.color,
                 self.scale_factor,
             )
-            panel.config(width=max(280, board_w - 20), height=max(240, board_h - 20))
+            panel.config(width=max(280, board_w - 20), height=max(200, board_h - 20))
             panel.pack(fill="both", expand=True)
             panel.pack_propagate(False)
-            self._bind_train_horizontal_scroll(panel)
+            self._bind_train_horizontal_scroll_tree(wrapper)
             panel.set_track_range(self.sim.track_max_m)
             self.panels[train.id] = panel
             if train.id not in self.position_history:
@@ -7824,7 +7864,7 @@ class App(tk.Tk):
         gap_px = int(10 * self.scale_factor)
         available_w = max(1, canvas_w - gap_px * max(0, visible_count - 1) - int(16 * self.scale_factor))
         board_w = max(int(320 * self.scale_factor), int(available_w / visible_count))
-        board_h = max(int(260 * self.scale_factor), canvas_h - int(6 * self.scale_factor))
+        board_h = max(int(220 * self.scale_factor), canvas_h - int(8 * self.scale_factor))
         return board_w, board_h
 
     def _resize_train_boards(self, _event=None):
@@ -7835,30 +7875,44 @@ class App(tk.Tk):
             wrapper = panel.master
             try:
                 wrapper.config(width=board_w, height=board_h)
-                panel.config(width=max(280, board_w - 20), height=max(240, board_h - 20))
+                panel.config(width=max(280, board_w - 20), height=max(200, board_h - 20))
             except tk.TclError:
                 continue
         self.trains_scrollable_frame.update_idletasks()
+        try:
+            self.trains_canvas.itemconfigure(self.trains_window, height=max(1, self.trains_canvas.winfo_height()))
+        except tk.TclError:
+            pass
         self.trains_canvas.configure(scrollregion=self.trains_canvas.bbox("all"))
 
     def _bind_train_horizontal_scroll(self, widget: tk.Widget):
+        if getattr(widget, "_cbtc_train_scroll_bound", False):
+            return
+        setattr(widget, "_cbtc_train_scroll_bound", True)
         widget.bind("<MouseWheel>", self._on_train_horizontal_mousewheel, add="+")
         widget.bind("<Shift-MouseWheel>", self._on_train_horizontal_mousewheel, add="+")
         widget.bind("<Button-4>", self._on_train_horizontal_mousewheel, add="+")
         widget.bind("<Button-5>", self._on_train_horizontal_mousewheel, add="+")
 
+    def _bind_train_horizontal_scroll_tree(self, widget: tk.Widget):
+        self._bind_train_horizontal_scroll(widget)
+        for child in widget.winfo_children():
+            self._bind_train_horizontal_scroll_tree(child)
+
     def _on_train_horizontal_mousewheel(self, event):
         if not hasattr(self, "trains_canvas"):
             return None
         if getattr(event, "num", None) == 4:
-            delta = -3
+            delta = -1
         elif getattr(event, "num", None) == 5:
-            delta = 3
+            delta = 1
         else:
             delta_raw = getattr(event, "delta", 0)
-            delta = -int(delta_raw / 120) if delta_raw else 0
+            if not delta_raw:
+                return "break"
+            delta = -1 if delta_raw > 0 else 1
         if delta:
-            self.trains_canvas.xview_scroll(delta * 3, "units")
+            self.trains_canvas.xview_scroll(delta * 12, "units")
         return "break"
 
     def _on_trains_tab_click(self, event):
@@ -7905,19 +7959,25 @@ class App(tk.Tk):
                 style="Danger.TButton",
             )
             emergency_btn.grid(row=row, column=0, sticky="ew", padx=2, pady=2)
+            self._bind_side_toolbar_scroll(emergency_btn)
             atp_btn = ttk.Button(
                 self.atp_fault_frame,
                 text=f"{train.id}: ATP",
                 command=lambda train_id=train.id: self.toggle_train_fault(train_id, "ATP"),
             )
             atp_btn.grid(row=row, column=0, sticky="ew", padx=2, pady=2)
+            self._bind_side_toolbar_scroll(atp_btn)
             ato_btn = ttk.Button(
                 self.ato_fault_frame,
                 text=f"{train.id}: ATO",
                 command=lambda train_id=train.id: self.toggle_train_fault(train_id, "ATO"),
             )
             ato_btn.grid(row=row, column=0, sticky="ew", padx=2, pady=2)
+            self._bind_side_toolbar_scroll(ato_btn)
             self.train_fault_buttons[train.id] = {"emergency": emergency_btn, "atp": atp_btn, "ato": ato_btn}
+        self._bind_side_toolbar_tree(self.emergency_fault_frame)
+        self._bind_side_toolbar_tree(self.atp_fault_frame)
+        self._bind_side_toolbar_tree(self.ato_fault_frame)
 
     def _hide_all_child_windows(self):
         for window in self.child_windows.values():
