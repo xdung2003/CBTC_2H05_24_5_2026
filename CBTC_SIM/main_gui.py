@@ -1256,6 +1256,7 @@ class Train:
         self.headway_hold_reason = ""
         self.protection_zone_id = None
         self.protection_lane = 0
+        self.source_name = train_cfg.get("source_name")
         self.source_lane = None
         self.station_lane = None
         self.assigned_station_id = None
@@ -3079,14 +3080,15 @@ class Simulation:
         self.source_trains = []
         for idx, source in enumerate(scenario.get("source_trains", [])):
             capacity = max(1, int(source.get("capacity", SOURCE_VISIBLE_ACTIVE_TRAINS)))
+            total_trains = max(0, int(source.get("total_trains", capacity)))
             self.source_trains.append(
                 {
                     "name": str(source.get("name", f"SRC_{idx + 1}")),
                     "start_m": SOURCE_TRAIN_START_M,
                     "length_m": SOURCE_TRAIN_LENGTH_M,
                     "capacity": capacity,
-                    "total_trains": capacity,
-                    "generated": min(capacity, max(0, int(source.get("generated", 0)))),
+                    "total_trains": total_trains,
+                    "generated": min(total_trains, max(0, int(source.get("generated", 0)))),
                 }
             )
             self.track_min_m = min(self.track_min_m, SOURCE_TRAIN_START_M)
@@ -3217,6 +3219,7 @@ class Simulation:
             "color": self.color_palette[len(self.trains) % len(self.color_palette)],
             "track_profile": self.track_profile,
             "scheduled_stops": self.scheduled_stops,
+            "source_name": str(source.get("name", "SRC")),
             "source_lane": lane,
         }
 
@@ -3233,6 +3236,56 @@ class Simulation:
             self.generated_train_counter += 1
             train_id = f"SRC_{self.generated_train_counter}"
         return train_id
+
+    def _source_train_matches(self, train: Train, source_name: str) -> bool:
+        if getattr(train, "source_name", None) == source_name:
+            return True
+        return train.id.startswith(f"{source_name}_")
+
+    def _source_train_sequence(self, train: Train, source_name: str) -> int:
+        prefix = f"{source_name}_"
+        if not train.id.startswith(prefix):
+            return 0
+        try:
+            return int(train.id[len(prefix):])
+        except ValueError:
+            return 0
+
+    def _source_owned_trains(self, source_name: str) -> List[Train]:
+        owned = [train for train in self.trains if self._source_train_matches(train, source_name)]
+        return sorted(owned, key=lambda item: self._source_train_sequence(item, source_name))
+
+    def _rebuild_after_train_set_change(self):
+        self.zc = ZoneController(self.trains, self.track_end_m, self.block_mode, self.fixed_blocks)
+        self._dispatch_safe_packets(with_delay=False)
+        self.train_generation_changed = True
+
+    def _sync_source_train_count(self, index: int, previous_name: str | None = None):
+        if index < 0 or index >= len(self.source_trains):
+            return
+        source = self.source_trains[index]
+        source_name = str(source.get("name", "SRC"))
+        match_name = previous_name or source_name
+        total = max(0, int(source.get("total_trains", source.get("capacity", 0))))
+        owned = self._source_owned_trains(match_name)
+        changed = False
+
+        for train in owned:
+            train.source_name = source_name
+
+        if len(owned) > total:
+            remove_set = set(owned[total:])
+            self.trains = [train for train in self.trains if train not in remove_set]
+            changed = True
+        elif len(owned) < total:
+            before = len(self.trains)
+            source["generated"] = len(owned)
+            self._stage_initial_source_trains()
+            changed = len(self.trains) != before
+
+        source["generated"] = min(total, len(self._source_owned_trains(source_name)))
+        if changed:
+            self._rebuild_after_train_set_change()
 
     def _stage_initial_source_trains(self):
         for source in self.source_trains:
@@ -3413,42 +3466,34 @@ class Simulation:
         if index < 0 or index >= len(self.source_trains):
             return
         source = self.source_trains[index]
+        previous_name = str(source.get("name", name))
         capacity = max(1, capacity)
+        total_trains = max(0, total_trains)
         source.update(
             {
                 "name": name,
                 "start_m": SOURCE_TRAIN_START_M,
                 "length_m": SOURCE_TRAIN_LENGTH_M,
                 "capacity": capacity,
-                "total_trains": capacity,
+                "total_trains": total_trains,
             }
         )
-        source["generated"] = min(capacity, max(0, int(source.get("generated", 0))))
-        before = len(self.trains)
-        self._stage_initial_source_trains()
-        if len(self.trains) != before:
-            self.zc = ZoneController(self.trains, self.track_end_m, self.block_mode, self.fixed_blocks)
-            self._dispatch_safe_packets(with_delay=False)
-            self.train_generation_changed = True
+        self._sync_source_train_count(index, previous_name)
 
     def add_source_train(self, name: str, start_m: float, length_m: float, capacity: int, total_trains: int):
         capacity = max(1, capacity)
+        total_trains = max(0, total_trains)
         source = {
             "name": name,
             "start_m": SOURCE_TRAIN_START_M,
             "length_m": SOURCE_TRAIN_LENGTH_M,
             "capacity": capacity,
-            "total_trains": capacity,
+            "total_trains": total_trains,
             "generated": 0,
         }
         self.source_trains.append(source)
         self.track_min_m = min(self.track_min_m, SOURCE_TRAIN_START_M)
-        before = len(self.trains)
-        self._stage_initial_source_trains()
-        if len(self.trains) != before:
-            self.zc = ZoneController(self.trains, self.track_end_m, self.block_mode, self.fixed_blocks)
-            self._dispatch_safe_packets(with_delay=False)
-            self.train_generation_changed = True
+        self._sync_source_train_count(len(self.source_trains) - 1)
 
     def _source_exit_clear(self, source: Dict[str, Any], exit_pos: float, train_length: float) -> bool:
         source_start = SOURCE_TRAIN_START_M
@@ -5081,7 +5126,7 @@ class TrainPanel(ttk.Frame):
         self.chart_canvas = tk.Canvas(
             chart_frame,
             width=int(560 * scale_factor),
-            height=int(80 * scale_factor),
+            height=int(150 * scale_factor),
             background=APP_THEME["card_alt"],
             highlightthickness=1,
             highlightbackground=APP_THEME["border"],
@@ -5317,10 +5362,13 @@ class TrainPanel(ttk.Frame):
     def update_from_train(self, train: Train, append_history: bool = True):
         self.last_train = train
         actual_kmh = ms_to_kmh(train.speed)
-        permitted_kmh = min(ms_to_kmh(train.curves["P"]), train.psr_kmh) if train.curves["P"] > 0.0 else train.psr_kmh
-        warning_kmh = ms_to_kmh(train.curves["W"])
-        sbi_kmh = ms_to_kmh(train.hidden_curves["SBI"])
-        ebi_kmh = ms_to_kmh(train.hidden_curves["EBI"])
+        table_curves = getattr(train, "raw_curves", train.curves)
+        table_hidden_curves = getattr(train, "raw_hidden_curves", train.hidden_curves)
+        permitted_ms = table_curves.get("P", train.curves["P"])
+        permitted_kmh = min(ms_to_kmh(permitted_ms), train.psr_kmh) if permitted_ms > 0.0 else train.psr_kmh
+        warning_kmh = ms_to_kmh(table_curves.get("W", train.curves["W"]))
+        sbi_kmh = ms_to_kmh(table_hidden_curves.get("SBI", train.hidden_curves["SBI"]))
+        ebi_kmh = ms_to_kmh(table_hidden_curves.get("EBI", train.hidden_curves["EBI"]))
         current_uncertainty_m = max(train.effective_position_uncertainty_m(), abs(train.pos_error_m))
         target_distance_m = train.distance_to_eoa if train.constraint_type == "STOP" else train.distance_to_constraint_m
         target_speed_kmh = 0.0 if train.constraint_type == "STOP" else train.constraint_target_speed_kmh
@@ -5432,19 +5480,21 @@ class TrainPanel(ttk.Frame):
         self.toggle_btn.config(text=text)
 
     def _push_history(self, train: Train):
+        chart_curves = getattr(train, "raw_curves", train.curves)
+        chart_hidden_curves = getattr(train, "raw_hidden_curves", train.hidden_curves)
         self.hist_actual.append(ms_to_kmh(train.speed))
-        self.hist_curves["P"].append(ms_to_kmh(train.curves["P"]))
-        self.hist_curves["I"].append(ms_to_kmh(train.hidden_curves["I"]))
-        self.hist_curves["W"].append(ms_to_kmh(train.curves["W"]))
-        self.hist_curves["SBI"].append(ms_to_kmh(train.hidden_curves["SBI"]))
-        self.hist_curves["SBD"].append(ms_to_kmh(train.curves["SBD"]))
-        self.hist_curves["EBI"].append(ms_to_kmh(train.hidden_curves["EBI"]))
-        self.hist_curves["EBD"].append(ms_to_kmh(train.curves["EBD"]))
+        self.hist_curves["P"].append(ms_to_kmh(chart_curves.get("P", train.curves["P"])))
+        self.hist_curves["I"].append(ms_to_kmh(chart_hidden_curves.get("I", train.hidden_curves["I"])))
+        self.hist_curves["W"].append(ms_to_kmh(chart_curves.get("W", train.curves["W"])))
+        self.hist_curves["SBI"].append(ms_to_kmh(chart_hidden_curves.get("SBI", train.hidden_curves["SBI"])))
+        self.hist_curves["SBD"].append(ms_to_kmh(chart_curves.get("SBD", train.curves["SBD"])))
+        self.hist_curves["EBI"].append(ms_to_kmh(chart_hidden_curves.get("EBI", train.hidden_curves["EBI"])))
+        self.hist_curves["EBD"].append(ms_to_kmh(chart_curves.get("EBD", train.curves["EBD"])))
 
     def _draw_chart(self):
         canvas = self.chart_canvas
-        w = max(600, int(canvas.winfo_width() or canvas["width"]))
-        h = max(150, int(canvas.winfo_height() or canvas["height"]))
+        w = max(320, int(canvas.winfo_width() or canvas["width"]))
+        h = max(120, int(canvas.winfo_height() or canvas["height"]))
         canvas.delete("all")
         canvas.create_rectangle(1, 1, w - 1, h - 1, outline=APP_THEME["border"], fill=APP_THEME["card_alt"])
 
@@ -5454,16 +5504,22 @@ class TrainPanel(ttk.Frame):
         max_v = max(max(self.hist_actual), 1.0)
         for key in self.hist_curves:
             max_v = max(max_v, max(self.hist_curves[key]) if self.hist_curves[key] else 1.0)
+        max_v = max(20.0, math.ceil(max_v / 10.0) * 10.0)
 
-        top_margin = 45
-        scale_y = (h - top_margin - 20) / max_v
-        step_x = (w - 20) / (self.history_len - 1)
+        left = 34
+        right = w - 10
+        top = 62
+        bottom = h - 22
+        plot_w = max(1.0, right - left)
+        plot_h = max(1.0, bottom - top)
+        scale_y = plot_h / max_v
 
         def to_points(values):
             pts = []
+            count = max(1, len(values) - 1)
             for i, v in enumerate(values):
-                x = 10 + i * step_x
-                y = h - 20 - v * scale_y
+                x = left + (i / count) * plot_w
+                y = bottom - min(max_v, max(0.0, v)) * scale_y
                 pts.extend([x, y])
             return pts
 
@@ -5475,19 +5531,30 @@ class TrainPanel(ttk.Frame):
         legend_y = 30
         legend_items = [
             ("Actual", CURVE_COLORS["actual"]),
-            ("Permitted (P)", CURVE_COLORS["P"]),
-            ("Warning (W)", CURVE_COLORS["W"]),
-            ("Intervention (I)", CURVE_COLORS["I"]),
+            ("P", CURVE_COLORS["P"]),
+            ("W", CURVE_COLORS["W"]),
+            ("I", CURVE_COLORS["I"]),
             ("SBI", ACTION_COLORS["SBI"]),
             ("SBD", CURVE_COLORS["SBD"]),
             ("EBI", ACTION_COLORS["EBI"]),
             ("EBD", CURVE_COLORS["EBD"]),
         ]
         for i, (label, color) in enumerate(legend_items):
-            x = legend_x + (i % 4) * 135
+            x = legend_x + (i % 4) * 78
             y = legend_y + (i // 4) * 18
-            canvas.create_line(x, y, x + 20, y, fill=color, width=2)
-            canvas.create_text(x + 25, y, anchor="w", text=label, fill=APP_THEME["text"], font=("Consolas", 8))
+            canvas.create_line(x, y, x + 16, y, fill=color, width=2)
+            canvas.create_text(x + 20, y, anchor="w", text=label, fill=APP_THEME["text"], font=("Consolas", 8))
+
+        canvas.create_line(left, top, left, bottom, fill=APP_THEME["canvas_grid"])
+        canvas.create_line(left, bottom, right, bottom, fill=APP_THEME["canvas_grid"])
+        tick_step = 10.0 if max_v <= 80.0 else 20.0
+        tick = 0.0
+        while tick <= max_v + 1e-6:
+            y = bottom - tick * scale_y
+            canvas.create_line(left, y, right, y, fill=APP_THEME["canvas_grid"], dash=(1, 3))
+            canvas.create_text(left - 4, y, anchor="e", text=f"{tick:.0f}", fill=APP_THEME["muted"], font=("Consolas", 8))
+            tick += tick_step
+        canvas.create_text(left, top - 8, anchor="w", text="km/h", fill=APP_THEME["muted"], font=("Consolas", 8))
 
         # Draw curves
         canvas.create_line(*to_points(self.hist_curves["EBD"]), fill=CURVE_COLORS["EBD"], dash=(2, 2), width=2)
@@ -5498,13 +5565,6 @@ class TrainPanel(ttk.Frame):
         canvas.create_line(*to_points(self.hist_curves["I"]), fill=CURVE_COLORS["I"], dash=(1, 3), width=2)
         canvas.create_line(*to_points(self.hist_curves["P"]), fill=CURVE_COLORS["P"], dash=(2, 2), width=2)
         canvas.create_line(*to_points(self.hist_actual), fill=CURVE_COLORS["actual"], width=3)
-
-        # Draw axis and bottom ticks
-        for step in range(0, int(max_v) + 1, 10):
-            x = 10 + step / max_v * (w - 20)
-            y = h - 20
-            canvas.create_line(x, y, x, y + 6, fill=APP_THEME["canvas_grid"])
-            canvas.create_text(x, y + 16, text=str(step), fill=APP_THEME["muted"], font=("Consolas", 8))
 
     def _toggle(self):
         if self.emg_state == 0:
@@ -6607,7 +6667,7 @@ class AddElementDialog(tk.Toplevel):
         ],
         "Source Train": [
             ("name", "Name", "SRC"),
-            ("capacity", "Train lanes / trains", "3"),
+            ("capacity", "Source trains", "3"),
         ],
     }
 
@@ -6712,7 +6772,7 @@ class MonteCarloPanel(ttk.Frame):
         self._stop_requested = False
 
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(4, weight=1)
+        self.rowconfigure(5, weight=1)
         ttk.Label(self, text="Monte Carlo Statistical Mode", style="SectionTitle.TLabel").grid(row=0, column=0, sticky="w")
 
         controls = ttk.Frame(self, style="Shell.TFrame")
@@ -6724,7 +6784,7 @@ class MonteCarloPanel(ttk.Frame):
         ttk.Entry(controls, textvariable=self.runs_var, width=7).grid(row=0, column=1, padx=(0, 10))
         ttk.Label(controls, text="Max sim s", style="Status.TLabel").grid(row=0, column=2, padx=(0, 4))
         ttk.Entry(controls, textvariable=self.max_time_var, width=8).grid(row=0, column=3, padx=(0, 10))
-        ttk.Label(controls, text="Seed", style="Status.TLabel").grid(row=0, column=4, padx=(0, 4))
+        ttk.Label(controls, text="Replay ID", style="Status.TLabel").grid(row=0, column=4, padx=(0, 4))
         ttk.Entry(controls, textvariable=self.seed_var, width=10).grid(row=0, column=5, padx=(0, 10))
         self.run_btn = ttk.Button(controls, text="Run Monte Carlo", command=self.start)
         self.run_btn.grid(row=0, column=6, padx=(10, 4))
@@ -6735,6 +6795,11 @@ class MonteCarloPanel(ttk.Frame):
         ttk.Progressbar(self, variable=self.progress_var, maximum=100.0).grid(row=2, column=0, sticky="ew", pady=(2, 6))
         self.status_var = tk.StringVar(value="Ready")
         ttk.Label(self, textvariable=self.status_var, style="Status.TLabel").grid(row=3, column=0, sticky="w")
+        ttk.Label(
+            self,
+            text="Replay ID is optional: leave it blank for a fresh random batch, or reuse the same number to replay the same batch.",
+            style="Muted.TLabel",
+        ).grid(row=4, column=0, sticky="w", pady=(0, 4))
 
         self.output = tk.Text(
             self,
@@ -6746,7 +6811,7 @@ class MonteCarloPanel(ttk.Frame):
             relief="solid",
             borderwidth=1,
         )
-        self.output.grid(row=4, column=0, sticky="nsew", pady=(8, 0))
+        self.output.grid(row=5, column=0, sticky="nsew", pady=(8, 0))
         self._set_output("Monte Carlo results will appear here.\n")
 
     def _config_from_fields(self) -> MonteCarloConfig:
@@ -6892,7 +6957,7 @@ class App(tk.Tk):
         self.position_history: Dict[str, deque] = {}
         self.event_log = deque(maxlen=30)
         self._last_ui_refresh_real_s = 0.0
-        self._running_ui_refresh_interval_s = 0.20
+        self._running_ui_refresh_interval_s = DT
         self._idle_ui_refresh_interval_s = 1.00
         self.edit_undo_stack: List[Dict[str, Any]] = []
         self.edit_redo_stack: List[Dict[str, Any]] = []
@@ -7082,6 +7147,8 @@ class App(tk.Tk):
         self.add_element_btn.grid(row=0, column=0, sticky="ew", padx=2, pady=2)
         self.delete_element_btn = ttk.Button(element_side, text="Delete", command=self.delete_selected_element)
         self.delete_element_btn.grid(row=1, column=0, sticky="ew", padx=2, pady=2)
+        ttk.Button(element_side, text="Source + Train", command=self.add_train_to_selected_source).grid(row=2, column=0, sticky="ew", padx=2, pady=(8, 2))
+        ttk.Button(element_side, text="Source - Train", command=self.remove_train_from_selected_source).grid(row=3, column=0, sticky="ew", padx=2, pady=2)
 
         faults_side = ttk.LabelFrame(side_toolbar, text="Selected Train Faults", padding=6)
         faults_side.grid(row=1, column=0, sticky="ew", pady=(0, 8))
@@ -7863,7 +7930,7 @@ class App(tk.Tk):
         visible_count = min(count, 4)
         gap_px = int(10 * self.scale_factor)
         available_w = max(1, canvas_w - gap_px * max(0, visible_count - 1) - int(16 * self.scale_factor))
-        board_w = max(int(320 * self.scale_factor), int(available_w / visible_count))
+        board_w = max(int(360 * self.scale_factor), int(available_w / visible_count))
         board_h = max(int(220 * self.scale_factor), canvas_h - int(8 * self.scale_factor))
         return board_w, board_h
 
@@ -8255,6 +8322,49 @@ class App(tk.Tk):
     def on_ats_element_selected(self, element_key: str):
         self.status_var.set(f"Status: selected {element_key}")
 
+    def _selected_source_index(self) -> int | None:
+        element_key = self.ats_overview_panel.selected_element
+        if element_key:
+            kind, index = self.ats_overview_panel._element_lookup.get(element_key, ("", -1))
+            if kind == "source_train" and 0 <= index < len(self.sim.source_trains):
+                return index
+        if self.sim.source_trains:
+            return 0
+        return None
+
+    def _set_source_train_count(self, index: int, count: int):
+        if index < 0 or index >= len(self.sim.source_trains):
+            return
+        self._push_edit_undo()
+        source = self.sim.source_trains[index]
+        count = max(0, int(count))
+        source["capacity"] = max(1, count)
+        source["total_trains"] = count
+        self.sim._sync_source_train_count(index)
+        self.sync_train_panels()
+        self.ats_overview_panel.update_data(self.sim)
+        self.infrastructure_panel.update_data(self.sim)
+        self.limits_panel.update_limits(self.sim.track_profile, self.sim.tsr_zones)
+        self.status_var.set(f"Status: source {source.get('name', index)} trains={count}")
+
+    def add_train_to_selected_source(self):
+        index = self._selected_source_index()
+        if index is None:
+            self.status_var.set("Status: add a Source Train first")
+            return
+        source = self.sim.source_trains[index]
+        current = int(source.get("total_trains", source.get("capacity", 0)))
+        self._set_source_train_count(index, current + 1)
+
+    def remove_train_from_selected_source(self):
+        index = self._selected_source_index()
+        if index is None:
+            self.status_var.set("Status: no Source Train to remove from")
+            return
+        source = self.sim.source_trains[index]
+        current = int(source.get("total_trains", source.get("capacity", 0)))
+        self._set_source_train_count(index, current - 1)
+
     def open_edit_element_dialog(self, kind: str, index: int):
         element_type, values = self._edit_dialog_data(kind, index)
         if element_type is None:
@@ -8350,6 +8460,13 @@ class App(tk.Tk):
             elif kind == "source_train" and 0 <= index < len(self.sim.source_trains):
                 self._push_edit_undo()
                 removed = self.sim.source_trains.pop(index)
+                source_name = str(removed.get("name", "SRC"))
+                self.sim.trains = [
+                    train for train in self.sim.trains
+                    if not self.sim._source_train_matches(train, source_name)
+                ]
+                self.sim._rebuild_after_train_set_change()
+                self.sync_train_panels()
                 self.status_var.set(f"Status: deleted source {removed.get('name', index)}")
             else:
                 self.status_var.set(f"Status: cannot delete {element_key}")
@@ -8392,6 +8509,7 @@ class App(tk.Tk):
                 capacity,
                 capacity,
             )
+            self.sync_train_panels()
         else:
             raise ValueError("Unsupported ATS element.")
         self.status_var.set(f"Status: edited {kind}:{index}")
@@ -8488,6 +8606,7 @@ class App(tk.Tk):
                 capacity,
                 capacity,
             )
+            self.sync_train_panels()
             self.status_var.set(f"Status: added source train {name}")
         else:
             raise ValueError("Unsupported element type.")
