@@ -1,0 +1,1 @@
+sim_time,train_id,event,reason,pos_m,speed_kmh,distance_to_eoa_m,collision_partner_id,collision_overlap_m,collision_gap_m,atp_state,ato_state,ato_profile_phase

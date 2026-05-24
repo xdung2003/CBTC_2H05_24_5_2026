@@ -1,0 +1,744 @@
+--- PAGE 1 ---
+Kỹ thuật tín hiệu cơ bản
+Nguyễn Duy Việt-2025 33
+Chương 2. VẬN HÀNH AN TOÀN VỚI KHOẢNG CÁCH GIỮA CÁC ĐOÀN TÀU
+Trong đường sắt, hệ thống bánh xe thép chạy trên ray thép, hệ số ma sát tĩnh trung bình ít hơn
+tám lần so với giao thông đường bộ. Do đó, lực phanh tối đa có thể truyền giữa bánh xe và ray
+cho một trọng lượng xác định cũng ít hơn tám lần. Điều đó dẫn đến khoảng cách phanh cho các
+phương tiện đường sắt có thể vượt quá tầm nhìn của người lái xe một cách đáng kể, đặc biệt ở
+tốc độ cao của đoàn tàu. Do đó, việc tạo khoảng cách giữa các đoàn tàu không thể chỉ dựa trên
+tầm nhìn mà phải được kiểm soát bằng công nghệ gồm thiết bị và kỹ thuật tín hiệu bên đường
+ray.
+2.1. Lý thuyết về tạo khoảng cách giữa các đoàn tàu
+Có ba nguyên tắc lý thuyết cơ bản về tạo khoảng cách giữa các đoàn tàu:
+• Khoảng cách phanh tương đối;
+• Khoảng cách phanh tuyệt đối;
+• Khoảng cách đóng đường cố định.
+Khoảng cách phanh tương đối
+Ở chế độ khoảng cách phanh tương đối, khoảng cách giữa hai đoàn tàu KC bằng với hiệu số
+khoảng cách phanh của tàu sau trừ đi khoảng cách phanh của tàu trước cộng với khoảng cách an
+toàn bổ sung AB. Mục đích của nguyên tắc này là giúp tối ưu hóa khoảng cách giữa các đoàn tàu
+khi khả năng phanh khác nhau, thay vì buộc tất cả phải cách xa nhau theo một khoảng cố định
+như trong chế độ “khoảng cách phanh tuyệt đối”.
+Ví dụ 1: Hai đoàn tàu có khả năng phanh khác nhau. Tàu A (trước): tàu nhẹ, phanh rất tốt, có thể
+dừng trong 800 m, tàu B (sau) là tàu hàng nặng chỉ có thể dừng trong 1400 m. Như vậy, khoảng
+cách tối thiểu giữa tàu B và tàu A là: 1400 m − 800 m + 200 m = 800 m. Khoảng cách an toàn bổ
+sung ở đây là 200 m. Như vậy, tàu B cần cách tàu A ít nhất 800m để đảm bảo nếu tàu A dừng
+đột ngột, tàu B có thể dừng kịp.
+Ví dụ 2: Cả hai đoàn tàu đều có khả năng phanh giống nhau: tàu A và B đều có thể dừng trong
+1000 m. Khoảng cách an toàn bổ sung là 200 m, lúc này khoảng cách tối thiểu là: (1000 m
+−1000 m + 200 m) = 200 m. Trường hợp này cho phép chạy tàu rất sát nhau, điều này sẽ giúp
+tăng năng lực chạy tàu so với nguyên tắc tuyệt đối.
+Ví dụ 3: Tàu sau có khả năng hãm tốt hơn tàu trước: Tàu A (trước) tàu nặng, có thể dừng trong
+1200 m; tàu B (sau) là tàu nhẹ, có thể dừng trong 800 m; Khoảng cách an toàn bổ sung là 200 m.
+Do tàu sau luôn hãm tốt hơn nên khoảng cách hãm luôn đủ, không cần tạo khoảng cách bằng
+hiệu số khoảng cách hãm của tàu sau với tàu trước, chỉ cần áp dụng khoảng cách an toàn bổ sung
+nào đó để đảm bảo an toàn. Thực tế đối với khoảng cách giữa hai đoàn tàu nối tiếp nhau, phải
+cộng thêm chiều dài của đoàn tàu đầu tiên mới đảm bảo sự an toàn cần thiết (Hình 2.1 a).
+--- PAGE 2 ---
+Kỹ thuật tín hiệu cơ bản
+Nguyễn Duy Việt-2025 34
+Các hệ thống điều khiển chạy tàu ETCS Level 3, CBTC, hoặc các hệ thống tín hiệu theo tốc độ
+di động ứng dụng nguyên tắc này để tối ưu hóa năng lực chạy tàu. Điểm chung của các hệ thống
+này là chỉ áp dụng được khi có giám sát và thông tin liên tục về vị trí và khả năng hãm của từng
+đoàn tàu.
+Ưu điểm của nguyên tắc này là giảm khoảng cách giữa các tàu trong điều kiện cho phép, điều đó
+sẽ tăng mật độ vận hành, nâng cao hiệu suất (năng lực thông qua) tuyến đường sắt.
+Khoảng cách phanh của cả hai đoàn tàu phải được tính toán bằng các đường cong hãm dựa trên
+cùng một tốc độ giảm tốc, hoặc bằng cách áp dụng quy tắc rằng trong trường hợp hiệu suất
+phanh của đoàn tàu thứ hai tốt hơn, thì phải luôn duy trì một khoảng cách an toàn tối thiểu giữa
+hai đoàn tàu.
+Mặc dù phương pháp khoảng cách phanh tương đối cho phép khai thác tối đa năng lực tuyến,
+nhưng vẫn tồn tại hai vấn đề quan trọng.
+Thứ nhất, trong trường hợp khi các tàu di chuyển, ví dụ đi vào (hoặc qua) ga, sau khi đoàn tàu
+thứ nhất đi qua khu ghi, khi cần chuyển vị trí ghi giữa hai đoàn tàu, đoàn tàu thứ hai không thể
+tiếp cận theo khoảng cách hãm tương đối, mà phải được giữ ở khoảng cách hãm đầy đủ (lớn hơn
+dự kiến) khi tiến vào khu vực ghi để đủ thời gian cho đến khi ghi được khóa an toàn ở vị trí mới.
+Do đó, năng lực tuyến bị giới hạn tại các khu vực có ghi, nơi các đoàn tàu liên tiếp có thể đi theo
+các tuyến khác nhau.
+Thứ hai, nếu xảy ra tai nạn với đoàn tàu phía trước (một lý do nào đó mà khoảng cách hãm của
+tàu trước nhỏ hơn bình thường), đoàn tàu chạy sau không có đủ thời gian hoặc khoảng cách để
+dừng lại và sẽ va chạm trực tiếp.
+Vì những lý do trên, nguyên tắc này hiện chưa được áp dụng cho mục đích phân tách đoàn tàu
+trong vận hành chính tuyến, mà chỉ được một số tuyến đường sắt hàng hóa sử dụng trong các
+thao tác như ghép nối hoặc tách đầu máy hỗ trợ trong lúc đang chạy.
+KC: Khoảng cách giữa hai đoàn tàu;
+H1: Khoảng cách hãm của đoàn tàu thứ nhất;
+H2: Khoảng cách hãm của đoàn tàu thứ hai;
+AB: Khoảng cách an toàn bổ sung;
+T1: Chiều dài của đoàn tàu thứ nhất.
+Khoảng cách phanh tuyệt đối
+Khoảng cách phanh tuyệt đối là khoảng cách giữa hai đoàn tàu nối tiếp nhau, bằng khoảng cách
+phanh của đoàn tàu thứ hai cộng với biên độ an toàn bổ sung. Đối với khoảng cách tối thiểu, phải
+cộng thêm chiều dài của đoàn tàu đầu tiên (Hình 2.1 b).
+Tạo khoảng cách giữa các đoàn tàu theo khoảng cách phanh tuyệt đối thường được coi là nguyên
+tắc tạo khoảng cách đoàn tàu phù hợp nhất. Vấn đề duy nhất cho đến nay đã ngăn cản việc đưa
+--- PAGE 3 ---
+Kỹ thuật tín hiệu cơ bản
+Nguyễn Duy Việt-2025 35
+nguyên tắc này ra ngoài các hệ thống vận tải công cộng là thiếu công nghệ có thể sử dụng để
+kiểm tra tính đầy đủ của đoàn tàu (tính toàn vẹn của đoàn tàu). Điều này là cần thiết để xác định
+vị trí an toàn của phần sau của đoàn tàu - đoàn tàu không bị đứt toa, rớt toa. Tuy nhiên, với sự
+phát triển hơn nữa của công nghệ vận hành dựa trên sóng vô tuyến, việc tách đoàn tàu theo
+khoảng cách phanh tuyệt đối có thể được giới thiệu rộng rãi trong tương lai gần.
+Chế độ khoảng cách phanh tuyệt đối là cơ sở cho “đóng đường di động”.
+Tµu 1
+SKC
+SH1
+SH2 SAB
+Tµu 2
+SKC
+SH1
+SH2 SAB
+LT1
+a. Khoảng cách phanh tương đối
+Tµu 2 Tµu 1
+SKC
+SH2 SAB LT1
+b. Khoảng cách phanh tuyệt đối (đóng đường di động)
+Tµu 2 Tµu 1
+SKC
+SH2 SAB LT1LPK
+c. Khoảng cách đóng đường cố định
+--- PAGE 4 ---
+Kỹ thuật tín hiệu cơ bản
+Nguyễn Duy Việt-2025 36
+Hình 2.1 Nguyên tắc tạo khoảng cách giữa các đoàn tàu
+Khoảng cách (phanh) hãm kiểu phân đoạn cố định (Fixed Block Distance)
+Trong hệ thống phân đoạn cố định, tuyến đường được chia thành các phân khu đóng
+đường liên tiếp (block section). Mỗi đoạn phân khu chỉ được phép có duy nhất một đoàn tàu
+chiếm dụng tại một thời điểm.
+Khoảng cách giữa hai đoàn tàu chạy liên tiếp trong hệ thống này bằng tổng:
+- Khoảng cách hãm của đoàn tàu thứ hai;
+- Chiều dài của phân khu;
+- Khoảng cách an toàn bổ sung.
+Do đó, khoảng cách chạy sau tối thiểu trong hệ thống phân đoạn cố định sẽ bằng khoảng
+cách hãm tuyệt đối (absolute braking distance) cộng với chiều dài của phân khu (xem Hình 2.1,c).
+Khoảng cách tối thiểu giữa các tàu trong hệ thống phân khu cố định lớn hơn so với hệ
+thống khu đoạn của đóng đường di động (moving block) nên ảnh hưởng giới hạn năng lực của
+tuyến đường do thêm độ dài phân khu cố định thường là quá mức cho khoảng cách an toàn, điều
+đó làm giảm năng lực thông qua của tuyến đường.
+Trong hệ thống điều khiển tàu sử dụng tín hiệu ven đường, các phân khu được giới hạn
+phòng vệ bởi các tín hiệu này. Hiện nay, vận hành theo nguyên tắc phân đoạn cố định vẫn là
+phương thức phổ biến nhất trong việc tạo khoảng cách tàu trên toàn thế giới.
+2.2. Nguyên tắc kiểm soát tàu
+Nguyên tắc được sử dụng để tạo khoảng cách tàu an toàn phụ thuộc vào các tiêu chí sau:
+• Cách thông báo quyền di chuyển từ đường ray này sang đường ray khác;
+• Cách giải phóng đường ray sau tàu.
+Nếu quyền di chuyển chỉ được thông báo tại các điểm rời rạc, ví dụ như tại các tín hiệu
+bên đường ray, sẽ là cơ sở của một hệ thống đóng đường cố định. Mỗi quyền di chuyển phải bao
+phủ toàn bộ đoạn đường cho đến điểm tiếp theo mà tại đó có thể nhận được quyền tiếp theo.
+Trên các tuyến mà tàu được điều khiển liên tục bởi hệ thống tín hiệu trên đầu máy, thì không có
+hạn chế này. Tuy nhiên, việc truyền liên tục thông báo quyền di chuyển vẫn chưa phải là tiêu chí
+đủ để xóa bỏ các hệ thống đóng đường cố định. Ngoài ra, tàu phải giải phóng đường ray không
+phải theo các khoảng thời gian cố định mà liên tục. Điều này đòi hỏi phải kiểm tra liên tục tính
+đầy đủ của đoàn tàu trên tàu. Vì đối với các hệ thống đường sắt truyền thống, vẫn chưa tìm ra
+giải pháp đủ cho vấn đề đó, nên việc tạo khoảng cách tàu ở đóng đường cố định vẫn là nguyên
+tắc tiêu chuẩn để gián cách an toàn giữa các đoàn tàu trên hầu hết các tuyến đường sắt trên toàn
+thế giới.
+Trước khi giải thích các nguyên tắc khác nhau của việc tạo khoảng cách đoàn tàu, một
+đặc điểm thiết yếu khác phải được đề cập đến. Khoảng cách hãm của một đoàn tàu không chủ
+--- PAGE 5 ---
+Kỹ thuật tín hiệu cơ bản
+Nguyễn Duy Việt-2025 37
+yếu phụ thuộc vào trọng lượng của tàu mà phụ thuộc vào tỷ lệ hãm, tức là tỷ lệ phần trăm lực
+hãm và khối lượng tàu, phản ánh khả năng hãm của đoàn tàu. Các đoàn tàu có cùng tỷ lệ hãm
+thường có cùng khoảng cách hãm. Để tạo khoảng cách đoàn tàu an toàn, đoàn tàu phải luôn có
+đường ray thông thoáng phía trước ít nhất bằng khoảng cách hãm. Do đó, xét về hiệu quả, việc
+lắp ráp các toa xe thành đoàn tàu là hợp lý. Tất cả các toa xe tạo thành một đoàn tàu chỉ cần một
+khoảng cách hãm chung cho toàn bộ đoàn tàu. Điều này sẽ làm giảm đáng kể những quãng
+đường do khoảng cách hãm dài tạo ra. Đây là lý do tại sao việc chạy toàn bộ đoàn tàu thay vì
+từng phương tiện là một trong những đặc điểm cơ bản nhất của hệ thống đường sắt.
+2.2.1 Kiểm soát tàu bằng tín hiệu bên đường
+1) Điều khiển tàu trong chế độ vận hành theo đóng đường cố định
+Như đã nói trên, mặc dù với sự xuất hiện của các hệ thống điều khiển tàu bằng sóng vô tuyến, xu
+hướng ngành đường sắt chuyển sang sử dụng tín hiệu trên tàu (buồng lái) nhưng tín hiệu ven
+đường vẫn đang giữ vai trò chủ đạo trong việc điều khiển đoàn tàu. Thậm chí, chúng vẫn tiếp tục
+được lắp đặt trong nhiều hệ thống mới. Do tín hiệu ven đường chỉ có thể truyền quyền di chuyển
+theo từng khoảng cách cố định, nên việc điều khiển tàu bằng loại tín hiệu này luôn được đảm bảo
+bằng chế độ vận hành theo đóng đường cố định. Trong chế độ này, tuyến đường được chia thành
+các phân khu, khu đoạn đóng đường (block section), mỗi phân khu đóng đường đó được phòng
+vệ bằng các tín hiệu. Để một tín hiệu cho phép tàu đi vào một phân khu đóng đường, các điều
+kiện sau đây phải được thỏa mãn (xem Hình 2.2):
+– Đoàn tàu phía trước đã ra khỏi phân khu đóng đường đó.
+– Đoàn tàu phía trước đã ra khỏi vùng chồng lấn (overlap) phía sau tín hiệu kế tiếp (áp dụng
+trên các tuyến có sử dụng vùng chồng lấn - vùng tạo ra để tàu có thể bị chui cột hiệu nhưng
+không bị tai nạn).
+– Đoàn tàu phía trước đã được bảo vệ bởi một tín hiệu dừng.
+– Trên các tuyến có vận hành hai chiều, đoàn tàu còn phải được bảo vệ chống lại các chuyển
+động ngược chiều.
+Tµu 2 Tµu 1
+Ph©n khu ®ãng ®­êng
+Thanh tho¸t
+7 9 11
+ChiÒu dµi phßng vÖ cña tÝn hiÖu 7
+Dõng
+§iÓm thanh tho¸t
+ngoµi cét 9
+ChiÒu dµi phßng vÖ
+cña tÝn hiÖu 9
+ChiÒu dµi phßng vÖ
+cña tÝn hiÖu 5
+Chång lÊn
+ChiÒu dµi phßng
+vÖ cña tÝn hiÖu 11
+Chång lÊn Chång lÊn
+Hình 2.2 Chiều dài phòng vệ của tín hiệu trên một đường đóng đường cố định
+2) Chiều dài phòng vệ của tín hiệu
+--- PAGE 6 ---
+Kỹ thuật tín hiệu cơ bản
+Nguyễn Duy Việt-2025 38
+Chiều dài phòng vệ của một tín hiệu là chiều dài đoạn đường ray nằm sau tín hiệu đó mà phải
+đảm bảo an toàn và thanh thoát thì tín hiệu mới được phép mở (tức là hiển thị cho phép tàu đi
+qua). Khi có sử dụng phần chồng lấn (overlap), chiều dài phòng vệ sẽ dài hơn chiều dài phân khu
+đóng đường và bị chồng lấn với chiều dài phòng vệ của tín hiệu tiếp theo. Mục đích chính của
+phần chồng lấn là để bổ sung mức độ an toàn, trong trường hợp tàu không dừng đúng vị trí do xử
+lý phanh không tốt và vượt nhẹ qua tín hiệu dừng (thường do cảm nhận vị trí cột hiệu của tài xế
+không chính xác gây ra lỗi này).
+Một tín hiệu chỉ được phép mở khi toàn bộ chiều dài kiểm soát của nó đã được giải phóng (tức là
+không có tàu hoặc vật cản). Vì vậy, điểm cho phép thông hành (clearing point) sau một tín hiệu
+sẽ tương ứng với điểm kết thúc của chiều dài phòng vệ của tín hiệu. Trong một số hệ thống
+đường sắt không sử dụng phần chồng lấn, chiều dài kiểm soát của tín hiệu sẽ bằng với chiều dài
+phân khu đóng đường.
+3) Hiển thị của tín hiệu ven đường
+Tín hiệu ven đường không chỉ cung cấp thông tin để duy trì khoảng cách an toàn giữa các đoàn
+tàu, mà còn đóng vai trò hướng dẫn tàu đi qua các khu vực ghi (chuyển hướng ray).
+Về cách phân loại các kiểu hiển thị tín hiệu, các hệ thống tín hiệu hiện nay có thể được chia
+thành hai nguyên tắc cơ bản:
+- Tín hiệu theo tốc độ (Speed Signalling);
+- Tín hiệu theo tuyến đường (Route Signalling).
+Khái niệm "hệ thống tín hiệu theo tốc độ" và "hệ thống tín hiệu theo tuyến đường" là hai phương
+pháp cơ bản trong thiết kế và vận hành hệ thống điều khiển chạy tàu của đường sắt. Đây là cách
+phân loại cơ bản trong triết lý thiết kế tín hiệu, ảnh hưởng tới cách cấp phép chạy tàu, tổ chức
+chạy tàu, và kiến trúc hệ thống điều khiển – tín hiệu. Cụ thể như sau:
+- Hệ thống tín hiệu theo tuyến đường là hệ thống cấp phép cho tàu chạy dựa trên tuyến đường
+(route) mà tàu sẽ đi qua, từ điểm bắt đầu đến điểm kết thúc của một hành trình cụ thể (ví dụ từ ga
+A đến ga B, qua các điểm chuyển hướng). Đặc điểm của loại hình này là tuyến đường được thiết
+lập trước (route setting), gồm các phần tử như: đường ray, ghi (thiết bị chuyển hướng), phân khu
+đóng đường (block), tín hiệu v.v..Tín hiệu vào một phân khu đóng đường chỉ cho phép nếu toàn
+bộ tuyến đường phía trước được thiết lập và kiểm tra an toàn. Hệ thống không liên quan trực tiếp
+đến tốc độ tàu, chỉ kiểm soát khả năng chiếm dụng và giải phóng tuyến đường.
+Điển hình của hệ thống tín hiệu theo tuyến đường là hệ thống tín hiệu truyền thống của châu Âu
+(ví dụ: Đức, Pháp trước khi áp dụng ERTMS Level 2), nhiều tuyến đường sắt ở Việt Nam hiện
+nay cũng áp dụng hình thức này.
+Ưu điểm của hệ thống tín hiệu theo tuyến đường là đơn giản, dễ bảo trì; hiệu quả trong môi
+trường vận hành có mật độ thấp và ít thay đổi tốc độ. Nhược điểm của nó là không tối ưu hóa
+khả năng khai thác, đặc biệt với các đoàn tàu có tốc độ khác nhau; không thể kiểm soát tốc độ
+chi tiết theo từng đoạn đường, dẫn đến khoảng cách giữa các tàu lớn (giảm mật độ khai thác).
+--- PAGE 7 ---
+Kỹ thuật tín hiệu cơ bản
+Nguyễn Duy Việt-2025 39
+- Hệ thống tín hiệu theo tốc độ (Speed-based Signalling) là hệ thống cấp phép chạy tàu dựa trên
+tốc độ mục tiêu mà tàu phải tuân thủ tại từng điểm trên hành trình – thay vì toàn bộ tuyến đường
+phải được thiết lập trước. Đặc điểm của hệ thống là chỉ yêu cầu kiểm tra an toàn của khoảng
+cách an toàn phía trước phù hợp với tốc độ hiện tại và tốc độ mục tiêu của tàu. Tín hiệu hiển thị
+tốc độ giới hạn mà tàu được phép đi, thay vì cho biết "tuyến đường đã được thiết lập", cho phép
+tàu giảm dần tốc độ phù hợp với trạng thái tuyến phía trước, không yêu cầu dừng lại nếu có thể
+kiểm soát bằng tốc độ.
+Hệ thống tín hiệu theo tốc độ là cơ sở của các hệ thống tín hiệu hiện đại như: ETCS (ERTMS),
+CTCS (Trung Quốc), đặc biệt ở cấp độ cao như Level 2 hoặc 3.
+Ưu điểm của loại hình hệ thống tín hiệu theo tốc độ là tối ưu hóa khoảng cách giữa các tàu, nâng
+cao mật độ chạy tàu; hỗ trợ vận hành các tuyến tàu chạy tốc độ cao, tàu hỗn hợp nhiều tốc độ. Là
+nền tảng cho các hệ thống tín hiệu có điều khiển bằng máy tính, không dùng tín hiệu quang học
+truyền thống (cabin signalling). Nhược điểm là hệ thống phức tạp hơn, cần liên tục đo tốc độ,
+xác định vị trí, khoảng cách phanh, dự đoán tuyến đường phía trước, điều đó dẫn đến chi phí cao
+hơn cho hệ thống và yêu cầu đào tạo, bảo trì chuyên sâu hơn.
+Hệ thống tín hiệu theo tuyến đường phù hợp với các tuyến truyền thống, mật độ tàu vừa và thấp,
+nơi yêu cầu đơn giản và chi phí thấp. Hệ thống tín hiệu theo tốc độ phù hợp với đường sắt hiện
+đại (đặc biệt là đường sắt cao tốc và đô thị), cần kiểm soát chính xác tốc độ để tối ưu năng lực
+vận hành và bảo đảm an toàn.
+Dù hiện nay nhiều hệ thống áp dụng nguyên tắc tín hiệu theo tốc độ, tín hiệu theo tuyến đường
+vẫn còn phổ biến, đặc biệt trong các hệ thống đường sắt có nguồn gốc từ Anh quốc.
+Ở một số hệ thống, thông tin về tốc độ hoặc tuyến đường được tích hợp luôn vào tín hiệu đóng
+đường (block signal), ví dụ bằng cách kết hợp nhiều màu biểu thị của đèn tín hiệu. Trong khi đó,
+các hệ thống hiện đại hơn (đặc biệt ở châu Âu) thường sử dụng thêm biển báo phụ trợ để hiển thị
+tốc độ hoặc tuyến đường. Trong các hệ thống này, tín hiệu đóng đường chính chỉ cung cấp thông
+tin về trạng thái của các phân khu tiếp theo. Do đó, các tín hiệu đóng đường có thể được thiết kế
+đơn giản hơn.
+Tín hiệu cơ bản dùng để tạo khoảng cách đoàn tàu
+Để đảm bảo khoảng cách an toàn giữa các đoàn tàu, hầu hết các hệ thống đường sắt sử dụng ba
+biểu thị tín hiệu cơ bản, thường được hiển thị bằng màu đỏ, vàng và xanh. Vì lý do này, hệ thống
+tín hiệu này còn được gọi là tín hiệu ba trạng thái (three-aspect signalling).
+Tuy nhiên, do mỗi công ty hoặc hệ thống đường sắt có thể dùng tên gọi khác nhau cho các tín
+hiệu này trong các quy trình vận hành riêng, nên trong tài liệu này sẽ sử dụng thuật ngữ chung
+như được nêu trong Bảng 1.
+Bảng 2.1. Các chỉ dẫn tín hiệu cơ bản
+Tín hiệu Màu đèn Ý nghĩa vận hành
+--- PAGE 8 ---
+Kỹ thuật tín hiệu cơ bản
+Nguyễn Duy Việt-2025 40
+Dừng (stop) Đỏ Tàu phải dừng lại khi có tín hiệu
+Dự kiến dừng
+(Expect stop)
+Vàng Tàu được phép tiếp tục chạy nhưng phải thận trọng, sẵn
+sàng dừng lại tại tín hiệu kế tiếp
+Thanh thoát (Clear) Xanh lục Tàu được phép tiếp tục chạy qua tín hiệu với tốc độ cho
+phép, đoạn đường phía trước an toàn và thông thoáng.
+Nguyên tắc cung cấp tín hiệu báo trước – Hai phương pháp tín hiệu
+Về nguyên tắc cung cấp tín hiệu báo trước cho lái tàu, có hai phương pháp tín hiệu chính (Hình
+2.3):
+Tín hiệu theo một phân khu đóng đường;
+Tín hiệu theo nhiều phân khu đóng đường.
+Trong tín hiệu một phân khu đóng đường (hình 2.3, a), tín hiệu chính chỉ phản ánh trạng thái của
+phân khu đóng đường ngay phía trước nó.
+Tín hiệu chính không cung cấp được thông tin tín hiệu báo trước cho tín hiệu tiếp theo.
+Vì vậy, mỗi tín hiệu chính phải có một tín hiệu báo trước đặt phía trước với mục đích duy nhất là
+cung cấp báo hiệu sớm cho lái tàu.
+Tín hiệu báo trước này thường được đặt cách tín hiệu chính một khoảng bằng cự ly hãm.
+Trên các tuyến có phân khu đóng đường ngắn (ngắn hơn hoặc gần bằng cự ly hãm), tín hiệu báo
+trước có thể được đặt cùng cột với tín hiệu chính phía sau.
+Trong trường hợp đó, tín hiệu chính và tín hiệu báo trước kế tiếp thường được gắn chồng lên
+nhau trên cùng một trụ.
+Trong tín hiệu nhiều phân khu đóng đường, tín hiệu chính phản ánh trạng thái của hai hoặc nhiều
+phân khu đóng đường kế tiếp.
+Cách bố trí phổ biến nhất là tín hiệu hai phân khu đóng đường (two-block signalling), trong đó
+tín hiệu chính phía sau đã thể hiện được tín hiệu báo trước, nên không cần tín hiệu báo trước
+riêng biệt (hình 2.3, b).
+Vì hệ thống hai phân khu đóng đường sử dụng ba trạng thái tín hiệu giống như hệ thống một
+phân khu đóng đường, nên cả hai đều thuộc nhóm tín hiệu ba trạng thái.
+Hệ thống tín hiệu theo nhiều phân khu đóng đường mang lại hiệu quả cao nhưng yêu cầu các
+phân khu đóng đường không được dài hơn nhiều so với cự ly hãm.
+Nếu phân khu đóng đường quá dài, tín hiệu báo trước sẽ xuất hiện quá sớm, làm giảm năng lực
+tuyến do tăng khoảng cách tín hiệu giữa các tàu.
+Nhiều hệ thống tín hiệu hiện đại có thể chuyển đổi linh hoạt giữa tín hiệu một phân khu đóng
+đường hoặc nhiều phân khu đóng đường, tùy theo chiều dài thực tế của đoạn khối trên tuyến.
+--- PAGE 9 ---
+Kỹ thuật tín hiệu cơ bản
+Nguyễn Duy Việt-2025 41
+Một số mạng đường sắt thậm chí còn sử dụng hệ thống tín hiệu ba phân khu đóng đường, trong
+đó một tín hiệu chính thể hiện trạng thái của ba phân khu đóng đường phía trước bằng cách sử
+dụng tín hiệu cảnh báo sớm nâng cao (hình 2.3, c).
+Để làm điều này, hệ thống sử dụng thêm một trạng thái tín hiệu thứ tư, thông báo cho lái tàu biết
+rằng phải chuẩn bị dừng tại tín hiệu thứ hai phía trước.
+Vì vậy, hệ thống này được gọi là tín hiệu biểu thị bốn trạng thái (four-aspect signalling).
+Nhờ hệ thống tín hiệu ba phân khu đóng đường, cự ly hãm có thể dài hơn chiều dài phân khu
+đóng đường, cho phép đặt tín hiệu ở khoảng cách ngắn hơn, từ đó nâng cao năng lực chạy tàu.
+Đối với các mạng đường sắt sử dụng nguyên tắc tín hiệu theo tốc độ, hiệu quả tương tự có thể
+đạt được bằng cách áp dụng tín hiệu giảm tốc lũy tiến (trong các hệ thống dùng tín hiệu theo tốc
+độ, hiệu ứng tương tự cũng có thể đạt được thông qua cách bố trí tín hiệu yêu cầu tàu giảm tốc
+dần theo từng mức (ví dụ: từ 120 km/h → 80 km/h → 40 km/h → dừng - Hình 2.4).
+Bảng 2.2: Đặc điểm của các hệ thống tín hiệu (đóng đường)
+Hệ thống tín hiệu Số đoạn khối được
+phản ánh
+Số trạng thái
+tín hiệu Ưu điểm chính
+Một phân khu đóng
+đường 1 3 Đơn giản, dễ thiết kế
+Hai phân khu đóng
+đường 2 3 Không cần tín hiệu báo trước, nâng
+cao năng lực
+Ba phân khu đóng
+đường 3 4 Cảnh báo sớm hơn, tăng mật độ tín
+hiệu, nâng năng lực
+Trong hệ thống tín hiệu giảm tốc lũy tiến (progressive speed signalling), tàu khi tiến gần đến tín
+hiệu “Dừng” sẽ được yêu cầu giảm tốc từng bước thông qua các tín hiệu giới hạn tốc độ. Tức là,
+tốc độ tối đa cho phép tại tín hiệu cuối cùng trước tín hiệu dừng sẽ đảm bảo rằng tàu có thể
+phanh an toàn trong phân khu đóng đường ngắn phía trước.
+Mặc dù hệ thống này sử dụng nhiều hơn ba trạng thái (biểu thị) tín hiệu (thường là bốn trạng thái,
+trong một số hệ thống có thể nhiều hơn), đây vẫn được xem là hệ thống tín hiệu hai phân khu
+đóng đường, bởi vì thông tin cảnh báo chỉ được cung cấp cho tín hiệu chính ngay phía trước.
+a) Tín hiệu một phân khu
+Ph©n khu ®ãng ®­êng
+B¸o tr­íc
+BT 11 11
+TÝn hiÖu chÝnhTÝn hiÖu b¸o tr­íc
+BT 9 9
+TÝn hiÖu chÝnhTÝn hiÖu b¸o tr­íc
+B¸o tr­íc
+Th«ng qua Th«ng qua ChuÈn bÞ dõng Dõng
+--- PAGE 10 ---
+Kỹ thuật tín hiệu cơ bản
+Nguyễn Duy Việt-2025 42
+b) Tín hiệu hai phân khu
+Ph©n khu ®ãng ®­êng
+B¸o tr­íc
+11
+TÝn hiÖu chÝnh
+7 9
+TÝn hiÖu chÝnh
+Th«ng qua ChuÈn bÞ dõng Dõng
+Ph©n khu ®ãng ®­êng
+TÝn hiÖu chÝnh
+B¸o tr­íc
+c) Tín hiệu ba phân khu
+Ph©n khu ®ãng ®­êng
+B¸o tr­íc
+11
+TÝn hiÖu chÝnh
+7 9
+TÝn hiÖu chÝnh
+ChuÈn bÞ dõng t¹i tÝn
+hiÖu thø 2 ChuÈn bÞ dõng Dõng
+Ph©n khu ®ãng ®­êng
+TÝn hiÖu chÝnh
+Ph©n khu ®ãng ®­êng
+5
+TÝn hiÖu chÝnh
+Th«ng qua
+B¸o tr­íc sím
+B¸o tr­íc sím
+B¸o tr­ícB¸o tr­íc
+Hình 2.3 Các nguyên tắc khác nhau trong việc áp dụng báo trước
+Ph©n khu ®ãng ®­êng
+B¸o tr­íc
+11
+TÝn hiÖu chÝnh
+7 9
+TÝn hiÖu chÝnh
+Gi¶m tèc ®Õn 100
+km/h
+Ch¹y víi tèc ®é 100 km/h,
+ChuÈn bÞ dõng Dõng
+Ph©n khu ®ãng ®­êng
+TÝn hiÖu chÝnh
+Ph©n khu ®ãng ®­êng
+5
+TÝn hiÖu chÝnh
+Th«ng qua
+B¸o tr­ícB¸o tr­íc
+Hình 2.4 Tín hiệu giảm tốc lũy tiến (progressive speed signalling)
+--- PAGE 11 ---
+Kỹ thuật tín hiệu cơ bản
+Nguyễn Duy Việt-2025 43
+Một ứng dụng phổ biến của các phân khu đóng đường tín hiệu ngắn là tín hiệu di chuyển phía
+trước tại các sân ga của hệ thống đường sắt đô thị (còn được gọi là tín hiệu vào ga so le hoặc tín
+hiệu vào ga nhiều cấp).
+Mục đích của các tín hiệu này là rút ngắn thời gian khi giữa một đoàn tàu rời sân ga và đoàn tàu
+tiếp theo tiến vào cùng đường ray tại sân ga đó.
+Tín hiệu di chuyển phía trước được đặt ngay tại sân ga, sau tín hiệu vào ga chính. Do đó, tín hiệu
+vào ga và tín hiệu di chuyển phía trước tạo thành một phân khu tín hiệu rất ngắn.
+Độ dài kiểm soát của tín hiệu vào ga chính kéo dài đến điểm giải phóng (clearing point) nằm ở
+cuối phần chồng lấn (overlap) của tín hiệu di chuyển phía trước (xem hình 2.5).
+Khi một đoàn tàu dừng tại sân ga, tàu này được bảo vệ bởi hai tín hiệu dừng, vì nó đang chiếm
+phạm vi kiểm soát của cả tín hiệu vào ga và tín hiệu di chuyển phía trước.
+Khi đoàn tàu đang rời sân ga và đã thoát khỏi phạm vi kiểm soát của tín hiệu vào ga (vị trí đầu
+trong hình 2.5), thì tàu tiếp theo đã có thể tiến gần đến sân ga, mặc dù tàu đang rời đi vẫn được
+tín hiệu di chuyển phía trước bảo vệ.
+ChiÒu dµi kiÓm so¸t VÞ trÝ tµu ®Ó xãa
+tÝn hiÖu vµo ga
+S©n ga
+Dõng
+TÝn hiÖu vµo ga
+TÝn hiÖu di chuyÓn
+phÝa tr­íc TÝn hiÖu ra ga
+ChiÒu dµi kiÓm so¸t VÞ trÝ tµu ®Ó xãa tÝn hiÖu
+di chuyÓn phÝa tr­íc
+Hình 2.5 Tín hiệu di chuyển phía trước
+Tín hiệu di chuyển phía trước chỉ chuyển sang trạng thái cho phép sau khi tàu trước hoàn toàn
+rời khỏi khu vực sân ga (vị trí thứ hai trong hình 2.5).
+Tại những ga có mật độ tàu rất cao, có thể sử dụng nhiều tín hiệu di chuyển phía trước (thường
+không quá bốn tín hiệu). Một số đường sắt thậm chí còn đặt tín hiệu di chuyển phía trước ở giữa
+sân ga.
+Mô hình thời gian đóng đường
+--- PAGE 12 ---
+Kỹ thuật tín hiệu cơ bản
+Nguyễn Duy Việt-2025 44
+Để các đoàn tàu có thể chạy liên tiếp mà không bị chậm trễ, một tín hiệu phải được mở (cho
+phép tàu đi qua) trước khi đoàn tàu tiếp theo đến gần đến mức phải bắt đầu phanh do nhìn thấy
+tín hiệu dừng phía sau.
+Khoảng cách tối thiểu giữa hai tàu liên tiếp (headway) phụ thuộc vào cái gọi là “thời gian đóng
+đường” (Hansen & Pachl 2014, Pachl 2018).
+Ph©n khu ®ãng ®­êng
+117 9
+ChiÒu
+dµi tµu
+Ph©n khu ®ãng ®­êng
+Kho¶ng c¸ch tèi thiÓu gi÷a hai ®oµn tµu
+§iÓm quan s¸t §iÓm xãa
+Thêi gian tíi gÇn
+Thêi gian gi÷a hai tÝn
+hiÖu ®ãng ®­êng
+Thêi gian kiÓm tra tÝn hiÖu
+Thêi gian quan s¸t tÝn hiÖu
+Thêi gian xãa
+Thêi gian ph¸t hµnh
+Thêi gian ®ãng ®­êng
+cña ph©n khu 9-11
+Thêi gian
+Kho¶ng c¸ch
+Tr­êng hîp tµu kh«ng dõng
+--- PAGE 13 ---
+Kỹ thuật tín hiệu cơ bản
+Nguyễn Duy Việt-2025 45
+§iÓm xãa
+Thêi gian gi÷a hai tÝn
+hiÖu ®ãng ®­êng
+Thêi gian kiÓm tra tÝn hiÖu
+Thêi gian quan s¸t tÝn hiÖu
+Thêi gian xãa
+Thêi gian ph¸t hµnh
+Thêi gian ®ãng ®­êng
+cña ph©n khu 9-11
+Kho¶ng c¸ch
+Tr­êng hîp tµu dõng
+Ph©n khu ®ãng ®­êng
+117 9
+ChiÒu
+dµi tµu
+Ph©n khu ®ãng ®­êng
+Hình 2.6 Thời gian đóng đường của một khu đoạn đóng đường
+Thời gian đóng đường (trong tiếng Đức gọi là Sperrzeit) là khoảng thời gian mà một đoạn đường
+ray (thường là một phân khu, phân đoạn, khu đoạn tín hiệu) được dành riêng cho một đoàn tàu
+và vì thế không thể cấp quyền chạy cho tàu khác trong thời gian đó.
+Thời gian đóng đường bắt đầu từ thời điểm muộn nhất mà có thể cấp quyền chạy cho tàu đi vào
+đoạn đường này mà không gây chậm trễ, và kết thúc khi có thể cấp quyền chạy cho tàu khác vào
+cùng đoạn đó.
+Do đó, thời gian đóng đường mô tả “khoảng thời gian an toàn” cần giữ trống một đoạn đường để
+một đoàn tàu đi qua đoạn đường đó mà không bị dừng hoặc phanh gấp.
+Mặc dù mục này mô tả hệ thống tín hiệu đặt bên đường (lineside signalling), nguyên lý thời gian
+đóng đường là nguyên tắc chung và có thể áp dụng cho:
+– Tín hiệu trong cabin của hệ thống tín hiệu tự động đầu máy;
+– Hệ thống lái tàu tự động;
+– Hệ thống đóng đường di động.
+Thời gian phong tỏa của một đoạn đường ray thường dài hơn nhiều so với thời gian đoàn tàu
+thực sự chiếm dụng đoạn đó. Trong hệ thống tín hiệu bên đường, với tàu không dừng, thời gian
+phong tỏa gồm các thành phần sau:
+--- PAGE 14 ---
+Kỹ thuật tín hiệu cơ bản
+Nguyễn Duy Việt-2025 46
+– Thời gian hệ thống điều khiển để mở tín hiệu;
+– Thời gian tín hiệu phải được mở trước khi tàu đến đủ sớm để tránh lái tàu phải phanh;
+– Thời gian tàu đi từ tín hiệu cảnh báo (tới gần, báo trước) đến tín hiệu chính;
+– Thời gian tàu di chuyển trong đoạn đường được phòng vệ bởi tín hiệu;
+– Thời gian tàu hoàn toàn rời khỏi đoạn đường và phần chồng lấn (nếu có) gồm thời gian xóa -
+xác nhận phân khu đã thanh thoát cả phần chồng lấn;
+– Thời gian hệ thống mở khóa đoạn đường cho tàu khác (thời gian phát hành).
+Lưu ý: Nếu tàu có kế hoạch dừng lại ngay tại tín hiệu lối vào đoạn đóng đường thì không cần
+thời gian tiếp cận, mà áp dụng thời gian phản ứng của lái tàu để khởi hành sau khi tín hiệu được
+mở.
+Thêi gian
+Kho¶ng c¸ch
+Hình 2.7 Biểu đồ bậc thời gian đóng đường
+Biểu đồ bậc thời gian đóng đường
+Khi vẽ thời gian đóng đường của tất cả các phân khu, khu đoạn tín hiệu mà một đoàn tàu đi qua
+trên biểu đồ thời gian - quãng đường, ta thu được cái gọi là “biểu đồ bậc thời gian đóng đường”
+(xem Hình 2.7).
+Biểu đồ này phản ánh một cách chính xác cách đoàn tàu sử dụng tuyến đường trong thực tế vận
+hành. Các hệ thống lập lịch tiên tiến hiện nay thường sử dụng các biểu đồ bậc này do máy tính
+tạo ra để xác lập lộ trình tàu chạy không xung đột.
+Thông qua biểu đồ bậc thời gian đóng đường, ta có thể: Xác định khoảng cách tối thiểu giữa hai
+đoàn tàu liên tiếp (minimum headway); Thời gian đóng đường trong mỗi phân khu tín hiệu, quy
+định khoảng cách tín hiệu – tức là thời gian tối thiểu giữa hai tàu khi đi qua cùng một đoạn
+đường; Khoảng cách tuyến (line headway) là khoảng thời gian tối thiểu giữa hai đoàn tàu tính
+trên toàn bộ tuyến, không chỉ riêng một đoạn đường.
+--- PAGE 15 ---
+Kỹ thuật tín hiệu cơ bản
+Nguyễn Duy Việt-2025 47
+Trong trường hợp hai biểu đồ bậc thời gian đóng đường của hai tàu liên tiếp chạm nhau ở một
+phân đoạn mà không có bất kỳ khoảng thời gian dự phòng nào, thì phân đoạn đó được gọi là
+“phân đoạn giới hạn” (critical block section).
+Đây là đoạn quyết định khoảng cách tối thiểu giữa hai đoàn tàu trên tuyến đó.
+Tµu 1
+Tµu 2
+Thêi gian ®ãng
+®­êng
+Thêi gian
+®ãng ®­êng
+Thêi gian
+®ãng ®­êng
+Thêi gian
+®ãng ®­êng
+Thêi gian
+®ãng ®­êng
+Kho¶ngthêi
+gian tèi thiÓu
+gi÷a hai ®oµn
+tµu
+Kho¶ng tÝn
+hiÖu cña ph©n
+khu ®ãng
+®­êng quan
+träng
+Thêi gian
+Kho¶ng c¸ch
+Thêi gian ®ãng
+®­êng
+Hình 2.8. Khoảng cách tín hiệu và khoảng cách tuyến
+Trên các tuyến có khai thác hỗn hợp nhiều loại tàu, khoảng cách tuyến tối thiểu (line headway)
+phụ thuộc đáng kể vào mức độ chênh lệch tốc độ giữa các đoàn tàu.
+Thêi gian
+Kho¶ng c¸ch
+Tµu 1
+Tµu 2
+Kho¶ng thêi
+gian tèi thiÓu
+gi÷a hai ®oµn
+tµu
+Ga
+Hình 2.9. Thang thời gian phong tỏa trên tuyến đường sắt đô thị
+--- PAGE 16 ---
+Kỹ thuật tín hiệu cơ bản
+Nguyễn Duy Việt-2025 48
+Ngược lại, trên các tuyến mà tất cả các tàu đều chạy với tốc độ tương tự nhau (điển hình là các
+tuyến đường sắt đô thị), thì các đoạn tín hiệu giới hạn (critical block sections) thường là những
+đoạn có nhà ga, nơi thời gian phong tỏa bao gồm cả thời gian tàu dừng tại ga (xem Hình 2.9).
+Trên những tuyến này, các tín hiệu nên được đặt sao cho thời gian phong tỏa ở các đoạn nhà ga
+là ngắn nhất có thể, nhằm tối ưu hóa khoảng cách giữa các đoàn tàu và nâng cao năng lực khai
+thác tuyến.
+Mô hình vùng được bảo vệ (Protected Zone Model)
+Mô hình vùng được bảo vệ là một phương pháp khác để mô tả tác động của hệ thống tín hiệu đối
+với khoảng cách giữa các đoàn tàu. Thuật ngữ này lần đầu tiên được sử dụng trong (Pachl, 2018).
+Ý tưởng cơ bản là: hệ thống tín hiệu luôn tạo ra một vùng phía sau mỗi đoàn tàu để bảo vệ nó
+khỏi các đoàn tàu chạy phía sau. Vùng được bảo vệ gồm hai phần (xem Hình 2.10 a):
+Phần bảo vệ tuyệt đối (màu đỏ) – gồm các đoạn đường mà tàu đang chiếm dụng một cách độc
+quyền. Khu vực này được bảo vệ bởi tín hiệu dừng (đèn đỏ).
+Phần cảnh báo (màu vàng) – là khu vực mà các tàu chạy sau buộc phải giảm tốc để tránh đi vào
+vùng bảo vệ tuyệt đối. Phần này bắt đầu từ tín hiệu hạn chế đầu tiên mà tàu sau gặp phải.
+Vùng được bảo vệ sẽ dài nhất khi tàu chuẩn bị rời khỏi một đoạn đường tín hiệu (hình 2.10 b).
+Sau khi tàu rời khỏi đoạn đó, vùng được bảo vệ sẽ ngắn lại rồi tăng dần trở lại khi tàu tiếp tục di
+chuyển (hình 2.10 c).
+Quá trình thay đổi từ hình (b) sang hình (c) chính là một bước trong thang thời gian đóng đường.
+Nếu biểu diễn các vùng bảo vệ cùng với thời gian thao tác và phản ứng tín hiệu, ta sẽ có sơ đồ
+tương tự với bậc thời gian đóng đường.
+Tuy nhiên, mô hình này có một điểm yếu quan trọng: nó không thể hiện rõ ràng yếu tố thời gian
+như mô hình đóng đường thời gian, nên chưa thể thay thế hoàn toàn khi lập kế hoạch chạy tàu
+chính xác cao.
+Hình 2.10. Mô hình vùng phòng vệ
+Vùng phòng vệ dài nhất
+Vùng chồng lấnVùng phòng vệ
+Vùng phòng vệ ngắn nhất
+--- PAGE 17 ---
+Kỹ thuật tín hiệu cơ bản
+Nguyễn Duy Việt-2025 49
+Vì thời gian tiếp cận (approach time) không được cộng vào phần đầu mà lại được cộng vào phần
+cuối của thời gian đoàn tàu chiếm dụng đoạn đường, nên mô hình vùng được bảo vệ không thể
+áp dụng cho các hệ thống tín hiệu trên đầu máy (cab signalling), trong đó khoảng cách hãm tín
+hiệu phụ thuộc vào tốc độ thực tế của tàu.
+Trong các hệ thống như vậy, mỗi tàu chỉ có thể tự tính toán khoảng cách hãm của chính mình,
+chứ không thể tính được khoảng cách hãm cần thiết cho đoàn tàu chạy phía sau.
+2.2.2. Điều khiển tàu bằng tín hiệu trên đầu máy (Cab Signalling)
+Trong hệ thống tín hiệu trên đầu máy, lệnh di chuyển của tàu được hiển thị trực tiếp trên bảng
+điều khiển trên đầu máy lái. Ở hầu hết các tuyến đường sắt sử dụng hình thức này, hệ thống tín
+hiệu trên đầu máy thường được kết hợp với một hệ thống bảo vệ (phòng vệ) tàu tự động liên tục
+(ATP) để cung cấp dữ liệu điều khiển cho tín hiệu trên đầu máy.
+Tín hiệu trên đầu máy cho phép loại bỏ hoàn toàn tín hiệu ven đường, nhưng cũng có thể được
+sử dụng cùng với tín hiệu ven đường. Trong trường hợp sử dụng song song, các đường sắt
+thường áp dụng quy định rằng tín hiệu trên đầu máy có giá trị cao hơn so với tín hiệu ven đường,
+để tránh gây nhầm lẫn cho người lái tàu.
+Một số tuyến đường vẫn còn sử dụng hệ thống tín hiệu trên đầu máy cũ, hoạt động như một hệ
+thống phụ. Trên các tuyến này, tàu vẫn phải tuân theo tín hiệu ven đường, nhưng tín hiệu trên
+đầu máy được dùng để hỗ trợ người lái trong việc quan sát.
+Tín hiệu trên đầu máy với phân khu đóng đường cố định
+Việc giữ nguyên các phân khu đóng đường cố định (fixed block) trên tuyến có tín hiệu trên đầu
+máy là để kiểm tra sự đầy đủ thành phần của đoàn tàu thông qua công nghệ phát hiện đường ray
+thanh thoát. Điều này đặc biệt cần thiết với tàu hàng, vì hiện tại chưa có giải pháp nào đủ tin cậy
+để kiểm tra độ đầy đủ của tàu hàng chỉ bằng hệ thống trên tàu. Tàu hàng không có dây điện
+xuyên suốt theo tàu, đoàn tàu dài và nặng, không thể tự kiểm chứng đầy đủ nên cần phân khu cố
+định với mạch đường ray hoặc thiết bị đếm trục để xác minh.
+Ngay cả với tàu chở khách có hạ tầng kỹ thuật hiện đại hơn (cáp liên thông, hệ thống giám sát độ
+toàn vẹn đoàn tàu - TIMS), chúng thường ít toa nên có thể tự kiểm chứng, nhưng nhiều tuyến
+vẫn giữ phân khu cố định làm lớp an toàn bổ sung, một công nghệ đã được kiểm chứng. Trên các
+tuyến không có tín hiệu ven đường, nhiều đường sắt đặt các biển báo giới hạn phân khu đóng
+đường (block marker board) để hỗ trợ vận hành trong tình huống suy giảm cấp vận hành
+(degraded mode - ví dụ mất tín hiệu vô tuyến hoặc ATP lỗi).
+Như vậy, phân khu cố định (fixed block) vẫn tồn tại ngay cả khi đã có tín hiệu trên đầu máy , để
+bảo đảm an toàn vận hành, đặc biệt với tàu hàng và trong trường hợp vận hành suy giảm.
+Phân khu đóng đường ảo (Virtual Block)
+--- PAGE 18 ---
+Kỹ thuật tín hiệu cơ bản
+Nguyễn Duy Việt-2025 50
+Trên các tuyến chỉ chạy tàu khách, nếu việc kiểm đoàn tàu với đầy đủ thành phần được thực hiện
+trên tàu, có thể áp dụng phân khu đóng đường ảo, tức là các phân khu đóng đường chỉ tồn tại
+trong hệ thống điều khiển mà không có thiết bị thật trên thực địa.
+Lý do sử dụng phân khu đóng đường ảo thay vì đóng đường di động là để giảm lượng dữ liệu
+truyền qua sóng vô tuyến. Khác với hệ thống đóng đường di động (cần cập nhật lệnh liên tục), hệ
+thống đóng đường ảo chỉ cập nhật lệnh di chuyển khi tàu trước đã rời khỏi phân khu đóng đường,
+giúp giảm đáng kể lưu lượng truyền dữ liệu.
+Nếu cần tăng năng lực vận hành, có thể rút ngắn chiều dài phân khu đóng đường ngay trong hệ
+thống điều khiển mà không cần thay đổi gì trên thực địa.
+Hệ thống đóng đường phân khu ảo là một trong những công nghệ tiên tiến trong điều khiển chạy
+tàu đường sắt, đặc biệt được áp dụng trong hệ thống tín hiệu hiện đại, như đường sắt cao tốc
+hoặc đường sắt đô thị không người lái.
+Nguyên lý hoạt động của hệ thống đóng đường phân khu ảo như sau: Phân khu ảo (Virtual Block)
+là các khoảng cách chia tuyến đường không cố định vật lý trên hạ tầng như các phân khu của hệ
+thống đóng đường cố định, mà phân khu được xác lập động, theo thời gian thực bởi hệ thống
+điều khiển trung tâm dựa trên vị trí tàu và khoảng cách an toàn phanh. Hệ thống giám sát chính
+xác vị trí thực tế của tàu bằng thiết bị đo lường hành trình (odometer), định vị (balise, GPS,
+radar); truyền thông liên tục giữa tàu và trung tâm (CBTC, ETCS Level 3). Khoảng cách an toàn
+phía trước được tính toán liên tục theo vị trí đoàn tàu phía trước; tốc độ, đặc tính hãm của tàu;
+điều kiện tuyến đường (độ dốc, độ cong, nhiệt độ...). Giải phóng tuyến đường không theo đoạn
+cố định, mà giải phóng từng đoạn nhỏ theo vị trí thực tế mà đuôi tàu vừa đi qua. Để rõ ràng hơn,
+xem bảng 2.3, so sánh hệ thống đóng đường phân khu ảo với hệ thống đóng đường phân khu vật
+lý.
+Bảng 2.3: So sánh hệ thống đóng đường phân khu ảo với hệ thống đóng đường phân khu vật lý
+Yếu tố Phân khu vật lý (phân khu đóng
+đường truyền thống) Phân khu ảo (Virtual Block)
+Cách chia đoạn tuyến Cố định bằng thiết bị trên hạ tầng Linh hoạt theo vị trí tàu
+Cách giải phóng phân khu
+đóng đường
+Khi tàu ra khỏi toàn bộ phân khu
+đóng đường Theo vị trí thực tế đuôi tàu
+Mật độ tàu Giới hạn theo độ dài phân khu đóng
+đường
+Tối ưu hóa theo năng lực
+phanh thực tế
+Ứng dụng Tín hiệu truyền thống, ATC CBTC, ETCS Level 3,
+CTCS-3/3+
+--- PAGE 19 ---
+Kỹ thuật tín hiệu cơ bản
+Nguyễn Duy Việt-2025 51
+Hệ thống đóng đường phân khu ảo được áp dụng khi các điều kiện cần thiết để áp dụng khi có hệ
+thống giám sát vị trí tàu chính xác cao, độ tin cậy >99,99%; hệ thống truyền thông liên tục giữa
+tàu và trung tâm, ví dụ: GSM-R, LTE-R, Wi-Fi 802.11ac; tàu có khả năng tự định vị, tự kiểm tra
+tình trạng đoàn tàu (ví dụ phát hiện đứt đoàn tàu). Hệ thống điều khiển trung tâm (ATS/CTC)
+phải có khả năng xử lý logic phân khu ảo và kiểm tra an toàn chạy tàu theo thời gian thực.
+Hiện chưa có ứng dụng thực tế nào của phân khu ảo trong đường sắt quốc gia. Tuy nhiên, CBTC
+của Metro Hà Nội (tuyến 3 Nhổn – Ga Hà Nội) hoặc các tuyến tương lai ở TP.HCM có khả năng
+sẽ sử dụng dạng này trong tương lai.
+Hệ thống đóng đường phân khu ảo sẽ giảm khoảng cách chạy tàu, tăng mật độ tàu trên tuyến.
+Tăng hiệu quả khai thác mà không cần thay đổi hạ tầng vật lý. Tối ưu chi phí đầu tư, bảo trì, bảo
+dưỡng dài hạn, giảm số thiết bị bên đường, là nền tảng cho vận hành không người lái
+(GoA3/GoA4).
+Tuy nhiên hệ thống yêu cầu độ tin cậy và chính xác rất cao trong định vị và truyền thông, khó
+phát hiện đứt tàu nếu không có thiết bị giám sát đoàn tàu chuyên biệt. Chi phí đầu tư ban đầu cao,
+yêu cầu về kỹ thuật công nghệ hệ thống ở mức độ chưa được phổ biến .
+Phân khu ảo là một bước phát triển vượt trội trong hệ thống điều khiển chạy tàu hiện đại. Nó phù
+hợp với các tuyến: Có yêu cầu năng lực vận tải lớn, tàu chạy tốc độ cao hoặc vận hành không
+người lái, có hạ tầng sẵn sàng về công nghệ định vị – truyền thông.
+Sự khác biệt chính giữa hệ thống tín hiệu trên đầu máy với các phân khu đóng đường cố định và
+hệ thống đóng đường cố định sử dụng tín hiệu ven đường nằm ở chỗ:
+Nó không còn phụ thuộc vào khoảng cách tiếp cận như trong hệ thống tín hiệu ven đường – tức
+là khoảng cách giữa tín hiệu vào phân khu đóng đường và tín hiệu phía sau dùng để báo trước.
+Trong hệ thống tín hiệu trên đầu máy, thời gian tiếp cận không còn được tính theo thời gian chạy
+giữa hai tín hiệu vật lý, mà thay vào đó là thời gian chạy thực tế trong khoảng cách phanh thực
+sự, được xác định theo đường cong giám sát của hệ thống tín hiệu trên đầu máy.
+Ngoài ra, do không còn các tín hiệu ven đường, cũng không cần tính đến thời gian quan sát tín
+hiệu (tức là thời gian người lái cần để phát hiện tín hiệu ở một vị trí cụ thể).
+Các yếu tố khác trong thời gian đóng đường vẫn giữ nguyên như ở hệ thống dùng tín hiệu ven
+đường (như minh họa trong Hình 2.11).
+--- PAGE 20 ---
+Kỹ thuật tín hiệu cơ bản
+Nguyễn Duy Việt-2025 52
+Ph©n khu ®ãng ®­êng
+ChiÒu
+dµi tµu
+Ph©n khu ®ãng ®­êng
+Kho¶ng c¸ch tèi thiÓu gi÷a hai ®oµn tµu
+§iÓm quan s¸t §iÓm xãa
+Thêi gian tíi gÇn
+Thêi gian gi÷a c¸c
+giíi h¹n ph©n khu
+Thêi gian cÊp MA
+Thêi gian xãa
+Thêi gian ph¸t hµnh
+Thêi gian ®ãng ®­êng
+cña ph©n khu
+Thêi gian
+Kho¶ng c¸ch
+MA - QuyÒn di chuyÓn
+Kho¶ng c¸ch phanh thùc tÕ
+Hình 2.11 Thời gian đóng đường của một phân khu đóng đường trên tuyến đường sử dụng tín
+hiệu trên đầu máy
+Tín hiệu trên đầu máy với đóng đường di động
+Hệ thống đóng đường di động (moving block) dựa trên nguyên tắc khoảng cách hãm tuyệt đối.
+Do các phân khu đóng đường cố định được loại bỏ, nên tuyến đường được giải phóng liên tục
+ngay sau đuôi của đoàn tàu đang di chuyển.
+Bên cạnh việc cần xác định liên tục vị trí đoàn tàu và đảm bảo đoàn tàu còn nguyên vẹn, hệ
+thống này còn yêu cầu cập nhật liên tục quyền di chuyển của tàu.
+Hình 2.12 minh họa tác động của hệ thống này đến khoảng cách tối thiểu giữa hai tàu, so với hệ
+thống tín hiệu đầu máy sử dụng các phân khu đóng đường cố định.
+Hiện nay, công nghệ đóng đường di động (moving block) chỉ được áp dụng tại một số hệ thống
+đường sắt đô thị. Một trong những lý do khiến các tuyến đường sắt tiêu chuẩn ít quan tâm đến
+đóng đường di động là vì mức độ cải thiện năng lực chạy tàu thường bị đánh giá quá cao. Thực
+tế, mức cải thiện không lớn như dự đoán, do các yếu tố kỹ thuật, khai thác và vận hành khác vẫn
+còn là rào cản.

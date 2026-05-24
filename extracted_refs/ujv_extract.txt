@@ -1,0 +1,1258 @@
+--- PAGE 1 ---
+ HANOI PEOPLES COMMITTEE 
+HANOI METROPOLITAN RAILWAY MANAGEMENT BOARD (MRB) 
+ 
+CONTRACTOR NAME: UJV (Alstom, Colas Rail, Thales) 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+MANUFACTURING DESIGN 
+TECHNICAL SPECIFICATION 
+PROJECT: HANOI PILOT LIGHT METRO LINE 
+ Section Nhon - Hanoi Railway Station 
+ 
+PACKAGE: RAIL SYSTEM 1 
+PACKAGE NUMBER: HPLMLP/CP-06 
+ 
+SIGNALLING SYSTEM DESIGN SPECIFICATION 
+ 
+ 
+Location: Section Nhon – Hanoi Railway Station 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+PROJECT IMPLEMENTATION CONSULTANT: SYSTRA S.A 
+April 2019 
+ 
+Project Reference: UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00 
+ 
+ 
+ 
+ 
+ 
+
+--- PAGE 2 ---
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 2/74 
+ 
+ 
+MANUFACTURING DESIGN 
+TECHNICAL SPECIFICATION 
+PROJECT: HANOI PILOT LIGHT METRO LINE 
+ Section Nhon - Hanoi Railway Station 
+PACKAGE: RAIL SYSTEM 1 
+PACKAGE NUMBER: HPLMLP/CP-06 
+ 
+SIGNALLING SYSTEM DESIGN SPECIFICATION 
+ 
+ 
+Location: Section Nhon – Hanoi Railway Station 
+ 
+ 
+ 
+Hanoi 22 April, 2019 
+ 
+ 
+HANOI METROPOLITAN RAILWAY 
+MANAGEMENT BOARD 
+CONTRACTOR 
+(UJV) 
+PROJECT IMPLEMENTATION CON-
+SULTANT  
+(SYSTRA S.A.) 
+--- PAGE 3 ---
+ 
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 3/74 
+ 
+ 
+ 
+ 
+ 
+Contractor Approval / Revision Record Sheet 
+ 
+ 
+ 
+Revision Date Subject of issue / Revision Authors 
+1A 29/03/2018 First version V.-H. NGUYEN 
+2A 16/07/2018 Reworks following internal Change Requests 
+and PIC comments ; PMG comments  V.-H. NGUYEN 
+3A 17/09/2018 PIC comments V.-H. NGUYEN 
+4A 18/04/2019 
+CMD25 implementation 
+Add of reference to Hardware specifications 
+Renaming of manual driving mode (CMD into 
+CMD ATP bypass) 
+Internal comments from UJV 
+V.-H. NGUYEN 
+    
+    
+    
+ 
+ 
+ 
+Revision N°: 4A Name Date Signature 
+Prepared by V.-H. NGUYEN 18/04/2019  
+Checked by Julien BARJOU 22/04/2019  
+Validated by Gilles MACHELON 22/04/2019  
+ 
+ 
+Contractor specific comments: 
+ 
+ 
+  
+--- PAGE 4 ---
+ 
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 4/74 
+ 
+ 
+UJV SUB-GROUPS VALIDATION (NA for PMG own Documents) 
+ 
+  
+Rev Date Designed by Checked by Sub-Group PM 
+Manager  
+1A(.1) 19/03/2018 Viet Hai NGUYEN Felipe PAIVA Christophe DUBU-
+ISSON 
+1A(.2) 29/03/2018 Viet Hai NGUYEN Felipe PAIVA Christophe DUBU-
+ISSON 
+2A(.1) 29/06/2018 Viet Hai NGUYEN Felipe PAIVA Christophe DUBU-
+ISSON 
+2A(.2) 16/07/2018 Viet Hai NGUYEN Felipe PAIVA Christophe DUBU-
+ISSON 
+3A(.1)  17/09/2018 Viet Hai NGUYEN Felipe PAIVA Christophe DUBU-
+ISSON 
+4A(.1)  04/03/2019 Viet Hai NGUYEN Felipe PAIVA Christophe DUBU-
+ISSON 
+4A(.2)  18/04/2019 Viet Hai NGUYEN Felipe PAIVA Christophe DUBU-
+ISSON 
+          
+          
+ 
+  
+--- PAGE 5 ---
+ 
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 5/74 
+ 
+Table of contents 
+ 
+ 
+1 INTRODUCTION .................................................................................................................................................. 9 
+1.1 URBALIS™ / U400 (CBTC) KEY POINTS & MAIN FEATURES .................................................................................... 9 
+1.2 CONTENT OF THE DOCUMENT ............................................................................................................................... 9 
+2 SIGNALLING SYSTEM ARCHITECTURES ...............................................................................................................11 
+2.1 GENERAL SIGNALLING SYSTEM ARCHITECTURE ....................................................................................................... 11 
+2.1.1 General description..................................................................................................................................... 11 
+2.1.2 Standards .................................................................................................................................................... 12 
+2.2 SIGNALLING SYSTEM STRUCTURE IN HNL3 ............................................................................................................ 13 
+3 SUB-SYSTEMS DESCRIPTION ..............................................................................................................................21 
+3.1 CBI SUB-SYSTEM ............................................................................................................................................. 21 
+3.1.1 Presentation ................................................................................................................................................ 21 
+3.1.2 Interlocking Functions ................................................................................................................................. 22 
+3.1.3 CBI System Interfaces ................................................................................................................................. 28 
+3.2 ATC SUB-SYSTEM ............................................................................................................................................ 29 
+3.2.1 Static Guideway database ........................................................................................................................... 29 
+3.2.2 ATC equipment ........................................................................................................................................... 30 
+3.2.3 List of ATC functions ................................................................................................................................... 31 
+3.3 FRONT END PROCESSOR (FEP) SUB-SYSTEM ......................................................................................................... 47 
+3.4 DCS SUB-SYSTEM ............................................................................................................................................ 47 
+3.4.1 DCS wired system: BTN ............................................................................................................................... 48 
+3.4.2 DCS Administration ..................................................................................................................................... 49 
+3.4.3 DCS wireless system: Radio Communication System ................................................................................. 49 
+3.5 MSS SUB-SYSTEM ............................................................................................................................................ 52 
+3.5.1 The Maintenance Support System (MSS) ................................................................................................... 52 
+3.5.2 Maintenance Data Collection ..................................................................................................................... 53 
+3.6 TRACKSIDE EQUIPMENT..................................................................................................................................... 54 
+3.6.1 Train Detection System (Axle Counters) ..................................................................................................... 54 
+3.6.2 Point Machines ........................................................................................................................................... 56 
+3.6.3 Signals ......................................................................................................................................................... 57 
+4 OPERATION .......................................................................................................................................................58 
+4.1 CBTC DRIVING MODES ...................................................................................................................................... 58 
+4.2 DEPOT OPERATION ........................................................................................................................................... 58 
+4.3 MANUAL RESCUE OPERATION............................................................................................................................. 59 
+5 INTERFACES .......................................................................................................................................................60 
+5.1 INTERFACE WITH ATS ....................................................................................................................................... 60 
+5.1.1 ATS - ATC Interface ..................................................................................................................................... 60 
+5.1.2 ATS - IXL Interface ....................................................................................................................................... 61 
+5.1.3 MSS-OCC (SCADA) Interface ....................................................................................................................... 61 
+5.2 INTERFACE WITH RS ......................................................................................................................................... 62 
+5.3 INTERFACE WITH POWER SUPPLY (ESP) ............................................................................................................... 62 
+5.4 INTERFACE WITH CHRONOMETRY (MASTER CLOCK) ................................................................................................ 62 
+5.5 INTERFACE WITH POINT MACHINES ..................................................................................................................... 62 
+5.6 PROTOCOL EXCHANGE WITH OTHER SYSTEMS ....................................................................................................... 63 
+6 OVERALL SOLUTION PERFORMANCE .................................................................................................................64 
+6.1 SAFETY CHARACTERISTICS .................................................................................................................................. 64 
+6.2 RAM CHARACTERISTICS .................................................................................................................................... 64 
+6.3 PERFORMANCE CHARACTERISTICS ....................................................................................................................... 64 
+6.4 IT SECURITY .................................................................................................................................................... 64 
+--- PAGE 6 ---
+ 
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 6/74 
+ 
+7 BUILT-IN REDUNDANCY .....................................................................................................................................66 
+7.1 EQUIPMENT REDUNDANCY ................................................................................................................................ 66 
+7.1.1 MooN Platform Redundancy ...................................................................................................................... 66 
+7.1.2 Carborne Controller Redundancy ............................................................................................................... 67 
+7.1.3 Smart IO Redundancy ................................................................................................................................. 68 
+7.2 SIGNALLING COMMUNICATION REDUNDANCY ........................................................................................................ 68 
+8 FAILURE MODES ................................................................................................................................................69 
+8.1 FAILURE OF FIELD EQUIPMENT ............................................................................................................................ 69 
+8.1.1 Failure of Train Detection ........................................................................................................................... 69 
+8.1.2 Failure of Point ............................................................................................................................................ 69 
+8.1.3 Beacon failure ............................................................................................................................................. 70 
+8.1.4 Signal failure ............................................................................................................................................... 70 
+8.2 FAILURE OF CBTC SYSTEM CONSTITUENTS ............................................................................................................ 70 
+8.2.1 Failure of Zone Controller or Line Controller .............................................................................................. 70 
+8.2.2 Failure of Carborne Controller .................................................................................................................... 70 
+8.2.3 Interlocking ................................................................................................................................................. 71 
+8.2.4 FEP .............................................................................................................................................................. 71 
+8.2.5 Communications ......................................................................................................................................... 71 
+8.2.6 Cold Backup function .................................................................................................................................. 71 
+8.3 ROLLING STOCK FAILURE ................................................................................................................................... 73 
+8.4 PRECISE STOP IN STATION NOT ACHIEVED .............................................................................................................. 73 
+8.5 AVAILABLE DRIVING MODE SUMMARY................................................................................................................. 73 
+  
+--- PAGE 7 ---
+ 
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 7/74 
+ 
+Abbreviations 
+ 
+MRB Hanoi Metropolitan Railway Management Board 
+PIC Project Implementation Consultant (SYSTRA S.A.) 
+ATC Automatic Train Control, composed of ATP, ATO, LC and ZC 
+ATP Automatic Train Protection 
+ATO Automatic Train Operation 
+ATS/ATSS Automatic Train Supervision / Automatic Train Supervision System 
+AxCo Axle Counter 
+BTN  Backbone Transmission Network 
+CBI  Computer Based Interlocking 
+CBTC Communication Based Train Control 
+CC Carborne Controller, composed of ATP and AT0 
+CMD ATP 
+bypass 
+Manual driving with Rolling Stock Speed Ceiling at 25kph 
+CMD25 Manual driving with ATP Speed Ceiling at 25kph 
+COTS Commercial Off The Shelf (a standard product that may be purchased directly 
+without the need for special development) 
+DCS  Data Communication System 
+DOP Destination Occupancy Proving 
+EMU Electric Multiple Unit 
+EOA End Of Authority 
+ESA Emergency Stop Area 
+ESP Emergency Stop Plunger 
+GAMA Geographical Auto Mode Area 
+IO Input Output 
+IXL Interlocking 
+LC Line Controller 
+LMD Speed-limited Manual Driving 
+MooN M out of N Platform (2x2oo2 platform) 
+MOD Multiple Occupancy Destination 
+MSS Maintenance Support Service 
+OCC  Operating Control Centre 
+PSR Permanent Speed Restriction 
+RAMS  Reliability, Availability, Maintainability, Safety 
+RAP Radio Access Point 
+SER Signalling Equipment Room 
+SMIO  SmartIO Equipment (an Alstom Remote Input/output equipment) 
+TD Train Detection 
+TRE Trackside Radio Equipment 
+--- PAGE 8 ---
+ 
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 8/74 
+ 
+TSR Temporary Speed restriction 
+WS  WorkStation 
+ZC  Zone Controller 
+ 
+Project References 
+ 
+Ref N° Ref ID number Ref description 
+REF1 UJV-TEC-TTS-SIG-L00-40208-E Preliminary SIG-RS interface specification 
+REF2 UJV-TEC-TTS-SIG-L00-40210-E Headway Simulation Report - Detailed 
+REF3 UJV-APH-TTS-UJV-L00-01000-E Operation plan (Mainline + Depot)  
+REF4 UJV-TEC-TTS-SIG-L00-40208-E Train Movement Specification 
+REF5 UJV-BAS-TTS-SIG-L00-40236-E Hardware Requirement Specification – SIGNALS 
+REF6 UJV-BAS-TTS-SIG-L00-40229-E Hardware Requirement Specification - Signalling Cables 
+REF7 UJV-BAS-TTS-SIG-L00-40243-E Hardware Requirement Specification - BTN CUBICLE 
+REF8 UJV-BAS-TTS-SIG-L00-40240-E Hardware Requirement Specification – TRE 
+REF9 UJV-BAS-TTS-SIG-L00-40230-E Hardware Requirement Specification – UNIVIC 
+REF10 UJV-BAS-TTS-SIG-L00-40231-E Hardware Requirement Specification - ODOMETER - 
+Customer Version 
+REF11 UJV-BAS-TTS-SIG-L00-40232-E Hardware Requirement Specification - Beacon ANTEN-
+NA 
+REF12 UJV-BAS-TTS-SIG-L00-40233-E Hardware Requirement Specification – BEACON 
+REF13 UJV-BAS-TTS-SIG-L00-40234-E Hardware Requirement Specification - MOON PLAT-
+FORM 
+REF14 UJV-BAS-TTS-SIG-L00-40235-E Hardware Requirement Specification - Cable Frames 
+REF15 UJV-BAS-TTS-SIG-L00-40237-E Hardware Requirement Specification - NS1 Frames 
+REF16 UJV-BAS-TTS-SIG-L00-40238-E Hardware Requirement Specification - SMART I/O 
+REF17 UJV-BAS-TTS-SIG-L00-40239-E Hardware Requirement Specification - Axle Counter 
+Cubicles - Customer Version 
+REF18 UJV-BAS-TTS-SIG-L00-40241-E Hardware Requirement Specification - DCS Wireless 
+Equipment 
+REF19 UJV-BAS-TTS-SIG-L00-40242-E Hardware Requirement Specification - DCS BTN 
+Equipment 
+REF20 UJV-BAS-TTS-SIG-L00-40246-E Hardware Requirement Specification - FEP CUBICLE 
+REF21 UJV-BAS-TTS-SIG-L00-40244-E Hardware Requirement Specification - Power Supply - 
+Customer Version 
+REF22 UJV-BAS-TTS-SIG-L00-40245-E Hardware Requirement Specification - MSS CUBICLE 
+--- PAGE 9 ---
+ 
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 9/74 
+ 
+1 INTRODUCTION 
+The purpose of this document is to describe the technical solution for the Signalling system of Hanoi Pilot 
+Light Metro Line 3 (HNL3) based on URBALIS™ / U400 Communication Based Train Control (CBTC) 
+solution and in compliance with contract. 
+1.1 URBALIS™ / U400 (CBTC) KEY POINTS & MAIN FEATURES 
+The URBALIS™ / U400 (CBTC) solution is Alstom’s advanced solution for mass transit CBTC application. 
+The Signalling system is a radio -based CBTC based on a proven moving block principle. The solution was 
+developed to be able to perform all Automatic Train Control, Interlocking, and Mai ntenance functions r e-
+quired for automatic mass transit rail operation with Train Drivers.  The URBALIS™ / U400 (CBTC) mo v-
+ing block principles allow achieving the contractual performances in particular in terms of headway, journey 
+time, RAMS and stopping accuracy. 
+Also, its advanced and modular architecture allows achieving other important performance goals namely 
+regarding scalability. 
+The Signalling solution offers major advantages. Below is a non-exhaustive list of main key points: 
+ A proven in use CBTC solution, in revenue service for 10 years on complex metro applications, 
+ A solution with Automatic Train Control (ATC) and Interlocking hosted in separate applications and 
+platforms, to allow interlocking operation, in case of ATC failure, 
+ A radio independent from CBTC application, radio handover is managed only by the radio, in order 
+to have a radio as “off-the-shelf” as possible, 
+ A redundant solution to avoid single point of failure, 
+ A URBALIS™ / U400 (CBTC) solution offering secondary train detection (ST D), in order to allow 
+management of non-communicating trains (in degraded mode), 
+ A system designed for a working life of at least 30 years, 
+ Facilities to remotely detect alarms and diagnostic failures, 
+ A strong IT security implementation to prevent deliber ate or accidental intrusion of external people 
+as hackers, 
+ A scalable and modular architecture that allows interlocking operation by sectors, in case of commu-
+nication failure. 
+ 
+1.2 CONTENT OF THE DOCUMENT 
+The following topics are addressed is the document: 
+ General system architecture – The Signalling system on project context 
+ Sub-systems description – Detailed implementation of the URBALIS™ / U400 (CBTC)  on the pr o-
+ject context 
+ Operation – Overview of Operations with the Signalling system 
+ Interfaces – Theaa Signalling system interfaces with other systems 
+ Overall system performances – Overview of Performances reached by the Signalling system 
+--- PAGE 10 ---
+ 
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 10/74 
+ 
+ Built-in redundancy principles – The principles to reach an high availability for the Signalling sy s-
+tem 
+ Failure modes – How to operate even in case of failure 
+--- PAGE 11 ---
+ 
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 11/74 
+ 
+2 SIGNALLING SYSTEM ARCHITECTURES 
+2.1 GENERAL SIGNALLING SYSTEM ARCHITECTURE 
+2.1.1 General description 
+The main subsystems of the CBTC Signalling System URBALIS™ / U400 (CBTC) system are:  
+ Automatic Train Control (ATC) composed by:   
+o Carborne Controller (CC), in the trains 
+o Zone Controller (ZC), 
+o Line Controller (LC), 
+ Interlocking (IXL), a computer-based interlocking (CBI) composed by: 
+o Central Interlocking (one dedicated Central Interlocking for main line, one dedicated Central 
+Interlocking for Depot) 
+o IO modules, based on the Alstom Smart IO product,  
+ Front End Processor (FEP), 
+ Maintenance Support System (MSS) for maintenance management composed by: 
+o MSS servers,  
+o MSS workstation, 
+ Data Communication System (DCS) which is made of: 
+o Backbone Transmission Network (BTN), that is divided into  redundant networks (red & 
+blue) for CBTC communication, 
+o Radio Transmission System through the free propagation medium (Radio Access Point 
+(RAP) on trackside and radio on-board the trains): radio redundant networks (red& blue) for 
+CBTC communication, 
+o Network Management system (NMS). 
+The trackside ATC is composed of the Zone Controller and the Line Controller. The role of the Zone Co n-
+troller is to ensure the protection of the train and to manage the movement authority with the Carborne Co n-
+troller. The role of the Line Controller is to manage the Temporary Speed Restriction and the control of 
+software version in the trains. 
+The Data Communication System is the sub -system of the architecture which ensures the IP communication 
+between all sub -systems: ATC, Interlocking and MSS. A continuous bi -directional radio communication is 
+guaranteed at each time between the track and the train. 
+Through the backbone and the radio, ea ch sub-system can communicate directly with another one. For e x-
+ample the ATS communicates directly with the Carbone Controller for the regulation orders. 
+--- PAGE 12 ---
+ 
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 12/74 
+ 
+CBI
+ Cubicle
+LC 
+Cubicle
+Axle Counter 
+Cubicle
+Beacon Point 
+machine BeaconSignal
+Axle
+Counter
+Axle 
+Counter
+SMART IO
+Cubicle
+Relays 
+frame
+Carborne 
+controller
+Carborne 
+controller
+Beacon 
+antenna
+Beacon 
+antenna Odometer Odometer
+Radio 
+Access 
+Point
+CBTC
+Maintenance 
+system
+ESP
+NMS
+External interfaces:
+- ATS
+- SCADA
+FEP
+ZC 
+Cubicle
+MSS
+ 
+Figure 1 : URBALISTM / U400 (CBTC) Architecture schematic 
+Line wide, the Data Communication System consists of a redundant backbone using hot redundant mult i-
+plexers and duplicated Ethernet access switches, and Radio Access Points (AP) all along the tracks which are 
+the radio communication part. 
+For signalling, full communication redundancy is also offered through the transmission of data through two 
+fully distinct paths (red & blue network). No matter what the nature of the failure or disturbance is, there is 
+always a path to transmit the needed information from a subsystem to another. 
+The context of the Signalling system in relation with external system is shown in Figure 34. 
+2.1.2 Standards 
+The purpose of this section is to draw the list of standards filled by the Signalling System: 
+ 
+No. Name of Standard 
+Code of standard; Issuing      
+organization; Year of 
+issuance 
+01 Communications, Signalling, and processing  systems: 
+safety related electronic systems for signalling EN 50129 (01/02/2003) 
+02 Electromagnetic compatibility (EMC) IEC 61000* 
+03 Communications, Signalling, and processing systems - 
+software for railway control and protection systems EN 50128 (2011) 
+04 Railway    applications-    Communication,    signalling    
+and processing systems EN 50159 (01/03/2001) 
+05 IEEE Standard for Communications-Based Train   Control 
+(CBTC) Performance and Functional Requirements IEEE Std 1474.1™-2004 
+06 IEEE    Standard    for    User    Interface    Requirements    
+in Communications-Based Train Control (CBTC) Systems IEEE Std 1474.2™-2003 
+ 
+*Note: Following IEC (EN) 61000-x standards are applicable: IEC/EN 61000-4-1, IEC/EN 61000-4-2, 
+IEC/EN 61000-4-3, IEC/EN 61000-4-4, IEC/EN 61000-4-5, IEC/EN 61000-4-6, IEC/EN 61000-4-8, 
+--- PAGE 13 ---
+ 
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 13/74 
+ 
+IEC/EN 61000-4-9, IEC/EN 61000-4-11, IEC/EN 61000-6-1, IEC/EN 61000-6-2, IEC/EN 61000-6-3, 
+IEC/EN 61000-6-4. For installation guidelines: IEC 61000-5-2, EN 50174-2. 
+ 
+2.2 SIGNALLING SYSTEM STRUCTURE IN HNL3 
+In the frame of HNL3, the proposed signalling system is made of:  
+ On-board URBALIS™ / U400 (CBTC) system for each equipped train, composed of two Carborne 
+Controller 
+ Centralized URBALIS™ / U400 (CBTC) system for mainline, composed of: 
+o Central core equipment located in main station S1 (NHON) and Backup equipment in OCC 
+Building: 
+ Zone Controller (ZC) [REF13], 
+ Line Controller (LC) [REF13], 
+ Central Interlocking (CIXL) [REF13], 
+ Front End Processors (FEP) [REF20], 
+ Maintenance Support System (MSS) [REF22], 
+ Network Management System (NMS),  
+o Distributed equipment in main stations S1 (NHON), S5 (LE DUC THO), S8 (CAU GIAY) 
+and S12 (Hanoi Railway Station) to interface with trackside equipment: 
+ SMART IO equipment [REF16] with associated relays [REF15] to interface with 
+points, signals, axle counters and state of power traction, 
+ Backbone Transmission Network (BTN) equipment [REF7] and Data Communica-
+tion System (DCS) equipment [REF18] to interface with Trackside Radio equipment 
+(Radio Access Points) , 
+ Distributed equipment in the secondary stations S3 (PHU DIEN) and S10 (CAT 
+LINH) to interface with trackside equipment: 
+o Backbone Transmission Network (BTN) and Data Communication System (DCS) equip-
+ment to interface with Trackside Radio equipment (Radio Access Points), 
+o Equipment spread along the track : 
+ DCS Radio Access Points [REF8], 
+ ATC Beacons [REF12],  
+ Signals [REF5],  
+ Axle counters [REF17]. 
+ Dedicated Interlocking system for Depot, composed of: 
+o Central Interlocking (CIXL), 
+o SMART IO equipment with associated relays to interface with Depot points, signals and ax-
+le counters, 
+o Backbone Transmission Network (BTN) equipment. 
+ All Signalling equipment is powered by a dedicated power supply system [REF21]. 
+ Dedicated signalling cables [REF6] 
+--- PAGE 14 ---
+ 
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 14/74 
+ 
+Only Signalling Equipment Room (SER) of main stations S1/S5/S8/S12, SER of secondary stations S3/S10 
+and SER of Depot will be equipped with signalling equipment.  
+   
+--- PAGE 15 ---
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 15/74 
+ 
+ 
+The scheme below presents the logic architecture of the proposed Signalling system and the distribution of Signalling subsystems inside Main stations, Sec-
+ondary stations, Depot Signalling Equipment Rooms (SER) and Backup system.  
+ 
+ 
+ 
+ 
+Figure 2 : Signalling System architecture in HNL3 
+ 
+ 
+ 
+
+--- PAGE 16 ---
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 16/74 
+ 
+ 
+ 
+ 
+The scheme below illustrates the deployment of wayside signalling equipment (Axle counters, signals, SER equipped with Signalling equipment) along HNL3 
+for Mono-directional application. Beacon will also be deployed in function of track topography.  
+ 
+ 
+HANOI L3
+S1
+NHON MINNH KAI PHU DIEN CAU DIEN LE DUC THO NATIONAL 
+UNIVERSITY CHUA HA CAU GIAY KIM MA CAT LINH VAN MIEU HRS
+MainlineDepot
+S1 S2 S3 S4 S5
+S2 S3 S4 S5
+S6 S7 S8
+S6 S7 S8
+S9 S10 S11 S12
+Transfer 
+Track 1
+Transfer
+Track 2
+S Main Station
+S Secondary Station with BTN/DCS equipment in SER
+S Secondary Station (without SIG equipment in SER)
+Turnback
+Transfer Track
+Tunnel (bi-tube)
+Viaduct
+(L)
+(L)
+(L) (L)
+(L) (L)
+(L)
+(L)
+Shunting signal
+Lit arrow on the right side of the track when the signal is on the left side of the track and not cancelled
+Permanent red signal
+Axle Counters boundary
+Direction of travel
+or
+ 
+ 
+ 
+Figure 3 : Hanoi Pilot Light Metro Line synoptic 
+ 
+ 
+  
+--- PAGE 17 ---
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 17/74 
+ 
+The scheme below presents the Backbone Transmission Network (BTN) Topology for Hanoi Pilot Light Metro Line. The BTN links al l main stations and 
+secondary stations with signalling equipment (S3 and S10) and the depot. The CBTC Backbone is redundant by a Red and Blue network. The optical fibres 
+are installed in such manner to create a ring. This network architecture prevents common mode failures and is tol erant to physical damage of a particular fibre 
+or equipment.   
+ 
+ 
+ 
+PHU DIEN
+S3MINH KHAI
+S2 CAU DIEN
+S4
+LE DUC THO
+S5
+Hanoi 
+Railway 
+Station (HRS)
+S12VAN MIEU
+S11
+CAT LINH
+S10
+KIM MA
+S9
+CAU GIAY
+S8
+CHUA HA
+S7
+NATIONAL 
+UNIVERSITY
+S6
+L3 Blue Master 
+Switch
+L2 Blue Switch
+L3 Red Master 
+Switch
+L2 Red Switch
+Optical fibres
+Track line
+DEPOT
+NMS 
+Server
+NHON
+S1
+NMS 
+Server
+Backup Room
+ 
+Figure 4 : Backbone Topology 
+--- PAGE 18 ---
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 18/74 
+ 
+ 
+ZC LC
+Trackside ATC
+CC
+Signals
+Point
+Machines
+ESP
+Main Station S1 (NHON)
+FEP
+Trackside 
+Radio 
+Equipment
+MASTER
+SWITCH 
+L3
+MASTER
+SWITCH 
+L3
+ROUTER
+NMS
+SER
+TER
+SWITCH
+MSS
+MSS
+FIREWALL
+SWITCH
+CBI
+Mainline ATS
+Server B
+Master
+Clock
+FEP
+SWITCH
+L2
+SWITCH
+L2
+OCC&ICS
+SIG
+Power 
+Supply
+TELECOM
+TRACK
+Cable Frame
+Relays
+AxCo
+Cubicle
+SMART
+IO
+Axle 
+Counters
+MASTER
+SWITCH 
+L3
+  
+ 
+Figure 5 : Signalling system architecture – Main Station S1 (NHON) 
+  
+--- PAGE 19 ---
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 19/74 
+ 
+ 
+Main Station S5/S8/S12 
+(LE DUC THO, CAU GIAY, HNR)
+Signals
+Point
+Machines
+ESP
+SWITCH
+L2
+Trackside 
+Radio 
+Equipment
+SER
+SWITCH
+L2
+Axle 
+Counters
+SIG
+PWS
+TRACK
+Cable FrameAxCo
+Cubicle
+SMART
+IO
+Relays
+ 
+Figure 6 : Signalling system architecture – Main Stations S5/S8/S12 
+ 
+Secondary Station S3/S10
+(PHU DIEN, CAT LINH)
+SWITCH
+L2
+SWITCH
+L2
+Trackside 
+Radio 
+Equipment
+SER
+ 
+Figure 7 : Signalling system architecture – Secondary Stations S3/S10 
+ 
+  
+--- PAGE 20 ---
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 20/74 
+ 
+ 
+Depot
+Signals
+Point
+Machines
+ESP
+Cable Frame
+SER
+SWITCH
+L2
+SWITCH
+L2
+SMART
+IO
+CBI
+Depot
+SIG
+PWS
+TRACK
+Axle 
+Counters
+AxCo
+Cubicle
+Relays
+ 
+ 
+Figure 8 : Signalling system architecture – Depot 
+ 
+The Depot is not CBTC equipped. Trains are driven in CMD25 mode (Manual mode with ATP Speed Ceil-
+ing). A dedicated Computer Based Interlocking covers the Depot. 
+Note: Transfer track is a part of the main line. 
+--- PAGE 21 ---
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 21/74 
+ 
+3 SUB-SYSTEMS DESCRIPTION 
+3.1 CBI SUB-SYSTEM 
+3.1.1 Presentation 
+The Interlocking is an essential part in a system to control safe movements of trains within a certain area. 
+The interlocking subsystem is a vital s ystem specially designed to generate safe routes for trains. For this it 
+monitors train and point positions, and controls points and signals. Equipment along the track is controlled 
+through remote IO modules dispatched over different equipment rooms. 
+In order to generate safe train -routes, following route settings from ATS, the interlocking reads track occ u-
+pancies, sets and locks points, locks routes, controls signals, informs ATC and ATS. The interlocking e x-
+changes with ATC that also performs train detecti on. While a point or route is locked it cannot be used for 
+other routes. While a train is running a route, the part of the route behind the train is released so other trains 
+can use it. The route is released section per section as the train moves along the  route. This task requires a 
+SIL4 system (according to EN50129). 
+To realize this function Alstom provides the SMARTLOCK 400 interlocking system that consists of:  
+ Interlocking for mainline,  
+ Interlocking for depot, 
+ IO modules, named Smart IO, interfaced with vital relays to track equipment, 
+ A computer for logging and diagnostics purpose, named Support System,  
+The communication between these components is done through the Backbone Transmission Network.  
+The following figure gives a generic overview of the equipment, and how it is connected. 
+ 
+SmartIO
+Interlocking
+SmartIO
+ATC
+Communication Network
+Centralized equipment
+Decentralized equipment
+Support 
+System
+Point
+Machine
+Signal Other
+track
+element
+Axle
+counter
+Point
+Machine
+Signal Other
+track
+element
+Axle
+counter
+Cable frame
+Relay frame
+AxCo
+Cubicle
+Cable frame
+Relay frame
+AxCo
+Cubicle
+ 
+Figure 9 : Interlocking subsystem 
+--- PAGE 22 ---
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 22/74 
+ 
+The specific Boolean equations for each application/project are defined off -line as a function of the railway 
+topography and all pos sible movements that shall be implemented. The equations are translated into data 
+structures using specific configuration tools.  
+The signalling principles to generate the Boolean equations are generic and have been proven in service. The 
+signalling principles are optimised for the system solution as provided in this project and have been proven 
+in service in other projects. They are based on British principles. 
+The Interlocking exchanges logic information with various subsystems (ATC, Smart IO module s, ATS) that 
+are all connected using the Data Communication Network (DCS). To ensure safety, proprietary protocols are 
+used for communication. 
+3.1.2 Interlocking Functions 
+3.1.2.1 Route Control 
+Routes can be controlled in several ways by the URBALIS™ / U400 (CBTC) solution. Route is defined from 
+an origin signal to destination signal. 
+When automatic route setting is activated in the ATS, the ATS automatically requests route setting when a 
+train enters a route demand area based on train tracking information in addition to  the trip or pattern assoc i-
+ated to that train. 
+Routes can also be set in manual mode from the ATS.  
+The URBALIS™ / U400 (CBTC) system provides the means and data: 
+ To remotely perform a switch calling. 
+ To remotely perform a switch blocking or unblocking  
+ To remotely perform a signal blocking or unblocking 
+ To perform a route setting. 
+ To perform a route cancellation 
+ To set and subsequently release fleet mode for route setting. 
+ To perform a sub-route manual release 
+These commands are available to ATS Operator from ATS Workstation. 
+3.1.2.1.1 Process route interlocking 
+The URBALIS™ / U400 (CBTC) CBI sub -system protects trains from front or flank collision, and from 
+derailment. 
+The secondary detection is used in order to detect non -talkative train and to process the correct route inter-
+locking. To achieve safety objectives of the route interlocking function, the URBALIS™ / U400 (CBTC) 
+system monitors the status of the secondary detection, using a combination of data from secondary detection 
+and localisation of URBALIS™ / U400 (CBTC)-equipped train. 
+The following figures provide an example of front and flank collisions. A route protects a zone from one 
+signal to another signal. The URBALIS™ / U400 (CBTC) system ensures that "Route A" and "Route B" are 
+not set at the same time. Before setting a route, the URBALIS™ / U400 (CBTC) system checks that no such 
+a conflicting situation exists. In automatic protected driving modes, the URBALIS™ system automatically 
+prevents a train from entering in an area where the route is not set. 
+--- PAGE 23 ---
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 23/74 
+ 
+ 
+Figure 10 : Process route interlocking 
+When processing route interlocking, either on automatic or on manual request (e.g. route setting) and when 
+that request involves a switch movement, the URBALIS™ / U400 (CBTC) system detects a conflicting sit-
+uation when: 
+ The switch is involved in a route that is already set and locked, or 
+ The switch is involved in an overlap that is already locked, or 
+ A train (URBALIS™ / U400 (CBTC)-equipped or non-talkative) is on the switch, or 
+ The switch is blocked. 
+It is to note that: 
+ An URBALIS™-equipped train is on the switch when this train position provided by the “Provide 
+Train movement measurement” function is above the switch position. 
+ A non-talkative train (e.g. non - URBALIS™ / U400 (CBTC) equipped or  non-talkative) is on the 
+switch when this train position provided by a secondary wayside detection system is above the 
+switch position. 
+ A switch is blocked on e.g. “point blocking” request defined by ATS operator. 
+When processing route interlocking withou t Face-to-Face authorised for the destination blocks of the route, 
+either on automatic or on manual request (e.g. route setting), the URBALIS™ / U400 (CBTC) system checks 
+that the following conditions are fulfilled: 
+ No conflicting route is set 
+ No conflicting fleet route is set 
+ No conflicting overlap is locked 
+ No conflicting sub-route is locked except for call-on routes 
+When processing route interlocking on automatic request and when that route involves a switch movement, 
+and when the route is set, the URBAL IS™ / U400 (CBTC) system automatically commands and locks the 
+points for that route. 
+Note: When the route has been defined automatically, a conflicting situation should have been detected ea r-
+lier when e.g. trying to correctly move and lock a switch involve  in that route or trying to lock the overlap 
+whose overlap distance includes that route. Most likely, the above requirement is applicable for manual route 
+setting. 
+The URBALIS™ / U400 (CBTC) system provides signal states command, in compliance with project specif-
+ic signal rules for route interlocking. 
+Route A
+Route B
+Route A
+Route B
+--- PAGE 24 ---
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 24/74 
+ 
+The URBALIS™ / U400 (CBTC) system is able to detect the position and to apply switch movement co m-
+mand (either set manually or automatically through automatic route setting) on the following types of 
+switches installed on the field: 
+ Switches composed by one point 
+ Switches composed by double point 
+A route is set when a route is defined and when no conflicting situation is detected. 
+A route is set and locked when: 
+ This route is set, and 
+ All sub-routes within this route are set, and  
+ All switches that are involved in that route are locked in the correct position 
+ 
+When a sub-route manual release is defined for a given sub-route of a route and when: 
+ This sub-route and the corresponding opposite sub-route are locked, and 
+ The sub-route preceding this sub-route in this route is not locked, and 
+ All routes locking the sub-route are not locked 
+URBALIS™ / U400 (CBTC) system unlocks this sub-route. 
+When URBALIS™ / U400 (CBTC) system cannot detect the position of a switch, it automatically sets the 
+signal protecting that switch to restrictive, but still allow to process with any route involving that switch 
+keeping the signal at the restrictive state. 
+When it can detect the position of a switch but cannot move that switch, the U RBALIS™ / U400 (CBTC) 
+system allows defining route involving that switch in that position keeping the protecting signal at the r e-
+strictive state. 
+The URBALIS™ / U400 (CBTC) system computes the traffic direction, which represents the authorised 
+direction of travel for the train. The traffic direction is set only if: 
+ This sub-route is locked, and  
+ The corresponding opposite sub-route is not locked and unset for any other condition. 
+On a Change of End zone, the URBALIS™ / U400 (CBTC) system shall interlock dep arture Traffic Direc-
+tion to be set or reversed only when turn back route is set and locked, in addition to arrival Traffic Direction. 
+Status of these Traffic Directions shall be maintained until turn back route is unlocked. 
+3.1.2.1.2 Perform route cancellation 
+A zone upstream of the signal protecting a route is defined and called “Approach Locking Section” (ALS). 
+On reception of a route cancellation request from ATS operator (from ATS work -station), the URBALIS™ / 
+U400 (CBTC) system immediately sets the route origin signal to restrictive state. 
+Once a route has been set and locked and no train is in approach locking section, a route cancellation control 
+from operator releases the route immediately; a route with the same origin signal can be set immediately. 
+Once a train is in approach locking section of a signal origin of route and this signal is or has been controlled 
+permissive in field or toward ATC, a route cancellation control from operator releases the route only: 
+ After a timer, called Route Release Timer proving the train is stopped. 
+ Or as soon as the trackside ATC guarantees to the IXL that the train will stop before the restrictive 
+signal ahead. 
+--- PAGE 25 ---
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 25/74 
+ 
+Note: An Approach locking section is defined for each route signal  in upstream direction. This section con-
+siders the case of a train running at the highest possible speed upstream of the signal with the most degraded 
+communication time between the equipment part of the URBALIS™ / U400 (CBTC) system, and with worst 
+emergency braking performances according to line topology. 
+Approach Locking Section is considered free if  a train which is present in upstream this area cannot enter 
+into it as described in follow: 
+ There is a diverging switch detected for the movement in the other direction, between the train and 
+the associated route signal. (Only if no alternative route is possible toward the route signal) 
+Approach Locking 
+Section
+ 
+ There is an intermediate route signal in restrictive aspect, between the train and the associated route 
+signal. (Only if no alternative route is possible toward the route signal) 
+Approach Locking 
+Section
+ 
+For instance, as depicted below, when "Route B" is cancelled the origin signal of that route is immediately 
+set to restrictive state. Then the URBALIS™ / U400 (CBTC) system checks if there is a train in the approach 
+locking section of that route. When there is no train in the approach locking section of that route (and when 
+there is not train on "Route B"), "Route B" is immediately released and "Route C" can be set. When there is a 
+train in the a pproach locking section of that route, it is necessary to wait the end of the timer before setting 
+"Route C". 
+ Route A Route B 
+Approach Locking Section 
+Route C 
+ 
+Figure 11 : Approach locking section 
+When fleet mode is set for a route, and when the route is  cancelled, the URBALIS™ system automatically 
+deactivates the fleet mode. 
+--- PAGE 26 ---
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 26/74 
+ 
+3.1.2.1.3 DOP & MOD routes 
+As described in Train Movement Specification [REF4], for operational needs, some routes are typed as DOP 
+(Destination Occupancy Proving) or MOD (Multiple Occupancy Detection). 
+ A DOP route is a route where no train must be located in order to set the route for another train. For 
+DOP routes management, the interlocking v erifies that all secondary detection devices between the 
+route origin signal and the route destination signal are cleared. If the condition is not fulfilled, the 
+route shall not be set. 
+ A MOD route is a route composed of destination blocks and transit blocks.  The spacing route con-
+dition shall only be applied on transit blocks , and not on destination blocks. The route could not be 
+set while the secondary detection devices of transit blocks are not cleared. If only destination blocks 
+are occupied, the route can be set and the origin signal shall be blinked. 
+ 
+transit 
+blocks 
+destination 
+blocks 
+origin 
+signal 
+destination 
+signal 
+ 
+Figure 12 : MOD route 
+3.1.2.2 Overlap 
+An overlap is a specificity associated to a signal. It represents an area in downstream of a signal and allows a 
+train in ATO/LMD mode to approach the related signal and/or to ensure spacing. On HNL3 project, the spac-
+ing need is not expected. 
+While a point or a fouling /flanking is present in an interlocked overlap, the overlap shall be declared with 
+one of following types: 
+ Critical overlap: All points involved in the overlap shall be set and locked on the predefined position 
+before the CBI interlocks the overlap. Such an overlap can be used to avoid the risk that a train 
+crossing a signal at re strictive state from Depot can enter into the Mainline. The point shall be set 
+and locked in the position towards a run-off area.  
+Critical overlap
+Depot Mainline
+Run-off area
+ 
+ Preferred overlap: The CBI can interlock the overlap while a ll points involved in the overlap are 
+controlled, and not necessarily on a given position (in contrary with critical overlap). In this case, it 
+only guarantees that if a train crosses a signal at restrictive state, there will not be any risk of derai l-
+ment. 
+In case that two overlap s are conflicting (two opp osite overlaps without fouling or fouling, with a common 
+intersection), both overlaps shall be declared as reduced overlap. If a reduced overlap is set, it will prevent a 
+conflicting route (involving the other reduced overlap) to be set. 
+--- PAGE 27 ---
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 27/74 
+ 
+Reduced overlap
+ 
+The Interlocking system: 
+ Performs overlap in order to allow trains to approach safely a signal at restrictive aspect 
+ Locks the switch after the signal when setting an overlap (critical/preferred).  
+ Sets the overlap sufficiently in advance in order to allow train to enter the platform with a permissive 
+overlap. 
+ Allows overlap release when the train is proved to be stopped in front of the signal or if the train has 
+crossed the overlap area 
+3.1.2.3 Wayside equipment management 
+The URBALIS™ / U400 (CBTC) system shall operate and detect the following equipment items: 
+ Points, 
+ Signals, 
+ Axle Counters 
+The URBALIS™ / U400 (CBTC) system shall manage the loss of traction power whose one of cause could 
+be activation of Emergency Stop Plungers (ESP). 
+3.1.2.3.1 Operate Points 
+Point Control 
+The points are controlled according to four ways:  
+ By setting of route. 
+ By route cancellation, for automatic return in the “normal” point position. 
+ Individually by the Operator. 
+ Manually from wayside by the operator through the point lever. 
+The points are operated normally electrically from the technical room, except in the fourth case. 
+Generally in the main track, the points are controlled in the position of normal direction when all the routes 
+that control these points are cancelled.  
+Dead Locking 
+When the CBI blocks over a set of points appear “occupied”, the interlocking prevents any movement of this 
+set of points. This is the equivalence of current Dead Locking. 
+3.1.2.3.2 Operate Signals 
+On HNL3 project, aspect and status are only determined in basing on r oute condition and partial route spac-
+ing condition. The pure s pacing condition, as well as the protection and blocking conditions are not taken 
+into account.  
+The signal is at permissive state (green aspect, 3.6.3) while all route -related conditions are fulfilled as d e-
+tailed in 3.1.2.1.  
+--- PAGE 28 ---
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 28/74 
+ 
+3.1.2.3.3 Compute Train detection  
+The URBALIS™ / U400 (CBTC) system interfaces with the Axle Counters to acquire the status of track 
+occupancy (Secondary Detection). 
+The CBI Block status which is used by the Interlocking to process route interlocking function is obtained by 
+combination of the secondary detection device status and the Primary Detection status computed by the Zone 
+controller. 
+For performance and availability reasons, the CBI sub -system permanently computes the CBI block status 
+based on the primary and secondary detection as follows: 
+ If the secondary train detection system is in operation, CBI block status value is equal to “clear 
+track” if one of secondary train detection occupancy state or ATP Block occupancy state is equal to 
+“clear track”.  
+ If the secondary tr ain detection system is out of operation, CBI Block status is equal to ATP Block 
+Status. So a secondary train detection failure shall not impact CBTC operation, 
+ In case of secondary train detection status available and ATP block occupancy status not availa ble; 
+CBI Block status is equal to the Secondary train detection occupancy status. 
+3.1.2.3.4 Manage loss of traction power 
+The URBALIS™ / U400 (CBTC) system does not directly manage Emergency Stop Plungers (ESP). The 
+Power Supply monitors these ESP and is in charge of cutting -off the power. CBI shall monitor the presence 
+of power in each electrical section and transfers its st ate to Zone Controller which computes the limit of 
+movement for each Carborne Controller.  
+3.1.3 CBI System Interfaces 
+3.1.3.1 Introduction 
+The objective of this section is to outline the interface principles between Interlocking / Smart IO cubicles 
+and trackside (means Point machine, Train detection, Signal) and platform (means ESP) equipment, via safe-
+ty relay frame when necessary. 
+3.1.3.2 CBI and Smart IO trackside interfaces 
+3.1.3.2.1 Typical configurations 
+The following figures represent the typical configurations of links between tra ckside equipment and Smart 
+I/O, through cable frame [REF14] and relay frame  [REF15]. These links are based on vital inputs/outputs 
+and vital relays. 
+3.1.3.2.2 Input/Output Redundant Detections 
+ 
+Figure 13 : Links between Smart I/O redundant input and Safety relay cubicle 
+SMART I/O
+(1) = PDC interface
+(2) = Relay frame/SMART I/O interface
+(*) = 1 per OM121 board
+(**) = 1 per IM112 board(1)
+(2)
+CABLE 
+FRAME
+24VdcS
+N(1) 24VdcSR24VdcSN
+IM112 N
+X
+IM112 R
+X
+ RELAY FRAME (3)
+24VdcF
+x2 x2
+x2 x2
+x2
+SA
+--- PAGE 29 ---
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 29/74 
+ 
+ 
+Figure 14 : Links between Smart I/O output-redundant Control and Safety relay cubicle 
+3.1.3.2.3 Application of typical configurations to trackside interfaces 
+According to RAM targets, the trackside equipment are either interfaced with Redundant Input/output co n-
+figuration, or with Non-Redundant Input/output configuration. 
+ 
+3.2 ATC SUB-SYSTEM 
+The ATC sub -system ensures vital and non -vital functions. It ensures protection of the trains, protection of 
+passengers for the Vital part (ATP) and it drives the train and display information for t he Non Vital part 
+(ATO).  
+The ATP sub-system consists of one system installed on-board the train and one system installed at trackside 
+level. These systems communicate together through the radio communication and the backbone. 
+The ATC consists of:  
+ Zone controller (ZC) and Line controller (LC).  
+ Eurobalises installed all along the track to perform the location of the train on the network. 
+ Redundant Carborne Controller (CC), in the trains. 
+The Moving block principle is managed by the Zone Controller which us es information from the other su b-
+systems. This information includes information as track occupancy by non -talkative trains, routes status, 
+point position, protection areas status, signal status. 
+3.2.1 Static Guideway database 
+The Static Guideway Database, named SGD, is the description of the line where all objects of the line are 
+identified with their attributes. The SGD is split in “Blocs” which represent a part of line between two nodes. 
+A node is a particular point as Train Detection boundary or Point. 
+The Static Guideway Database is created automatically during the ATC data process and elaborated from the 
+System database which is the input for the data of each subsystem, as well as interface data. 
+The Static Guideway Database describes all the track objects fo r ATC purpose as slopes, speed limits, st a-
+tions, beacons, points, signals, emergency areas, etc. The static track description and PSR are stored in on -
+board SGD database. Only Movement Authority, Temporary Speed Restrictions (TSR) and Variants are sent 
+by the Zone Controller (ZC) to Carborne Controller (CC). 
+The Static Guideway Database is loaded in the Carborne Controller when programming or updating its data. 
+A Carborne Controller gets at any time the SGD of the whole line. 
+
+--- PAGE 30 ---
+Hanoi Pilot Light Metro Project Signalling System Design Specification 
+ 
+Doc N° UJV-BAS-TTS-SIG-L00-40206-E-4A-D300-2.00  Page 30/74 
+ 
+3.2.2 ATC equipment 
+3.2.2.1 Zone Controller 
+The Zone Controller is housed in a MooN cubicle (2x2oo2). The Zone Controller Subsystem controls the 
+movement of trains on the main line. 
+The Zone Controller processes the moving block status exchanging data with the interlocking and using the 
+train position reports. The movement authorities, for all trains within the Zone Controller area, are sent to the 
+Carborne Controllers on-board the trains. 
+The Zone Controller Subsystem controls the movement authority of the trains within the Zone Controller 
+area. 
+The Zone Controller Subsystem manages GAMA zone in order to restrict train movement inside geograp h-
+ical zone of the line. 
+The Zone Controller Subsystem manages the availability (in operation / out of operation) of the Secondary 
+Detection Device by continuously exchanging Train Detection information with the CBI sub-system. 
+The Zone Controller is interfaced with: 
+ Interlocking subsystem to acquire track equipment status and send ATP block occupancy.  
+ Carborne Controller to receive the report location of each train and send the End of Authority to each 
+train. 
+ ATS subsystem to report the train tracking and operational alarms. 
+ MSS to report maintenance alarms and failure.  
+ Line Controller to synchronize and verify the Data and software versions. 
+3.2.2.2 Line Controller 
+The Line Controller is housed in a MooN cubicle (2x2oo2). It performs Temporary Speed Restrictions (TSR) 
+with a high Safety Integrity Level (SIL4). The Line Controller is in charge of storing the TSRs and safe i n-
+terfacing with ATS for TSR updates.  
+In the trains, each Carborne Controller continuously verifies the status of the current TSRs, and acquires new 
+TSR data if required. 
+The Line Controller is also in charge of distributing to the ATC subsystems the authorised data and software 
+versions to be used. Duri ng the initialisation sequence, each ATC software checks its version number with 
+the version number provides by the Line Controller.  
+The Zone Controller and Carborne Controller compare their installed versions with the information received 
+from the Line Controller and, if they do not have the latest applicable versions, they will enter a safe restri c-
+tive state. 
+The Line Controller is interfaced with 
+ Carborne Controller to synchronize and provide Data and Software version, and TSR status. 
+ Zone Controller to synchronize and provide Data and Software version 
+ ATS subsystem to manage the TSR status 
+ MSS to report maintenance alarms and failure 
+3.2.2.3 Carborne Controller 
+In each 4 -car unit passenger train, a fully redundant architecture is provided for Vital  and Non-Vital func-
+tions in hot standby mode. In each train, the on -board equipment includes two Carborne Controllers  [REF9] 
+with the associated I/O modules, two radio mod ems (each equipped with two radio antennas)  [REF18], two 

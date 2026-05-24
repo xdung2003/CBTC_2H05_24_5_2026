@@ -1,0 +1,737 @@
+--- PAGE 1 ---
+8 Bảo vệ tàu 
+8.1. Yêu cầu, phân loại và điều kiện áp dụng 
+8.1.1. Tổng quan chung 
+Con người là yếu tố yếu nhất trong an toàn đư ờng sắt. Để giảm thiểu tác động của 
+những sai lầm từ người điều độ, các bộ ghi, đường chạy và tín hiệu đã được liên khóa với 
+nhau bất cứ khi nào có thể từ khoảng năm 1870. Do đó, có thể lập luận rằng cách tiếp cận 
+tương tự cũng là mong muốn hướng tới đối với các lái tàu. 
+Các hệ thống bảo vệ  tàu để phòng chống l ỗi của lái tàu đã phát tri ển muộn hơn 
+một chút để giám sát các hành động của lái tàu và, nếu cần, thự c thi an toàn. Thông 
+thường, các hệ thống bảo vệ tàu chỉ bảo vệ chống lại các lỗi, không phải hành vi c ố ý sai 
+trái. 
+Nhiều ngành đư ờng sắt coi việc b ổ sung các tín hiệu d ọc đường bằng các ch ỉ thị 
+trong buồng lái, hoặc lo ại bỏ hoàn toàn các tín hiệu dọc đư ờng là điều mong muốn. Các 
+chức năng tín hiệu trên buồng lái, vì chúng có liên quan kỹ thuật chặt chẽ với các h ệ 
+thống bảo vệ tàu, sẽ được đề cập ở đây thay vì trong chương 7. 
+Tóm lại, các ch ức năng của h ệ thống bảo vệ/điều khiển tàu có thể được phân loại 
+thành ba nhóm: 
+– Chức năng tín hiệu trên buồng lái 
+– Chức năng giám sát 
+– Chức năng can thiệp 
+Trong khi hầu hết các h ệ thống hiện đại đều cung cấp tất cả các chức năng này, 
+nhiều hệ thống cũ hơn vẫn còn được sử dụng lại ít toàn diện hơn. 
+Để phân loại các hệ thống bảo vệ tàu, các danh mục đư ợc sử dụng nhiều nhất, đặc 
+biệt là ở các nước nói tiếng Anh, là ATS (Automatic Train Stop - Dừng tàu tự động), ATP 
+(Automatic Train Protection - Bảo vệ tàu tự động), ATC (Automatic Train Control - điều 
+khiển tàu tự  động) và PTC (Positive Train Control - điều khiển tàu tích cự c). Nhưng vì 
+không có định nghĩa chung về ý nghĩa của các thuật ngữ này, chúng không được sử dụng 
+trong cuốn sách này để  phân loại. Thay vào đó, một cách phân loạ i khác được phát triển 
+trong mục 8.3.1. 
+8.1.2. Chức năng tín hiệu trên buồng lái 
+Các chức năng tín hiệu trên buồng lái nói chung có thể được phân loại như sau: 
+– Tín hiệu cảnh báo không chọn lọc; 
+– Tín hiệu cảnh báo có chọn lọc; 
+– Hiển thị lặp lại trực quan các tín hiệu dọc đường; 
+– Thông tin tốc độ tĩnh liên tục; 
+– Thông tin tốc độ động. 
+Tín hiệu cảnh báo không chọn lọc (chủ yếu là âm thanh). Bất cứ khi nào tàu đi qua 
+một vị trí nhất định, ví dụ như vị trí của một tín hiệu báo trư ớc, một âm báo s ẽ vang lên 
+--- PAGE 2 ---
+để hướng sự chú ý của lái tàu đ ến các tín hiệ u dọc đư ờng, độc l ập với trạng thái c ủa tín 
+hiệu. Không cần có kết n ối thông tin giữa tín hiệu dọc đư ờng và hệ thống bảo vệ tàu cho 
+chức năng này, vốn được áp dụng trong các hệ thống bảo vệ tàu cũ. 
+Tín hiệu cảnh báo có chọn lọc (cũng chủ yếu là âm thanh). Tín hi ệu âm thanh 
+được áp dụng một cách ch ọn lọc trong các trư ờng hợp có những hạn chế đối với lái tàu. 
+Thông thường, tín hiệu trên buồng lái đư ợc kết nối với các trạng thái tín hiệu yêu c ầu bắt 
+đầu quá trình hãm, ch ẳng hạn như Chú ý (chương 7.6.3) và Cả nh báo hạn chế tốc đ ộ 
+(chương 7.6.4.3). 
+Hiển thị lặp lại trự c quan các tín hiệu dọc đư ờng. Trạng thái củ a tín hiệu dọ c 
+đường ở phía trước (trong một s ố trường hợp là ở phía sau), được lặp lại trong bu ồng lái 
+trong suốt quá trình tàu di chuyển giữ a hai tín hiệu (đoạn tín hiệu), hoặc khi tàu đang ở 
+trong một đoạn con xác định gần tín hiệu dọc đường. Trong một số trường hợp nhất định, 
+hình thức tín hiệu trên buồng lái này có thể  thay thế các tín hiệu dọc đường, nhưng trong 
+nhiều trường hợp nó được sử dụng bổ sung: Tín hiệu trên buồng lái có thể nhìn thấy trong 
+mọi điều kiện thời tiết; nó cung cấp cho lái tàu một lờ i nhắc nhở tích cực về trạng thái tín 
+hiệu, và trong nhiề u trường hợp cung cấp thông tin cho lái tàu sớ m hơn so vớ i tín hiệu 
+dọc đường. Tuy nhiên, tín hiệu trên buồ ng lái không cung cấ p thêm bất kỳ thông tin nào 
+so với tín hiệu dọc đường và lái tàu vẫn chịu trách nhiệm thực hiện quá trình hãm. 
+Thông tin tốc đ ộ tĩnh liên tục (hình 8.1). Không chỉ các chỉ thị của tín hiệu dọc 
+đường được lặp lại, mà tốc đ ộ cho phép sau khi xem xét tất c ả các hạn chế luôn được 
+hiển thị. Ngoài ra, thông tin cảnh báo hạ n chế tốc độ cũng có thể được hiển thị, nhưng lái 
+tàu vẫn chịu trách nhiệm ước tính đường cong hãm. Trong một số hệ thống, hình thức tín 
+hiệu trên buồng lái này thay thế các tín hiệu d ọc đường. Trong nhiều hệ thống hiện đại, 
+cũng như trong tín hiệ u theo hành trình, các biểu đồ tốc độ tĩnh có thể được điều chỉnh 
+riêng cho từng yếu tố đường ray thay vì áp đ ặt một tốc độ cho toàn bộ đoạn giữa hai tín 
+hiệu dọc đường (hình 7.23). 
+Thông tin t ốc độ động (hình 8.1). Dự a trên thông tin tốc đ ộ tĩnh, các đư ờng cong 
+hãm được tính toán trên tàu và/hoặc trong thi ết bị dọc đường. Hệ thống kỹ thuật hiển thị 
+liên tục m ột tốc đ ộ hướng dẫn cho lái tàu. T ốc độ này không đư ợc vượt quá t ại bất kỳ  
+thời điểm nào để tuân thủ tốc độ mục tiêu tiếp theo. Đối vớ i chức năng này, thông tin về 
+khoảng cách đến mục tiêu hãm tiếp theo phả i có mặt. Thông tin này có thể được truyền 
+riêng cho từ ng đoạn đường ray, hoặc đư ợc tiêu chuẩn hóa bằ ng chiều dài đồng nh ất của 
+các đoạn. Trường hợp sau, do tính không linh hoạt, chỉ phù hợp cho các tuyến có giao 
+thông gần như đồ ng nhất, chẳ ng h ạn như các tuyến đư ờng sắt cao t ốc thuần túy hoặ c 
+đường sắt ngoại ô. 
+--- PAGE 3 ---
+ 
+Hình 8.1. Biểu đồ tốc độ tĩnh và động 
+8.1.3. Chức năng giám sát 
+Các chức năng giám sát sau đây có thể được tìm thấy trong các hệ thống: 
+– Kiểm tra khả năng của lái tàu; 
+– Kiểm tra sự chú ý của lái tàu; 
+– Chức năng dừng tàu; 
+– Giám sát hãm; 
+– Tuân thủ các giới hạn tốc độ. 
+Kiểm tra khả năng c ủa lái tàu. Trong các khoảng thờ i gian đều đ ặn, độc l ập vớ i 
+thông tin dọc đường, lái tàu phải sử dụng một thiết bị cảnh giác để đề phòng ngủ gật hoặc 
+tương tự, được gọi là 'tay nắm người chết'. Khoảng thời gian giữa việc nhấn một tay nắm, 
+nhấn một nút, hoặ c b ất cứ  điều gì đư ợc yêu cầu, có thể được đo bằng thờ i gian hoặc 
+khoảng cách. Như một tính năng bổ  sung trong một vài hệ thống bảo vệ tàu, khoảng thời 
+gian được rút ngắn trong khi lái tàu phải hãm. Đôi khi (ví dụ: ở Hoa Kỳ), thiết bị này chỉ 
+cần được thao tác nếu lái tàu không thự c hiện bất k ỳ hoạt động nào khác trên đ ầu máy 
+trong một khoảng thời gian xác định. 
+Kiểm tra sự chú ý của lái tàu. Trong một số tình huống nhất định, ví dụ như sau khi 
+đi qua một tín hi ệu hiển thị Chú ý, lái tàu ph ải xác nhận sự  chú ý c ủa mình, ví dụ bằng 
+cách nhấn một nút đặc biệt. Do đó, nguy cơ từ  việc lái tàu không nhậ n biết được tín hiệu 
+có thể được giảm đáng kể. Tuy nhiên, nhiều trư ờng hợp đã xảy ra trong đó lái tàu nhấ n 
+nút theo thói quen mà không hãm, điều này có khả năng gây nguy hiểm cao. 
+Chức năng dừng tàu: Khi một đoàn tàu vư ợt qua tín hiệu đỏ, hệ thống sẽ phát hiện và lập 
+tức kích hoạt hãm khẩn cấp. 
+Tuy nhiên, có một số tình huống đặc biệ t mà lái tàu vẫn đư ợc phép đi tiếp, dự a trên lệnh 
+bằng văn bản của điều độ hoặc qua tín hiệu phụ. Trường hợp này được cho phép nhờ các 
+T è c  ®é
+VÞ  trÝ  däc tuyÕ n ® ­ êng
+Th«ng tin tèc ® é tÜ nh (tèc ® é ® ­ î c phÐ p lí n nhÊ t cña vÞ  trÝ  bÊ t kú)
+T è c  ®é
+VÞ  trÝ  däc tuyÕ n ® ­ êng
+Th«ng tin tèc ® é ® éng (xem xÐ t ® ­ êng cong h· m)
+--- PAGE 4 ---
+thiết bị ghi đè trong buồng lái, bằ ng cách cho phép tàu đi qua tín hiệu đỏ  với tốc độ rất 
+thấp, hoặc kết hợp cả hai phương pháp. 
+Ngoại trừ khi tàu chạ y ở tốc độ rất thấp, có hiệu suất hãm cao hoặ c có đoạn bảo vệ đủ 
+dài, bản thân chứ c năng dừng tàu này – kể cả khi kết hợp với việc kiểm tra sự chú ý của 
+lái tàu – thường không đủ để đảm bảo tàu dừng kịp trong đoạn bảo vệ. 
+ 
+Hình 8.2. Các dạng đường cong giám sát hãm trong các hệ thống bảo vệ tàu 
+Vì các ch ức năng trên không đủ để đưa tàu đến điểm dừ ng trư ớc điểm xung đột 
+trong hầu hết các trường hợp, các hệ thống hiện đại cung cấp giám sát hãm: Khi tàu phải 
+hãm vì một tín hiệu nguy hiểm hoặc đ ể tuân thủ một hạn chế tốc độ, quá trình hãm đư ợc 
+giám sát liên tục ho ặc tại một số điểm nhất định. Một vấn đề ở đây là các tỷ lệ hãm khác 
+nhau cho các đoàn tàu khác nhau, dẫn đến các đư ờng cong hãm khác nhau (chương 3.4). 
+Các phương pháp giám sát hãm khác nhau được sử dụng trong các hệ thống (hình 8.2): 
+– Đường cong giám sát hãm đư ợc tính toán riêng cho tàu và bố trí đường ray. Một 
+đường cong giám sát được sử dụng cho toàn bộ quá trình hãm ở phía sau một tín 
+hiệu Dừng (điều khiển hãm một bư ớc). Các hệ thống tiên tiến với truyền dữ liệu 
+số chủ yếu sử dụng phương pháp này (chương 8.3.5, 8.3.6). 
+– Một kho các đoạn đư ờng cong hãm đư ợc tiêu chuẩn hóa, đư ợc phân biệt theo 
+mức tốc độ, sự gần gũi với tín hiệu Dừng và/hoặc loại tàu, được cung cấp bởi hệ 
+thống. Nó đư ợc lưu tr ữ trên máy tính của tàu hoặc trong trung tâm điều khiển 
+dọc đường. Được khởi xướng bởi một máy phát dọc đư ờng, đoạn phù hợp được 
+chọn. Đây là giải pháp điển hình cho các hệ thống có truyền tải theo điểm và với 
+khối lượng dữ liệu thấp (chương 8.3.3). 
+– Chức năng giám sát có hình dạng bậ c thang. Đây là giải pháp điển hình cho các 
+hệ thống có truyền tải liên tục các tr ạng thái tín hiệu bằng các m ạch đường ray 
+được mã hóa (chương 8.3.4), nơi cùng một d ữ liệu đầu vào có giá trị trong suốt 
+chiều dài của một mạch đường ray. 
+– Tốc độ được kiểm tra dư ới dạng nhiều điể m. Tốc đ ộ giám sát giảm d ần từ một 
+điểm kiểm tra đến điểm tiếp theo khi tiếp cận một tín hiệu Dừng. 
+Gi ¸ m s¸ t
+Tèc ® é
+VÞ  trÝ  däc tuyÕ n ® ­ êng
+§ ­ êng cong gi¸ m s¸ t h· m cho tõng tµu Gi ¸ m s¸ t
+Tèc ® é
+VÞ  trÝ  däc tuyÕ n ® ­ êng
+Gi¸ m s¸ t h· m b»ng c¸ c ® ­ êng cong h· m tiªu chuÈ n cã s½ n
+Gi ¸ m s¸ t
+Tèc ® é
+VÞ  trÝ  däc tuyÕ n ® ­ êng
+Gi¸ m s¸ t bË c thang Gi ¸ m s¸ t
+Tèc ® é
+VÞ  trÝ  däc tuyÕ n ® ­ êng
+Gi¸ m s¸ t h· m nhiÒ u ® iÓ m
+--- PAGE 5 ---
+– Thay vì kiểm tra tốc đ ộ, việc áp d ụng phanh có thể được kiểm tra ngắt quãng 
+hoặc liên tục trong suốt quá trình hãm yêu cầu. 
+Một số hệ thống cho phép lái tàu thoát khỏi giám sát hãm bằng tay nếu tín hiệu đã 
+được nâng cấp, nếu thông tin này không thể được truyền tự động bởi hệ thống bảo vệ tàu. 
+Tuân thủ các giới hạn tốc độ. Ngoài việc giám sát quá trình hãm, nhiều hệ thống còn 
+cung cấp việc kiểm tra các hạn ch ế tốc độ. Đây có thể là tốc độ tối đa của tuyến, các h ạn 
+chế tốc độ cục bộ, các hạn chế trên chính các phương tiện và những hạn chế khác. 
+Để đo tốc độ, hai loại phương pháp được sử dụng: 
+– Các phương pháp dự a trên phương ti ện, đo tốc độ bằng đo lường quãng đường, 
+radar Doppler hoặc các phương pháp khác (chương 5.2.6.3). 
+– Các phương pháp dự a trên đư ờng ray đo th ời gian tàu cần để đi một khoảng 
+cách xác định. 
+8.1.4. Chức năng can thiệp 
+Khi các ch ức năng giám sát phát hiện một v ấn đề trong hành vi của phương tiện, 
+các chức năng can thiệ p sẽ được kích hoạt. H ầu hết các h ệ thống hiện đại đề u phân cấp 
+chúng. Các mức độ can thiệp có thể có là: 
+– Yếu nhất là cảnh báo cho lái tàu về một vấn đề, chủ yếu bằng một âm báo, và 
+yêu cầu sửa chữa. 
+– Bước tiếp theo được áp dụng trên một số ngành đường sắt là tự động ngắt điện 
+sức kéo. 
+– Bước tiếp theo là can thiệp bằng phanh hãm thông thường. 
+– Chức năng can thiệp mạnh nhất là can thiệp bằng phanh hãm khẩn cấp. 
+Trong trường hợp vượt quá các h ạn chế tốc độ hoặc các đường cong giám sát hãm, 
+một số hệ thống sử dụng các biện pháp can thiệp khác nhau liên tiế p. Chúng sẽ được áp 
+dụng theo các mức dung sai khác nhau trên tốc độ cho phép động (hình 8.3), và/hoặc thời 
+gian vượt quá tốc đ ộ. Các hệ thống khác chỉ  sử dụng một trong các biện pháp này, chủ  
+yếu là phanh hãm khẩn cấp. 
+Sau khi đi qua một tín hiệu chỉ  thị 'Dừng', hậu quả trong tất cả các hệ thống có chức 
+năng giám sát này là một cú dừng khẩn cấp ngay lập tức. 
+Phanh có thể được áp dụng cho đến khi tàu dừng lại hẳn, hoặc cho đến khi tốc độ đã 
+được giảm xuống dưới một giới hạn an toàn. Nhiều hệ thống ghi lại các sự cố có vấn đề. 
+--- PAGE 6 ---
+ 
+Hình 8.3: Các giới hạn tốc độ để kích hoạt các chức năng can thiệp (trường hợp tối đa) 
+8.1.5. Vai trò trong quá trình vận hành đường sắt 
+Theo vai trò trong vận hành đường sắt, các hệ thống có thể được chia thành: 
+– Hệ thống phụ trợ. Các hệ thống này cung cấp sự an toàn bổ sung, nhưng không 
+thay thế cho các tín hiệu dọc đư ờng. Trong hầu hết các h ệ thống, nếu tín hiệu 
+dọc đường và tín hiệu trên buồng lái không khớ p nhau, lái tàu phải tuân theo 
+tín hiệu dọc đường được coi là an toàn hơn. 
+– Hệ thống độc l ập có chứ c năng hư ớng dẫn liên tục. Các h ệ thống này có thể  
+thay thế các tín hiệu d ọc đường, trong khi các tín hiệu dọc đư ờng thường vẫn 
+còn tồn t ại để vận hành các đoàn tàu không đư ợc trang bị và cho chế độ vận 
+hành giảm cấp. Nếu tín hiệu dọc đư ờng và tín hiệu trên buồng lái không kh ớp 
+nhau, lái tàu phải tuân theo tín hiệu sau. Điều này thư ờng có thể  cung cấp 
+thông tin chi tiế t hơn (ví dụ: cung cấp các đo ạn khu gian ng ắn hơn). Các hệ  
+thống này đặc biệt được yêu cầu trong giao thông tốc đ ộ cao, nơi lái tàu không 
+thể nhận biết an toàn tr ạng thái của tín hiệu d ọc đường (xem chương 7.1), và 
+trong một số tuyến đường sắt đô thị có yêu cầu năng lực cao. 
+Hầu hết các hệ thống hiện đại được thiết kế an toàn bất khả kháng, có nghĩa là một 
+lỗi kỹ thuật trong truyền tải hoặc sẽ dẫn đến các lệnh hạn chế hơn hoặc sẽ được phát hiện. 
+Nhiều hệ thống cũ hơn không phải là an toàn bất khả kháng, có nghĩa là lái tàu không 
+được phụ thuộc vào chức năng chính xác của chúng. Do đó, an toàn bất khả  kháng là một 
+điều kiện tiên quyết đ ể sử dụng thông tin cho tín hiệu trên buồng lái như một nguồn 
+thông tin chính cho lái tàu. 
+8.1.6. Tự động hóa vận hành Tàu 
+Với một biểu đồ tốc độ động hoàn chỉnh có trên tàu, về nguyên tắc, v ận hành tàu 
+có thể được tự động hóa. Tuy nhiên, các lý do cản tr ở việc tự động hóa ch ủ yếu là do 
+thiếu khả năng của các h ệ thống tự động để phản ứng với các tình huống không lư ờng 
+trước đư ợc như chư ớng ngại v ật trên đư ờng ray. Do đó, một yêu cầu nữ a cho việc t ự 
+
+--- PAGE 7 ---
+động hóa hoàn toàn vậ n hành tàu là việc phát hiện liên tục các v ật thể bên ngoài, hoặc 
+loại trừ chúng bằng các hàng rào không thể  vượt qua một cách c ố ý hoặc vô ý. Điều này 
+rất tốn kém trên các mạng lư ới mở rộng, nhưng đôi khi khả thi trên các tuyến đư ờng sắt 
+đô thị do phạm vi mạng lư ới hạn chế và mật độ giao thông cao. Điề u này làm cho vi ệc 
+đầu tư trở  nên hợp lý về mặt kinh tế. Trong các hệ thống tàu điện ngầm, nơi đư ờng ray 
+chủ yếu nằm trong hầ m hoặc trên cao, việc tách biệt v ật lý tạo điề u kiện thuận l ợi cho 
+việc tự động hóa vận hành tàu. Việc b ảo vệ  hoàn toàn chống lại các s ự kiện rất hiếm, 
+chẳng hạn như một vậ t thể rơi từ một chiếc máy bay đang bay qua xuống đư ờng sắt, là 
+không bao giờ có thể. 
+Thuật ngữ lái xe tự  trị (autonomous driving), đư ợc sử dụng trong v ận tải đư ờng 
+bộ, không phù hợp cho lĩnh vực đường sắt. Tàu sẽ không tự quyết định đi đâu. Các xung 
+đột trong lịch trình do chậm trễ  được giải quyết tại trung tâm vận hành. S ự vắng mặt của 
+các chức năng vận hành trung tâm như vậy là một yêu cầu cho việc lái xe tự trị. 
+Đối với vận tải dẫn hướng đô thị, tiêu chuẩn CENELEC (IEC 62290-1) định nghĩa 
+các cấp độ tự động hóa (grades of automation - GOA), dự a trên các trách nhiệm khác 
+nhau cho các chức năng cần thiết để hoàn thành hoạt động mong muốn (xem bảng 8.1): 
+GOA0 Lái tàu thủ công theo tầm nhìn không có bất kỳ sự tự động hóa nào. Lái tàu 
+hoàn toàn chịu trách nhiệm lái. Đây là trường hợp không có hệ thống bảo vệ tàu; một ứng 
+dụng điển hình là xe điện chạy trong giao thông đư ờng phố. Tuy nhiên, các bộ ghi và các 
+tuyến đường đơn có thể cần được bảo vệ. 
+GOA1 vận hành tàu không tự  động. Đây là trư ờng hợp của m ột hệ thống bảo vệ 
+tàu giám sát lái tàu và thự c thi an toàn trong trư ờng hợp lỗi của lái tàu. Việc đóng cử a an 
+toàn và khởi hành tàu là nhiệm vụ của lái tàu. 
+GOA2 vận hành tàu bán tự  động. Đây là trư ờng hợp khi việc tăng t ốc và áp d ụng 
+phanh được tự động hóa. Các nhiệm vụ khác như đóng cửa an toàn và giám sát đường ray 
+được giao cho lái tàu. Ví dụ là một s ố hệ thống hiện đ ại tính toán biểu đồ tốc độ động, 
+nơi lái tàu có thể chọn lái thủ công hoặc tự động (chương 8.3.6). Mặc dù lái tự động hoàn 
+toàn về mặt kỹ thuật là có thể trong nhiều hệ thống hiện đại, nó hiếm khi đư ợc thực hiện 
+vì lý do tâm lý. Một lái tàu mà nhi ệm vụ duy nhất trong các ho ạt động bình thư ờng là 
+quan sát các quy trình sẽ không thể hành động đúng trong các tình huống khẩn cấ p, do 
+thiếu sự chú ý và thự c hành lái. Điều này có th ể được khắc phục b ằng cách giao cho lái 
+tàu một s ố nhiệm v ụ tích cự c, như đư ợc th ực hiện trên tuyế n Victoria của London 
+Underground vào năm 1968. 
+GOA3 vận hành tàu không ngư ời lái. Ở đây, tàu thường được lái tự  động. Không 
+có lái tàu thư ờng trực trong buồng lái đ ể quan sát liên tục đư ờng ray. Có một nhân viên 
+phục vụ trên tàu, người có thể đảm nhận các nhi ệm vụ khác (như bán vé) và có thể hành 
+động trong trường hợp nguy hiểm hoặc lỗi kỹ thuật. Việc đóng cửa có thể được thực hiện 
+bởi nhân viên hoặc tự động. 
+GOA4 vận hành tàu không có ngư ời giám sát. Trong các hệ thống này, không có 
+lái tàu nào có mặt trên tàu. Việc đóng cử a, phát hiện các v ật thể bị kẹt trong cử a hoặc 
+giữa tàu và sân ga, và khở i hành tàu đ ều phải được thực hiện t ự động và an toàn. Hơn 
+--- PAGE 8 ---
+nữa, hệ thống phải phát hiện các sự kiện nguy hiểm như khói hoặc lửa, trật bánh, đứt móc 
+nối và các cuộc gọi khẩn cấp từ hành khách. Trong những tình huống đó, có thể cần phải 
+cử nhân viên đến tàu. Lái xe hoàn toàn tự động hiện đang được áp dụng trên một số tuyến 
+đường sắt đô thị riêng biệt (ví dụ : Paris, Lille, London, Vancouver, Copenhagen và 
+Nuremberg) và các đoàn tàu cho các mục đích đặc biệt như xe đưa đón sân bay. 
+Bảng 8.1: Các cấp độ tự động hóa 
+Mức tự động 
+hóa 
+GOA0 GOA1 GOA2 GOA3 GOA4 
+Dạng tàu vận 
+hành 
+TOS –  
+Vận hành theo 
+tầm nhìn 
+NTO – Vận 
+hành tàu 
+không tự động 
+STO – Vận 
+hành bán tự 
+động 
+DTO – 
+Vận hành tàu 
+không người 
+lái 
+ 
+UTO – 
+Vận hành tàu 
+không người 
+giám sát (Vận 
+hành hoàn toàn 
+tự động) 
+Giám sát tốc 
+độ 
+ 
+Lái tàu 
+ 
+Tự động 
+ 
+Tự động 
+ 
+Tự động 
+ 
+Tự động 
+Điều khiển tàu 
+bắt đầu chạy 
+ 
+Lái tàu 
+ 
+Lái tàu 
+ 
+Tự động 
+ 
+Tự động 
+ 
+Tự động 
+ 
+Điều khiển tàu 
+dừng 
+ 
+Lái tàu 
+ 
+Lái tàu 
+ 
+Tự động 
+ 
+Tự động 
+ 
+Tự động 
+ 
+Điều khiển 
+đóng/mở cửa 
+ 
+Lái tàu 
+ 
+Lái tàu 
+ 
+Lái tàu 
+ 
+Nhân viên hỗ 
+trợ trên tàu 
+ 
+Tự động 
+Vận hành 
+trong trường 
+hợp có sự cố 
+ 
+Lái tàu 
+ 
+Lái tàu 
+ 
+Lái tàu 
+ 
+Nhân viên hỗ 
+trợ trên tàu 
+ 
+Tự động 
+Việc tiết kiệm chi phí do không cần lái tàu ở GOA4 có thể dễ dàng bị đánh giá quá 
+cao. Các lợi ích chính của việc tự động hóa là sự linh hoạt cao hơn, tiết kiệm năng lư ợng, 
+lịch trình cân bằng hơn, cần ít đầu máy toa xe hơn do thời gian quay vòng ngắn hơn, năng 
+lực tuyến cao hơn do lái xe chính xác hơn và mứ c độ an toàn cao hơn do loại b ỏ yếu tố 
+con người. 
+8.2. Các giải pháp kỹ thuật cho truyền dữ liệu 
+8.2.1. Tổng quan về các hình thức truyền dữ liệu 
+Từ khía cạnh vận hành, các hình thứ c truyền dữ liệu có thể được chia thành (bảng 
+8.2): 
+--- PAGE 9 ---
+– Truyền dữ liệu gián đoạn, bao gồm: 
++ Truyền theo điểm 
++ Truyền theo đoạn gián đoạn 
+– Truyền dữ liệu liên tục 
+Trong các hệ thống truyền dữ  liệu liên tục, về cơ bản có một liên k ết dữ liệu liên 
+tục giữa đường ray và tàu – bất kể có thể có các đo ạn ngắn không có kết nối như các 
+vùng mất sóng radio. Tuy nhiên, dữ  liệu thường được truyền bằng các b ức điện dữ  liệu 
+trong các khoảng thờ i gian ngắn. Trong các hệ thống truyền dữ  liệu gián đoạn, việc 
+truyền chỉ có thể thực hiện tại các v ị trí được chọn, do thiết bị dọc đường xác định. Các 
+giải pháp kỹ  thuật cho truyền dữ  liệu liên t ục và truyền theo đoạ n gián đoạn là tương tự  
+nhau và do đó được mô tả cùng nhau trong chương 8.2.3. 
+Bảng 8.2: Các hình thức truyền dữ liệu trong các hệ thống bảo vệ tàu 
+Ngắt quãng Liên tục 
+Theo điểm Dọc theo tuyến 
+Truyền tín hiệu theo điểm Truyền tín hiệu ngắt quãng 
+dọc theo tuyến 
+Truyền tín hiệu liên tục 
+8.2.2. Truyền theo điểm 
+8.2.2.1. Phân loại 
+Đối với truyền theo điểm, có nhiều thiết bị dọc đường khác nhau để truyền dữ liệu 
+liên quan đến tàu. Việc phân loại được đưa ra theo các thông số sau: 
+– Nguyên lý kỹ thuật của việc truyền 
+– Loại nguồn cấp điện 
+– Truyền một chiều hoặc hai chiều 
+– Khả năng chuyển đổi nội dung dữ liệu 
+– Kích thước dữ liệu được truyền 
+– Tính dự phòng 
+– Vị trí dọc theo đường ray 
+– Vị trí ngang trên đường ray 
+Việc truyền theo điểm được thực hiện bằng các nguyên lý kỹ thuật sau: 
+– Cơ khí 
+– Điện (galvanic) 
+– Quang học 
+– Cảm ứng 
+Hai giải pháp đầ u tiên đã đư ợc phát triể n từ thế kỷ 19, nhưng vẫn đư ợc sử dụng 
+trong các hệ thống cũ hơn vớ i mứ c đ ộ giảm dần. Nguyên lý quang học, sau khi thử  
+nghiệm, đã không đạt được tầm quan trọng đáng kể. Nguyên lý cảm ứng là cơ sở của hầu 
+hết các h ệ thống hiện đại. Trong các chương 8.2.2.2 đến 8.2.2.5, các nguyên lý kỹ thuật 
+sẽ được mô tả chi tiết hơn. 
+--- PAGE 10 ---
+Loại nguồn cấp điện. Trong hầu h ết các trư ờng hợp, các thiết b ị dọc đường cần 
+năng lượng để truyền thông tin. Chúng nhận năng lư ợng này liên tụ c từ một nguồn điện 
+dọc đư ờng hoặc trong thờ i gian ngắn từ  tàu đang đi qua (ví dụ: các balise phát đáp, 
+chương 8.3.5). Cũng có nhữ ng thiết bị  truyền thông tin mà không cần điện (ví d ụ: một 
+nam châm vĩnh cửu). 
+Truyền thông tin m ột chi ều ho ặc hai chi ều. Trong phần lớn các h ệ thống, dữ 
+liệu chỉ được truyền từ  dọc đường đến tàu. Một số  thiết bị hiện đại, ví dụ: balise, cung 
+cấp khả năng truyền hai chiều v ới kết nối đến trung tâm điều khiển. Tuy nhiên, khả năng 
+này chỉ được sử dụng trong một số ít trường hợp (chương 8.3.5). 
+Khả năng chuy ển đ ổi nội dung d ữ liệu. Các máy phát có thể được phân loại 
+thành: 
+– Máy phát dữ liệu cố định, luôn truyền cùng một nội dung thông tin, và 
+– Máy phát có thể chuyển đổi, có nội dung thông tin có thể được chuyển đổi 
+bởi thông tin đầu vào từ dọc đường, ví dụ: các trạng thái tín hiệu. 
+ 
+Thường thì cả hai loại máy phát này đ ều được sử dụng trong cùng một hệ thống bảo vệ 
+tàu. 
+Kích thước dữ liệu được truyền. Các thiết bị dọc đường cũ hơn chỉ có thể truyền 
+một bit (ví dụ: Indusi, chương 8.3.3.1). Nếu c ần nhiều bit hơn, một s ố thiết bị như vậy sẽ 
+được lắp đặt. Nhưng các loại hiện đại có thể truyền dữ liệu chi tiết bằng cùng m ột máy 
+phát dọc đường (chương 8.3.5). 
+Tính d ự phòng. Thông tin có thể được bổ sung bằng tính dự  phòng, hoặc thậm 
+chí được lặp lại hoàn toàn trong quá trình truyền để phát hiện và sửa lỗi. Một số hệ thống 
+sử dụng các khả năng này, một số khác thì không. 
+Vị trí d ọc. Các vị trí lắp đặt của các thi ết bị dọc theo đư ờng ray khác nhau. Để 
+thực hiện ch ức năng kiểm tra sự  chú ý (chương 8.1.3), cần có một máy phát ở  gần tín 
+hiệu báo trước, trong khi chức năng dừng tàu yêu cầu một máy phát ở gần tín hiệu chính. 
+Để giám sát việc hãm, các máy phát bổ sung giữa hai điểm này đư ợc áp dụng trong một 
+số hệ thống, ví dụ như trong PZB 90 (chương 8.3.3.1) và ATS-S (chương 8.3.3.2), và đối 
+với các bi ểu đồ tốc độ liên tục, thông tin ph ải được cập nhật đều đặn dọc theo toàn bộ  
+tuyến. 
+Vị trí ngang. Các máy phát theo điểm được lắp đặt chủ yếu trên đường ray, hoặc ở 
+trung tâm hoặc g ần ray bên phải hoặc bên trái. Cũng có nhữ ng trường hợp có các máy 
+phát ở trên mức ray. Vì thông tin phụ thuộc vào hướng di chuyển, các thiết bị thường chỉ 
+hoạt động cho một hư ớng tàu hoặc truyền n ội dung thông tin khác nhau cho mỗi hư ớng. 
+Vị trí của chúng ở gần ray trái hoặc phải cho phép tàu chỉ  phát hiện máy phát cho hư ớng 
+của nó. V ới các máy phát đ ặt ở giữa, các hư ớng phải đư ợc xác đ ịnh theo cách khác, ví 
+dụ: bằng cách triệt tiêu cho một hư ớng hoặ c b ằng nội dung dữ  liệu chứ a thông tin về 
+hướng. Hình 8.4 cho thấy một ví d ụ về vị trí của các ăng -ten trên tàu cho các hệ thống 
+khác nhau ở dưới gầm đầu máy. 
+--- PAGE 11 ---
+ 
+ 
+Hình 8.4: Vị trí của các bộ phận giao tiếp trên phương tiện cho các hệ thống bảo vệ tàu 
+khác nhau (đồ họa: Jörn Pachl) 
+8.2.2.2. Nguyên lý cơ khí 
+Trong các hệ thống cơ khí, thông tin đư ợc truyền bằng một tay đòn cơ khí di động 
+ở dọc đường, tác động lên một thiết bị tương ứng trên tàu và từ  đó khởi xướng các phản 
+ứng như dừng khẩn cấp khi đi qua một tín hi ệu đỏ. Trong các hệ thống đầu tiên, một ống 
+thủy tinh được đặt trên nóc các đầu máy hơi nư ớc được kết nối với phanh khí nén. Khi đi 
+qua một tín hiệu hiển thị dừng, tay đòn trên đường ray sẽ làm vỡ ống thủy tinh và kết quả 
+là dừng tàu (Theeg/Vincze 2007). Một ví dụ  (không có ống thủy tinh) vẫn còn đư ợc sử 
+dụng là hệ thống dừng tàu cơ khí (chương 8.3.2.1). 
+8.2.2.3. Nguyên lý điện (Galvanic) 
+Theo nguyên lý điệ n, thông tin đư ợc truyền bằng dòng điện giữ a các bộ phận tiếp 
+xúc trên phương tiện và trên đư ờng ray. Một ví dụ điển hình là hệ thống Crocodile của 
+Pháp (chương 8.3.2.2). 
+Các nguyên lý cơ khí và điện cũng đư ợc sử dụng kết hợ p. Một ví dụ là hệ thống 
+được giới thiệu vào năm 1905 ở Mỹ (Barwell 1983). Ở đây, sự hiện diện của m ột máy 
+phát dọc đư ờng đư ợc chỉ báo cho tàu mộ t cách cơ h ọc, nhưng thông tin tín hi ệu được 
+truyền đến tàu một cách an toàn bất khả kháng bằng dòng điện. 
+8.2.2.4. Nguyên lý quang học 
+Theo nguyên lý quang học, các gương đặc biệ t có đặc tính phản xạ  thay đổi được 
+sử dụng làm máy phát dọc đư ờng, vị trí của chúng phụ thuộc vào trạng thái tín hiệu. Một 
+chùm tia phân cực được gửi từ tàu, phản xạ bởi gương và quay trở lại bộ tách sóng quang 
+trên tàu. Phổ của nó chứa thông tin về vị trí của gương và do đó là tr ạng thái tín hiệu. Do 
+các vấn đề thực tế (ví dụ: giữ  cho gương sạch), nguyên lý này đã không đạt đư ợc nhiều 
+tầm quan trọng. 
+8.2.2.5. Nguyên lý cảm ứng 
+Nguyên lý cảm ứng của việc truyền theo điểm, nói chung, dự a trên cảm ứng điện 
+từ giữa các bộ phận ở dọc đường và trên tàu. Theo các máy phát có liên quan thự c tế, nó 
+có thể được chia thành các loại quan trọng nhất sau: 
+
+--- PAGE 12 ---
+– phương pháp mạch cộng hưởng 
+– phương pháp từ trường DC di động 
+– phương pháp balise hoặc beacon phát đáp 
+Trong phương pháp m ạch cộng hư ởng, một mạch cộng hư ởng được cấp điện liên 
+tục nằm trên đầu máy. Đư ờng ray có m ột mạch cộng hư ởng thụ động được điều chỉnh 
+theo tần số  của mạch trên tàu và thông tin cầ n truyền. Nếu phương tiện dẫn đầ u đi qua 
+mạch cộng hư ởng thụ động, các cu ộn dây gi ữa cả hai sẽ tương tác vớ i nhau bằ ng cách 
+thay đổi độ tự cảm. Do đó, những thay đổi trong các thông số của mạch cộng hưởng trên 
+tàu (ví dụ: dòng điện, điện áp, tần số) trở  nên có thể đo được. Các ví dụ được mô tả trong 
+chương 8.3.3. 
+Phương pháp từ  trường DC di động sử  dụng hiệu ứng dòng điện đư ợc cảm ứng 
+trong một dây dẫn điệ n di chuyển trong một từ  trường. Từ trường có thể được tạo ra bởi 
+nam châm vĩnh cử u (dữ liệu cố định), bởi nam châm điện DC (có thể chuyển đổi) hoặ c 
+bằng sự kết hợp của cả hai. Nam châm vĩnh c ửu và nam châm điện có thể được sử dụng 
+cùng nhau (v ới một cái triệt tiêu từ  trường của cái kia, hình 8.5) hoặc theo trình tự  dọc 
+theo đường ray để chỉ định thông tin. Một nhược điểm của phương pháp này là chức năng 
+của nó bị giới hạn trong các trường hợp có một tốc độ tương đối tối thiểu nhất định của từ 
+trường và dây dẫn. Điều này có nghĩa là một tốc độ tối thiểu nhất định (tối thiểu này thay 
+đổi, nhưng thấp hơn 10 km/h) của tàu, vì v ậy các phương tiện di chuyển rất chậm không 
+nhận được thông tin. 
+Hình thức hiện đ ại nhất của truyền c ảm ứng theo điểm là tiếp xúc bằng bộ phát 
+đáp (transponder) vớ i các beacon ho ặc balise radio tầm ngắn. Ti ếp xúc này hoạt đ ộng ở 
+tần số cao và cho phép truyền các b ức điện phức tạp. Trong hầu hết các hệ thống, thiết bị 
+dọc đường nhận nguồn cấp điện từ đầu máy và phát ra dữ liệu khoảng vài trăm bit. Balise 
+và beacon có thể mang dữ  liệu cố định hoặ c có thể chuyển đổi (chương 8.2.2.1) hoặ c 
+thậm chí cung cấp việc truyền thông tin hai chiều. 
+Để thực hiện việc truy ền dữ liệu an toàn, các giải pháp khác nhau như lặp lại các 
+bức điện hoặc tổng kiểm tra (checksum) có thể được sử dụng. Hơn nữa, các máy phát dọc 
+đường được liên kết logic trong hầu hết các hệ thống để phát hiện lỗi của một máy phát. 
+ 
+--- PAGE 13 ---
+ 
+Hình 8.5: Nam châm vĩnh cửu với cuộn dây 
+8.2.3. Truyền theo tuyến 
+8.2.3.1. Phân loại 
+Truyền theo tuyến bao gồm cả các dạng liên tục cũng như gián đo ạn theo đoạn 
+(chương 8.2.1). Việc phân loại các hệ thống truyền theo tuyến nên tính đến các tiêu chí cơ 
+bản sau: 
+– Nguyên lý kỹ thuật của việc truyền 
+– Truyền một chiều hoặc hai chiều 
+– Kích thước dữ liệu được truyền 
+– Độ dài của các chu kỳ truyền 
+– Thời gian phản ứng với thông tin mới 
+– Việc sử dụng các bổ sung kỹ thuật 
+– Sự tập trung hóa củ a việc tạo thông tin và do đó khả năng thay đổi thông tin 
+một cách linh hoạt 
+– Chi phí cho thiết bị 
+Nguyên lý kỹ thuật. Nguyên lý kỹ thuật cho tất cả các máy phát tuyến tính quan 
+trọng trên thực tế là cảm ứng. Thông tin có thể được truyền qua các phương ti ện kỹ thuật 
+quan trọng nhất sau đây, được mô tả chi tiết hơn trong chương 8.2.3.2: 
+– Mạch đường ray (hình 8.6a) 
+– Vòng cáp (hình 8.6b) 
+– Radio (hình 8.6c) 
+ 
+Hình 8.6: Các thiết bị kỹ thuật cho việc truyền thông tin theo tuyến 
+
+--- PAGE 14 ---
+Truyền một chiều hoặ c hai chiều. Bằng việ c truyền dữ  liệu hai chi ều, ngoài việc 
+tàu nhận dữ liệu về thẩm quyền chạy tàu, tốc đ ộ cho phép và nhữ ng thứ khác, nó có thể 
+truyền lại thông tin về tốc độ hiện tại, vị trí, tình trạng của h ệ thống phanh, tính toàn vẹn 
+của đoàn tàu, v.v. Tín hiệu trên buồng lái thông qua các mạch đư ờng ray chỉ cung cấp 
+việc truyền dữ liệu một chiều; vòng cáp và radio có thể hoạt động theo cả hai hướng. 
+Kích thước dữ liệu được truyền phụ thuộc vào dung lư ợng kênh. Radio cung cấp 
+một dải tần số rộng cho việc trao đổi thông tin. Vòng cáp có thể truyền thông tin ở tần số 
+lên đến 50 – 100 kHz. Dung lư ợng kênh của các m ạch đường ray bị  giới hạn ở 20 kHz. 
+Do đó, các phương tiệ n truyền theo tuyến có thể truyền dữ liệu từ vài bit (ví dụ: ba trạng 
+thái tín hiệu trong ALSN, chương 8.3.4.1) đến d ữ liệu chi tiết về thẩm quyền chạy tàu và 
+hồ sơ như trong ETCS (chương 8.4.4, 8.4.6), tùy thuộc vào dải tần số. 
+Độ dài của chu kỳ  truyền cũng quan tr ọng, đặc biệt  l à  đối v ới việ c truyền các 
+thông điệp khẩn cấp (ví dụ: lệnh dừng khẩn cấp). Tốc độ tàu cao đòi hỏi các chu kỳ ngắn 
+(dưới một giây) phải có thể thực hiện được, đối với tốc độ thấp, các chu kỳ trong vài giây 
+có thể chấp nhận được. 
+Thời gian ph ản ứng. Việc kiểm tra tính toàn vẹn của các thông điệ p trước khi ra 
+quyết định là cần thiết. Trong một số hệ thống, điều này dẫn đến các hành động chỉ được 
+thực hiện sau khi nhậ n được lặp lại. Nó dẫn đến một hành động bị trì hoãn. Ví d ụ, nó có 
+thể mất đến ba chu kỳ hoặc gần năm giây trong ALSN (chương 8.3.4.1). 
+Các bổ sung kỹ thuật. Các mạch đường ray trong khu vực có mối nối cách điện và 
+radio ở các khu vực miền núi không phải lúc nào cũng có thể đảm bảo vùng phủ sóng đầy 
+đủ với việc truyền từ dọc đường. Trong những trường hợp này, một số ăng-ten dọc đường 
+bổ sung như vòng cáp có thể trở nên cần thiết. 
+Sự tập trung hóa. Các hệ thống truyền liên tục có thể được tập trung hóa hoặc phân 
+tán. Các hệ thống tập trung hóa cho phép ngư ời vận hành thay đổi thông tin dễ dàng. Ví 
+dụ là việc nhập các hạn chế tốc độ tạm thời, nhưng cũng có thể là các lệnh dừng khẩn cấp 
+chung trong trường hợp thiên tai như động đất. 
+Một yếu tố kinh tế quan trọng là chi phí của thiết bị truyền. Việc sử dụng các mạch 
+đường ray đã có sẵn không đòi hỏi đầu tư đáng kể. Vòng cáp đòi hỏi nỗ lực b ổ sung 
+tương đối cao cho cáp, và sự  sắp xếp của chúng cản tr ở công tác đường ray. Việc truyền 
+bằng radio giữa tàu và trung tâm điều khi ển được ước tính có một tri ển vọng tốt, mặc dù 
+ngày nay nó đòi hỏi nhiều đầu tư. 
+8.2.3.2. Các nguyên lý kỹ thuật của việc truyền 
+Khi dữ liệu được truyền qua các m ạch đường ray, thông tin có thể  được mã hóa 
+bằng (chương 5.3.4): 
+– Tần số tín hiệu không đổi hoặc 
+– Tín hiệu điều chế. 
+Hệ thống truyền đầu tiên trong lịch sử  thông qua các mạch đư ờng ray đã sử  dụng 
+các tần số khác nhau, mỗi tần số được gán cho một thông tin cụ thể (hệ thống CSS ở Mỹ, 
+chương 8.3.4.2). Nhưng ngày nay, các dạ ng điều chế xung, tần số hoặc pha khác nhau 
+--- PAGE 15 ---
+được áp dụng trong hầu hết các hệ thống hiện đại. Điều chế tần số và pha cho phép kh ối 
+lượng thông tin cao hơn so với điều chế xung. 
+Khi vòng cáp được sử dụng, hai loại về mặt lắp ráp là quan trọng nhất trên thực tế 
+(hình 8.7): 
+– Một vòng cáp, được bắt chéo định kỳ cho mục đích định vị: Dạng này được 
+sử dụng trên một số hệ thống đường sắt đô thị cũng như trong hệ thống LZB (chương 
+8.3.6, hình 8.8). 
+– Cáp với một dây dẫn và dây trở  về, được xếp chồng lên đế ray. Loại vòng cáp 
+này được tùy chọn áp dụng trong ETCS L1 như các vòng lấ p đầy (infill loops) 
+(chương 8.4.3, hình 8.9). 
+Đối với giao tiế p vô tuyến, có mộ t tiêu chu ẩn châu Âu gọi là GSM-R. Trong số  
+các ứng dụng khác, nó đư ợc sử dụng trong ETCS (chương 8.4.1). Nó cũng đư ợc áp dụng 
+bên ngoài châu Âu ở nhiều quốc gia. Độ rộng của một kênh là 200 kHz, các tần s ố sóng 
+mang chiếm vùng 876 – 880 (Uplink) và 921 – 925 (Downlink) MHz. Tuy nhiên, cũng có 
+các hệ thống giao tiếp vô tuyến kỹ thuật số khác đang được thử nghiệm hoặc sử dụng bởi 
+các ngành đường sắt để truyền dữ liệu liên tục. 
+ 
+ 
+Hình 8.7: Các dạng vòng cáp 
+ 
+  
+Hình 8.8: Vòng cáp LZB Hình 8.9: Euroloop 
+8.3. Các hệ thống cụ thể 
+8.3.1. Phân loại các hệ thống 
+Các hệ thống bảo vệ tàu được áp d ụng trong ngành đư ờng sắt có th ể được phân 
+loại sơ bộ thành năm nhóm theo chức năng và loại hình truyền dữ liệu (bảng 8.3): 
+1) Hệ thống truyền dữ liệu gián đoạn và không có giám sát hãm. 
+2) Hệ thống truyền dữ  liệu gián đoạn vớ i khối lư ợng dữ liệu thấp và có giám 
+sát hãm. 
+
+--- PAGE 16 ---
+3) Hệ thống truyền dữ liệu liên tục về trạng thái tín hiệu bằng các mạch đường 
+ray được mã hóa. Vì ranh giớ i giữa các hệ thống có và không có giám sát hãm là không 
+rõ ràng, nên 3a và 3b được phân loại vào cùng một nhóm ở đây. 
+4) Hệ thống truyền dữ  liệu gián đoạ n với khối lư ợng dữ liệu cao và giám sát 
+tốc độ động. 
+5) Hệ thống truyền dữ liệu liên tục với khối lượng dữ liệu cao và giám sát tốc 
+độ động. 
+Có một xu hướng là các hệ thống cũ hơn thuộc các nhóm đầu và các h ệ thống tiên 
+tiến hơn thuộc các nhóm sau. 
+ 
+ 
+Bảng 8.3: Phân loại các hệ thống bảo vệ tàu 
+Hầu hết các h ệ thống hoạt động độc l ập, nhưng có một s ố hệ thống bổ sung cho 
+các hệ thống bảo vệ tàu khác và chỉ có thể hoạt động cùng vớ i chúng. Một ví d ụ là hệ 
+thống SAUT của Nga (chương 8.3.5.3) là một phần bổ sung cho ALSN (chương 8.3.4.1) 
+với các ch ức năng giám sát đư ợc cải thiện. Một ví dụ khác là hệ  thống GNT của Đ ức 
+(chương 8.3.5.1) là một phần bổ sung cho PZB 90 (chương 8.3.3.1) để xử lý các đoàn tàu 
+nghiêng có giới hạn tốc độ cao hơn. 
+8.3.2. Nhóm 1: Các hệ thống truyền dữ liệu gián đoạn và không có giám sát hãm 
+Các hệ thống không có giám sát hãm (bảng 8.3) về  cơ bản có hai ch ức năng giám 
+sát: Chúng cung cấp chứ c năng kiểm tra sự  chú ý tại các tín hiệu có thể hiển thị 'Chú ý' 
+(tín hiệu báo trư ớc và tín hiệu kết hợ p), và/hoặc ch ức năng dừ ng tàu (hình 8.10). Các 
+phương tiện truyền dữ liệu của các hệ thống này đơn giản, nhưng khác nhau. Bốn ví dụ sẽ 
+được mô tả ngắn gọn: hệ thống dừng tàu cơ khí, Crocodile của Pháp, AWS củ a Anh và 
+Signum của Thụy Sĩ. 
+Lợi ích về an toàn từ việc áp dụng các hệ thống bảo vệ tàu này là hạn chế. Sự thiếu 
+hụt này sẽ được ch ứng minh bằng ví dụ về hệ thống ATS-S l ịch sử  của Nhật Bản, hệ 
+thống này chỉ cung cấp việc kiểm tra sự  chú ý tại các tín hiệu có thể hiển thị 'Chú ý', độc 
+lập với trạng thái tín hi ệu hiện tại: Hệ thống này chỉ giảm được một nửa số vụ tai nạn do 
+vi phạm tín hi ệu dừng, và 98% các v ụ tai nạn còn lại x ảy ra sau khi lái tàu đã có hành 
+động xác nhậ n chính xác (Kondo 1980). Ngay cả khi có thể  giả định rằng việc kiểm tra 
+
+--- PAGE 17 ---
+xác nhận có chọn lọc (chỉ khi tín hiệu thực sự hiển thị 'Chú ý') và chức năng dừng tàu bổ 
+sung làm tăng tính an toàn, trong hầu h ết các trường hợp, các hệ thống này không đủ đáp 
+ứng các yêu cầu an toàn hiện đại. Chức năng dừng tàu mà không có giám sát hãm đòi hỏ i 
+các đo ạn bảo vệ (overlap) phải dài bằng kho ảng cách hãm của tàu. Trong hầu hết các 
+trường hợp, điều này không thể được cung cấp. 
+ 
+ 
+Hình 8.10: Chức năng giám sát của các hệ thống nhóm 1 
+8.3.2.1. Hệ thống dừng tàu cơ khí 
+Hệ thống dừng tàu cơ khí (hình 8.11) là một hệ thống đơn giản với một tiếp điểm cơ 
+khí tại các tín hiệ u có thể hiển thị 'Dừng' (tín hiệu chính và tín hiệu kết hợ p) và một tiếp 
+điểm tương ứng trên các phương tiện. Tùy thuộc vào việc tín hiệ u hiển thị trạng thái 
+Dừng hay Cho phép đi, tiếp điểm trên đường ray sẽ được bật/tắt hiệu lực. Việc đi qua một 
+tiếp điể m có hiệ u lự c s ẽ gây ra một cú dừ ng khẩn c ấp ngay lập tứ c. Bên cạnh nhữ ng 
+nhược điểm chung về an toàn của các h ệ thống thuộc nhóm này đã đư ợc đề cập trong 
+chương 8.3.2, các hệ thống này còn có một số nhược điểm khác: 
+– Các bộ phận cơ khí chuyển động gây mài mòn, làm tăng chi phí bảo trì. 
+– Cần phải chú ý đặc biệt đến khổ giới hạn của các phương tiện. 
+ 
+Hình 8.11: Thiết bị dọc đường của hệ thống dừng tàu cơ khí trên tuyến S-Bahn Berlin 
+Những nhược điểm này đã hạn chế khả năng áp dụng của các hệ thống này cho các 
+tuyến đường sắt ngoại ô và đô thị với các phương tiện đồng nhất, tốc độ thấp và hiệu suất 
+hãm cao. Đư ợc phát minh ở  Anh, nhiều hệ thống loại này đã đư ợc phát triển trong quá 
+
+--- PAGE 18 ---
+khứ. Nhiều hệ thống vận tải công cộng khối lư ợng lớn vẫn sử dụng hệ thống dừng tàu cơ 
+khí, nhưng số lượng đang giảm dần. 
+8.3.2.2. Hệ thống Crocodile của Pháp 
+Hệ thống Crocodile, đư ợc áp d ụng ở Pháp, Bỉ và cho đến vài năm trư ớc là 
+Luxembourg, truyền thông tin về trạng thái c ủa một tín hi ệu báo trư ớc hoặc tín hiệu kết 
+hợp bằng một tiếp điể m điện (galvanic) giữ a các thanh ray (hình 8.12). Thiết bị trên tàu 
+bao gồm một tiếp điểm điện ở dưới gầm đầu máy, tiếp xúc cơ học với bộ phát trên đường 
+ray, một kết nối dẫn đi ện giữa tiếp điểm đó và các bánh xe và một b ộ phận tác động đơn 
+giản. Việc không có điện áp giữa ray và bộ phát trên đường ray có nghĩa là không có hạn 
+chế, điện áp 20 V DC tùy thuộc vào cự c tính của nó sẽ cảnh báo về  một hạn chế tốc độ 
+hoặc một tín hiệu dừng. Khi đi qua một tín hiệu hiển thị 'Chú ý' hoặc 'Cảnh báo hạn ch ế 
+tốc độ', trong các phiên bản cũ hơn chỉ có một âm thanh cả nh báo vang lên trong buồng 
+lái ngay trước khi đi qua tín hiệu. Các phiên bản mớ i hơn cũng sử dụng một bài kiểm tra 
+sự chú ý. 
+ 
+Hình 8.12: Thiết bị dọc đường của hệ thống Crocodile (ảnh: Dietmar Strobel) 
+8.3.2.3. Hệ thống AWS của Anh 
+AWS (Hệ thống cả nh báo tự  động) là m ột h ệ thống bảo vệ tàu cũ của Anh. Bộ  
+phận truyền dữ liệu trên đư ờng ray bao gồ m hai nam châm đặt giữ a các thanh ray theo 
+một trình tự ngắn (hình 8.13), được đặt ngay trước bất kỳ tín hiệu nào có thể hiển thị 'Chú 
+ý'. Nam châm đầu tiên là một nam châm vĩnh cử u có cự c bắc ở phía trên, kh ởi tạo m ột 
+âm thanh cảnh báo. Nam châm thứ hai là một nam châm điện DC có cực nam ở phía trên, 
+sẽ thiết lập lại thiết bị trên tàu trong trư ờng hợp tín hiệu hiển thị 'Cho phép đi'. Điều này 
+phù hợp với nguyên tắ c an toàn bất khả kháng. Trong bất k ỳ trường hợp nào khác ('Chú 
+ý' hoặc 'Dừng'), thiết b ị trên tàu phải đư ợc thiết lập lại b ằng hành độ ng xác nhận củ a lái 
+tàu, nếu không tàu sẽ bị hãm khẩn cấp. Để  nhắc nhở lái tàu, mộ t tín hiệu đơn giả n trên 
+buồng lái ('Hoa hư ớng dương', hình 8.14) đư ợc hiển thị. Một như ợc điểm quan trọng là 
+hệ thống không phân biệt giữ a các tr ạng thái 'Chú ý' và 'Dừ ng'. Đ ể sử dụng trên các 
+đường ray hai chiều, nam châm phả i được triệt tiêu bằng một t ừ trường DC mạnh tương 
+đương có cực tính ngược lại. Thông tin thêm về AWS có thể được tìm thấy trong (IRSE 
+1999). 
+
+--- PAGE 19 ---
+ 
+Hình 8.13: Bộ cảm ứng điện từ và nam châm vĩnh cửu của AWS, được lắp đặt trên một 
+tuyến hành khách ở Anh (ảnh: David Stratton) 
+8.3.2.4. Hệ thống Integra Signum của Thụy Sĩ 
+Integra Signum là một h ệ thống bảo vệ tàu của Thụy Sĩ kết h ợp chức năng dừ ng 
+tàu và kiểm tra sự chú ý. Đến năm 2018, Signum đã được thay thế hoàn toàn bằng ETCS. 
+Việc truyền dữ liệu là cảm ứng bằng dòng điện một chiều. Cuộn dây đư ợc cấp điện được 
+đặt ở trung tâm dư ới gầm phương tiện. Khi phương tiện đi qua cuộ n dây trung tâm trên 
+đường ray, dòng điện đư ợc cảm ứng trong cuộn dây này và đư ợc cảm ứng ngược trở lại 
+phương tiện bởi các cuộn dây bên ngoài phía bên trái (hình 8.15, hình 8.16). Cần có một 
+tốc độ tối thiểu của tàu (khoảng 5 km/h) để truyền dữ liệu. Bộ phát đáp trên đường ray có 
+thể được tắt hiệu lực bằng cách đoản m ạch trong trư ờng hợp tín hiệ u cho phép đi. Bằng 
+cách định vị cặp cuộn dây thứ  hai trên một hoặc ray kia, các hư ớng được phân biệt. Các 
+trạng thái tín hiệu 'Chú ý' và 'Dừ ng' được phân biệt bằ ng cực tính của cuộn dây bên trái. 
+'Chú ý' yêu cầu một hành động xác nhận, trong khi 'Dừ ng' gây ra mộ t cú dừng khẩn cấp 
+ngay lập tức. 
+Thông tin thêm về Signum có thể được tìm thấy trong (Oehler 1981). 
+ 
+Hình 8.14: Tín hiệu trên buồng lái của AWS 
+
+--- PAGE 20 ---
+ 
+Hình 8.15: Các bộ phát trên đường ray của Signum (cuộn dây giữa và phải) ở Thụy Sĩ. 
+Thiết bị bên trái thuộc hệ thống bổ sung ZUB (chương 8.3.5) (ảnh: SBB) 
+ 
+Hình 8.16: Truyền dữ liệu trong Integra Signum 
+8.3.3. Nhóm 2: Các hệ thống truyền dữ liệu gián đoạn với khối lượng dữ liệu thấp và 
+có giám sát hãm 
+Trong các hệ thống này (bảng 8.3), ngoài các chức năng kiểm tra sự chú ý và dừng 
+tàu, quá trình hãm đư ợc giám sát dư ới các hình thứ c khác nhau, nhưng không tính toán 
+biểu đồ tốc độ động. Để truyền dữ liệu, các mạch cộng hưởng được sử dụng trong hầu hết 
+các trường hợp. Mỗi mạch cộ ng hưởng trên đư ờng ray đư ợc điều chỉnh theo m ột tần số 
+nhất định trong số một loạt các tần số đã xác định, với tần số mã hóa thông tin. Các mạch 
+cộng hưởng trên đường ray có thể được bật/tắt hiệu lực, hoặc chúng có thể được chuyển 
+đổi giữa các trạng thái hoạt động khác nhau (t ần số khác nhau), tùy thuộc vào trạng thái 
+tín hiệu. 
+Một nhược điểm của nhiều hệ thống này là trạng thái không hiệu lực (cho phép đi) 
+không thể được phân biệt vớ i sự vắng mặt của m ột bộ phát trên đường ray, điều này dẫn 
+đến hành vi không an toàn bất khả kháng của hệ thống. Do đó, các hệ thống này không 
+phù hợp cho tín hiệu trên buồng lái và phải hoạt động ở chế độ nền miễn là lái tàu vẫn 

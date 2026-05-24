@@ -1,0 +1,2 @@
+train_id,drive_mode,pos_m,speed_kmh,distance_to_eoa_m,distance_to_train_ahead_m,headway_s,atp_action,ato_profile_phase,traction_work_kwh,brake_work_kwh,coast_distance_m,distance_m,runtime_accel_ms2,runtime_traction_force_n,runtime_brake_force_n,sbi_count,ebi_count,collision_count,collision_latched,collision_partner_id,collision_overlap_m
+A1,ATO,142.1850699600231,41.790056676522724,352.9214925760176,,,,LK,7.256671576876498,1.2667206597381842,7.537279257002652,142.1850699600231,0.8544743280888099,269891.15631057427,0.0,0,0,0,False,,0.0
