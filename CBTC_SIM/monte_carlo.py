@@ -28,6 +28,22 @@ def _percentile(values: Iterable[float], percentile: float) -> float | None:
     return data[lower] + (data[upper] - data[lower]) * ratio
 
 
+def _recorded_station_dwell_s(record: Dict[str, Any], minimum_s: float) -> float | None:
+    for key in ("passenger_dwell_s", "station_wait_s", "planned_dwell_s"):
+        value = record.get(key)
+        if value is None:
+            continue
+        try:
+            dwell_s = float(value)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(dwell_s):
+            return max(minimum_s, dwell_s)
+    if record.get("train_id") is not None:
+        return minimum_s
+    return None
+
+
 @dataclass
 class MonteCarloConfig:
     runs: int = 100
@@ -410,10 +426,11 @@ def run_one(
         for value in station.get("arrival_headways_s", [])
     ]
     station_dwell = [
-        max(config.min_passenger_dwell_s, float(record.get("passenger_dwell_s")))
+        dwell_s
         for station in analytics.get("station_passenger_metrics", [])
         for record in station.get("arrivals", [])
-        if record.get("passenger_dwell_s") is not None
+        for dwell_s in [_recorded_station_dwell_s(record, config.min_passenger_dwell_s)]
+        if dwell_s is not None
     ]
     dispatch_headways = analytics.get("actual_headways_s", [])
     return MonteCarloRunResult(

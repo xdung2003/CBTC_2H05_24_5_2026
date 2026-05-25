@@ -53,7 +53,7 @@ source_trains:
   total_trains: 7
 headway:
   mode: fixed
-  target_headway_s: 180.0
+  target_headway_s: 80.0
 capacity_baseline:
-  blocks_per_section: 3
+  blocks_per_section: 4
 line_conditions: []

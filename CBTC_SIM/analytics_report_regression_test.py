@@ -24,6 +24,37 @@ def make_scenario():
     )
 
 
+def make_two_station_headway_scenario():
+    return normalize_scenario(
+        {
+            "track": {"segments": [{"start_m": 0, "end_m": 1600, "gradient": 0.0, "psr_kmh": 70}]},
+            "scheduled_stops": [
+                {"name": "S500", "pos_m": 500.0, "length_m": 160.0, "capacity": 2, "dwell_s": 300.0},
+                {"name": "S1200", "pos_m": 1200.0, "length_m": 160.0, "capacity": 2, "dwell_s": 300.0},
+            ],
+            "headway": {"mode": "fixed", "target_headway_s": 80.0},
+            "trains": [{"id": "A1", "start_pos": 0.0, "drive_mode": "ATO"}],
+            "source_trains": [],
+        }
+    )
+
+
+def test_station_dwell_is_zc_headway_controlled():
+    sim = main_gui.Simulation(make_two_station_headway_scenario())
+    first_stop = sim.scheduled_stops[0]
+    if sim._station_dwell_time_s(0, first_stop) != main_gui.MIN_PASSENGER_DWELL_S:
+        raise AssertionError("configured station dwell should not force a fixed platform wait")
+    sim.sim_time_s = 120.0
+    sim.station_last_departure_s[0] = 100.0
+    dwell_s = sim._station_dwell_time_s(0, first_stop)
+    if abs(dwell_s - 60.0) > 1e-6:
+        raise AssertionError(f"ZC station dwell should extend to target headway, got {dwell_s:.2f}s")
+    sim.sim_time_s = 170.0
+    hold_s = sim._station_departure_headway_hold_s(0)
+    if abs(hold_s - 10.0) > 1e-6:
+        raise AssertionError(f"station departure should remain held until target headway, got {hold_s:.2f}s")
+
+
 def test_analytics_accumulates_train_metrics():
     sim = main_gui.Simulation(make_scenario())
     saw_runtime_traction = False
@@ -100,6 +131,7 @@ def test_report_contains_tables_and_csv(tmp_dir: Path | None = None):
 
 
 def main() -> int:
+    test_station_dwell_is_zc_headway_controlled()
     test_analytics_accumulates_train_metrics()
     test_report_contains_tables_and_csv()
     print("analytics report regression ok")

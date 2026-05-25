@@ -3105,7 +3105,10 @@ class Simulation:
         self.color_palette = palette
         self.generated_train_counter = 0
         self.train_generation_changed = False
+        self.station_last_arrival_s: Dict[int, float] = {}
+        self.station_arrival_headway_actual_s: Dict[int, List[float]] = {}
         self.station_last_departure_s: Dict[int, float] = {}
+        self.station_next_departure_release_s: Dict[int, float] = {}
         self.station_headway_actual_s: Dict[int, List[float]] = {}
         self.station_headway_deviation_s: Dict[int, List[float]] = {}
         self.trains = []
@@ -3944,13 +3947,7 @@ class Simulation:
         train.standstill_anchor_pos = train.pos
         self._set_train_station_state(train, station_idx, "STOPPED_AT_PLATFORM", "aligned_stop")
         train.dwell_remaining_s = self._station_dwell_time_s(station_idx, stop)
-        self.analytics.setdefault("station_arrivals", {}).setdefault(station_idx, []).append(
-            {
-                "train_id": train.id,
-                "arrival_time_s": self.sim_time_s,
-                "planned_dwell_s": train.dwell_remaining_s,
-            }
-        )
+        self._record_station_arrival(station_idx, train, train.dwell_remaining_s)
         train.next_scheduled_stop_idx += 1
         self._set_train_station_state(train, station_idx, "DWELLING", "dwell_started")
         self.log_station_event(station_idx, train, self._station_line_for_lane(station_idx, train.station_lane), "DWELL_STARTED")
@@ -4114,11 +4111,35 @@ class Simulation:
     def _station_dwell_time_s(self, station_idx: int | None, stop: Dict[str, Any]) -> float:
         if self._is_terminal_station(station_idx) or self._is_final_scheduled_station(station_idx):
             return float("inf")
-        return max(MIN_PASSENGER_DWELL_S, float(stop.get("dwell_s", MIN_PASSENGER_DWELL_S)))
+        minimum_departure_s = self.sim_time_s + MIN_PASSENGER_DWELL_S
+        if station_idx is None:
+            return MIN_PASSENGER_DWELL_S
+        target_headway_s = max(0.0, float(self.headway_manager.nominal_target_headway_s()))
+        if target_headway_s <= 0.0:
+            return MIN_PASSENGER_DWELL_S
+        previous_candidates = [
+            value
+            for value in (
+                self.station_next_departure_release_s.get(station_idx),
+                self.station_last_departure_s.get(station_idx),
+            )
+            if value is not None
+        ]
+        previous_slot_s = max(previous_candidates) if previous_candidates else None
+        if previous_slot_s is None:
+            departure_slot_s = minimum_departure_s
+        else:
+            departure_slot_s = max(minimum_departure_s, previous_slot_s + target_headway_s)
+        self.station_next_departure_release_s[station_idx] = departure_slot_s
+        return max(MIN_PASSENGER_DWELL_S, departure_slot_s - self.sim_time_s)
 
     def _record_station_departure_headway(self, station_idx: int, train: Train):
         previous = self.station_last_departure_s.get(station_idx)
         self.station_last_departure_s[station_idx] = self.sim_time_s
+        self.station_next_departure_release_s[station_idx] = max(
+            self.station_next_departure_release_s.get(station_idx, self.sim_time_s),
+            self.sim_time_s,
+        )
         if previous is None:
             return
         actual = max(0.0, self.sim_time_s - previous)
@@ -4126,6 +4147,35 @@ class Simulation:
         self.station_headway_actual_s.setdefault(station_idx, []).append(actual)
         if target > 0.0:
             self.station_headway_deviation_s.setdefault(station_idx, []).append(actual - target)
+
+    def _station_departure_headway_hold_s(self, station_idx: int | None) -> float:
+        if station_idx is None:
+            return 0.0
+        previous = self.station_last_departure_s.get(station_idx)
+        if previous is None:
+            return 0.0
+        target_headway_s = max(0.0, float(self.headway_manager.nominal_target_headway_s()))
+        if target_headway_s <= 0.0:
+            return 0.0
+        return max(0.0, previous + target_headway_s - self.sim_time_s)
+
+    def _record_station_arrival(self, station_idx: int, train: Train, dwell_s: float) -> None:
+        previous = self.station_last_arrival_s.get(station_idx)
+        self.station_last_arrival_s[station_idx] = self.sim_time_s
+        arrival_headway_s = None
+        if previous is not None:
+            arrival_headway_s = max(0.0, self.sim_time_s - previous)
+            self.station_arrival_headway_actual_s.setdefault(station_idx, []).append(arrival_headway_s)
+        self.analytics.setdefault("station_arrivals", {}).setdefault(station_idx, []).append(
+            {
+                "train_id": train.id,
+                "arrival_time_s": self.sim_time_s,
+                "arrival_headway_s": arrival_headway_s,
+                "planned_dwell_s": dwell_s,
+                "passenger_dwell_s": dwell_s,
+                "station_wait_s": dwell_s,
+            }
+        )
 
     def _set_train_station_state(self, train: Train, station_idx: int | None, state: str, reason: str = ""):
         stop_key = train.stop_identity() if train.active_scheduled_stop is not None else train.station_state_stop_key
@@ -4667,6 +4717,10 @@ class Simulation:
             if train.dwell_remaining_s != float("inf"):
                 train.dwell_remaining_s = max(0.0, train.dwell_remaining_s - DT)
             if train.dwell_remaining_s <= 0.0:
+                headway_hold_s = self._station_departure_headway_hold_s(station_idx)
+                if headway_hold_s > 0.0:
+                    train.dwell_remaining_s = headway_hold_s
+                    return immediate_packet_required
                 train.commanded_stop = False
                 self._set_train_station_state(train, station_idx, "READY_TO_DEPART", "dwell_complete")
                 if station_idx is not None:
@@ -4726,13 +4780,7 @@ class Simulation:
             train.standstill_anchor_pos = train.pos
             self._set_train_station_state(train, station_idx, "STOPPED_AT_PLATFORM", "aligned_stop")
             train.dwell_remaining_s = self._station_dwell_time_s(station_idx, stop)
-            self.analytics.setdefault("station_arrivals", {}).setdefault(station_idx, []).append(
-                {
-                    "train_id": train.id,
-                    "arrival_time_s": self.sim_time_s,
-                    "planned_dwell_s": train.dwell_remaining_s,
-                }
-            )
+            self._record_station_arrival(station_idx, train, train.dwell_remaining_s)
             train.next_scheduled_stop_idx += 1
             self._set_train_station_state(train, station_idx, "DWELLING", "dwell_started")
             immediate_packet_required = True
@@ -4874,33 +4922,43 @@ class Simulation:
             self.analytics["current_open_headway_s"] = max(0.0, self.sim_time_s - max(release_times.values()))
         self.analytics["traction_work_kwh"] = sum(t.analytics_traction_work_j for t in self.trains) / 3_600_000.0
         self.analytics["brake_work_kwh"] = sum(t.analytics_brake_work_j for t in self.trains) / 3_600_000.0
-        self.analytics["station_passenger_metrics"] = [
-            {
-                "station_index": idx,
-                "station_name": self.scheduled_stops[idx].get("name", f"STATION_{idx}")
-                if idx < len(self.scheduled_stops)
-                else f"STATION_{idx}",
-                "arrival_headways_s": list(values),
-                "departure_headways_s": list(values),
-                "headway_deviation_s": list(self.station_headway_deviation_s.get(idx, [])),
-                "arrivals": [dict(record) for record in self.analytics.get("station_arrivals", {}).get(idx, [])],
-            }
-            for idx, values in self.station_headway_actual_s.items()
-        ]
-        for idx, records in self.analytics.get("station_arrivals", {}).items():
-            if idx not in self.station_headway_actual_s:
-                self.analytics["station_passenger_metrics"].append(
-                    {
-                        "station_index": idx,
-                        "station_name": self.scheduled_stops[idx].get("name", f"STATION_{idx}")
-                        if idx < len(self.scheduled_stops)
-                        else f"STATION_{idx}",
-                        "arrival_headways_s": [],
-                        "departure_headways_s": [],
-                        "headway_deviation_s": [],
-                        "arrivals": [dict(record) for record in records],
-                    }
-                )
+        station_metric_indices = sorted(
+            set(self.station_arrival_headway_actual_s)
+            | set(self.station_headway_actual_s)
+            | set(self.analytics.get("station_arrivals", {}))
+        )
+        station_metrics = []
+        for idx in station_metric_indices:
+            arrival_headways = list(self.station_arrival_headway_actual_s.get(idx, []))
+            departure_headways = list(self.station_headway_actual_s.get(idx, []))
+            arrivals = [dict(record) for record in self.analytics.get("station_arrivals", {}).get(idx, [])]
+            avg_arrival_headway = (
+                sum(arrival_headways) / len(arrival_headways)
+                if arrival_headways
+                else None
+            )
+            avg_departure_headway = (
+                sum(departure_headways) / len(departure_headways)
+                if departure_headways
+                else None
+            )
+            for record in arrivals:
+                record["avg_station_arrival_headway_s"] = avg_arrival_headway
+            station_metrics.append(
+                {
+                    "station_index": idx,
+                    "station_name": self.scheduled_stops[idx].get("name", f"STATION_{idx}")
+                    if idx < len(self.scheduled_stops)
+                    else f"STATION_{idx}",
+                    "arrival_headways_s": arrival_headways,
+                    "departure_headways_s": departure_headways,
+                    "avg_arrival_headway_s": avg_arrival_headway,
+                    "avg_departure_headway_s": avg_departure_headway,
+                    "headway_deviation_s": list(self.station_headway_deviation_s.get(idx, [])),
+                    "arrivals": arrivals,
+                }
+            )
+        self.analytics["station_passenger_metrics"] = station_metrics
         ordered_for_collision = sorted(self.trains, key=lambda item: item.pos)
         active_collisions = 0
         for left, right in zip(ordered_for_collision, ordered_for_collision[1:]):
@@ -6061,12 +6119,32 @@ class ATSOverviewPanel(ttk.Frame):
                     y = rail_y
             else:
                 y = rail_y
-            dcs_fault = bool(getattr(train, "dcs_fault_active", False) or getattr(train, "dcs_muted", False))
+            dcs_fault = bool(
+                getattr(train, "dcs_fault_active", False)
+                or getattr(train, "dcs_muted", False)
+                or not getattr(train, "safe_packet_valid", True)
+            )
             atp_fault = bool(getattr(train, "atp_fault_active", False))
             ato_fault = bool(getattr(train, "ato_fault_active", False))
-            fault_active = atp_fault or ato_fault or dcs_fault
+            emergency_fault = bool(
+                getattr(train, "trip_mode", False)
+                or getattr(train, "emergency_stop", False)
+                or getattr(train, "emg_latch", False)
+                or getattr(train, "emergency_recovery_hold", False)
+            )
+            fault_active = atp_fault or ato_fault or dcs_fault or emergency_fault
             train_fill = "#6b7d90" if fault_active else train.color
-            train_alert_outline = APP_THEME["danger"] if atp_fault else "#ff9f1c" if ato_fault else APP_THEME["warning"] if dcs_fault else ""
+            train_alert_outline = (
+                APP_THEME["danger"]
+                if atp_fault
+                else "#4d5964"
+                if emergency_fault
+                else "#ff9f1c"
+                if ato_fault
+                else APP_THEME["warning"]
+                if dcs_fault
+                else ""
+            )
             train_half_height = 5
             c.create_rectangle(
                 x1 - 2,
@@ -6103,6 +6181,8 @@ class ATSOverviewPanel(ttk.Frame):
                 fault_labels.append("ATO")
             if dcs_fault:
                 fault_labels.append("DCS")
+            if emergency_fault and not atp_fault:
+                fault_labels.append("EMG")
             label_text = f"{train.id} {'/'.join(fault_labels)}" if fault_labels else train.id
             c.create_text((x1 + x2) / 2, y - 11, text=label_text, fill=train_fill, font=("Consolas", 8, "bold"))
             if train.departure_hold:
@@ -6161,12 +6241,25 @@ class InfrastructurePanel(ttk.Frame):
     def update_data(self, sim: Simulation):
         lines = ["Asset                State                 Notes"]
         lines.append("-" * 72)
-        for idx, (start, end, gradient, psr) in enumerate(sim.track_profile, 1):
-            occupied = any((t.pos - t.length) < end and t.pos > start for t in sim.trains)
-            signal = "RED" if occupied else "GREEN"
-            axle = "OCC" if occupied else "CLEAR"
-            lines.append(f"VB-{idx:02d} {start:>5.0f}-{end:<5.0f}  {axle:<20} gradient={gradient:+.3f} psr={psr:.0f}")
-            lines.append(f"SIG-{idx:02d}             {signal:<20} virtual lineside aspect")
+        if getattr(sim, "block_mode", "moving_block") == "fixed_block":
+            blocks = list(getattr(sim, "fixed_blocks", []))
+            for idx, block in enumerate(blocks, 1):
+                start = float(block.get("start_m", 0.0))
+                end = float(block.get("end_m", start))
+                _gradient, psr = get_track_info(sim.track_profile, (start + end) / 2.0)
+                occupied = any((t.pos - t.length) < end and t.pos > start for t in sim.trains)
+                signal = "RED" if occupied else "GREEN"
+                axle = "OCC" if occupied else "CLEAR"
+                signal_id = str(block.get("id", f"FB{idx:02d}"))
+                lines.append(f"{signal_id:<6} {start:>5.0f}-{end:<5.0f}  {axle:<20} fixed block psr={psr:.0f}")
+                lines.append(f"SIG-{idx:02d}             {signal:<20} physical lineside signal")
+        else:
+            for idx, (start, end, gradient, psr) in enumerate(sim.track_profile, 1):
+                occupied = any((t.pos - t.length) < end and t.pos > start for t in sim.trains)
+                signal = "RED" if occupied else "GREEN"
+                axle = "OCC" if occupied else "CLEAR"
+                lines.append(f"VB-{idx:02d} {start:>5.0f}-{end:<5.0f}  {axle:<20} gradient={gradient:+.3f} psr={psr:.0f}")
+                lines.append(f"SIG-{idx:02d}             {signal:<20} virtual lineside aspect")
         if sim.tsr_zones:
             lines.append("")
             lines.append("Temporary speed restrictions")
@@ -6482,6 +6575,13 @@ class AnalyticsPanel(ttk.Frame):
         self.text.configure(yscrollcommand=vscroll.set, xscrollcommand=hscroll.set)
 
     def update_data(self, sim: Simulation):
+        def fmt_seconds(value):
+            if value is None:
+                return "--"
+            if value == float("inf") or (isinstance(value, float) and math.isinf(value)):
+                return "terminal"
+            return f"{float(value):,.1f}s"
+
         min_headway = sim.analytics["min_headway_s"]
         min_headway_text = "--" if min_headway is None else f"{min_headway:.1f}s"
         completed = len(sim.analytics["journey_times"])
@@ -6511,6 +6611,36 @@ class AnalyticsPanel(ttk.Frame):
                 f"{train.id:<5} {train.drive_mode:<6} {train.pos:>7.1f} {ms_to_kmh(train.speed):>6.1f} "
                 f"{headway_text:>8} {journey_text:>10} {link_text:<7} {train.atp_state}"
             )
+
+        station_metrics = sorted(
+            sim.analytics.get("station_passenger_metrics", []),
+            key=lambda item: (int(item.get("station_index", 0)), str(item.get("station_name", ""))),
+        )
+        lines.extend(["", "Station Headway / Train Wait", "-" * 88])
+        if not station_metrics:
+            lines.append("No station arrivals recorded yet.")
+        else:
+            lines.append("Station       Train   Arrive       Headway    Avg HW     Wait")
+            lines.append("-" * 88)
+            for station in station_metrics:
+                station_name = str(station.get("station_name", f"STATION_{station.get('station_index', '')}"))
+                avg_headway = station.get("avg_arrival_headway_s")
+                arrivals = sorted(
+                    station.get("arrivals", []),
+                    key=lambda item: (float(item.get("arrival_time_s", 0.0)), str(item.get("train_id", ""))),
+                )
+                if not arrivals:
+                    lines.append(f"{station_name:<13} {'--':<7} {'--':>10} {'--':>10} {fmt_seconds(avg_headway):>9} {'--':>8}")
+                    continue
+                for record in arrivals:
+                    wait_s = record.get("station_wait_s", record.get("passenger_dwell_s", record.get("planned_dwell_s")))
+                    lines.append(
+                        f"{station_name:<13} {str(record.get('train_id', '--')):<7} "
+                        f"{fmt_seconds(record.get('arrival_time_s')):>10} "
+                        f"{fmt_seconds(record.get('arrival_headway_s')):>10} "
+                        f"{fmt_seconds(avg_headway):>9} "
+                        f"{fmt_seconds(wait_s):>8}"
+                    )
 
         self.text.configure(state="normal")
         self.text.delete("1.0", "end")
@@ -6773,7 +6903,7 @@ class MonteCarloPanel(ttk.Frame):
 
         self.columnconfigure(0, weight=1)
         self.rowconfigure(5, weight=1)
-        ttk.Label(self, text="Monte Carlo Statistical Mode", style="SectionTitle.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(self, text="Chế độ thống kê Monte Carlo", style="SectionTitle.TLabel").grid(row=0, column=0, sticky="w")
 
         controls = ttk.Frame(self, style="Shell.TFrame")
         controls.grid(row=1, column=0, sticky="ew", pady=(10, 6))
@@ -6786,7 +6916,7 @@ class MonteCarloPanel(ttk.Frame):
         ttk.Entry(controls, textvariable=self.max_time_var, width=8).grid(row=0, column=3, padx=(0, 10))
         ttk.Label(controls, text="Replay ID", style="Status.TLabel").grid(row=0, column=4, padx=(0, 4))
         ttk.Entry(controls, textvariable=self.seed_var, width=10).grid(row=0, column=5, padx=(0, 10))
-        self.run_btn = ttk.Button(controls, text="Run Monte Carlo", command=self.start)
+        self.run_btn = ttk.Button(controls, text="Chạy thống kê", command=self.start)
         self.run_btn.grid(row=0, column=6, padx=(10, 4))
         self.stop_btn = ttk.Button(controls, text="Stop", command=self.stop, state="disabled")
         self.stop_btn.grid(row=0, column=7)
@@ -6812,7 +6942,7 @@ class MonteCarloPanel(ttk.Frame):
             borderwidth=1,
         )
         self.output.grid(row=5, column=0, sticky="nsew", pady=(8, 0))
-        self._set_output("Monte Carlo results will appear here.\n")
+        self._set_output("Kết quả thống kê sẽ hiển thị tại đây.\n")
 
     def _config_from_fields(self) -> MonteCarloConfig:
         seed_text = self.seed_var.get().strip()
@@ -7049,7 +7179,7 @@ class App(tk.Tk):
             sim_group.columnconfigure(idx, weight=1)
         for idx in range(3):
             scenario_group.columnconfigure(idx, weight=1)
-        for idx in range(2):
+        for idx in range(1):
             mode_group.columnconfigure(idx, weight=1)
         scenario_group.grid_configure(column=1)
         mode_group.grid_configure(column=2)
@@ -7066,10 +7196,8 @@ class App(tk.Tk):
         self.export_btn = ttk.Button(scenario_group, text="Export Report", command=self.on_export_report)
         self.export_btn.grid(row=1, column=2, padx=3, pady=(2, 4), sticky="ew")
 
-        self.monte_carlo_btn = ttk.Button(mode_group, text="Monte Carlo", command=self.show_monte_carlo_mode)
-        self.monte_carlo_btn.grid(row=1, column=0, padx=3, pady=(2, 4), sticky="ew")
-        self.normal_mode_btn = ttk.Button(mode_group, text="Normal Mode", command=self.show_normal_mode)
-        self.normal_mode_btn.grid(row=1, column=1, padx=3, pady=(2, 4), sticky="ew")
+        self.mode_toggle_btn = ttk.Button(mode_group, text="Chế độ thống kê", command=self.toggle_workspace_mode)
+        self.mode_toggle_btn.grid(row=1, column=0, padx=3, pady=(2, 4), sticky="ew")
 
         clock_frame = ttk.Frame(header, padding=(10, 5, 10, 5), style="Clock.TFrame")
         clock_frame.grid(row=0, column=1, sticky="e", padx=(8, 0))
@@ -7321,6 +7449,20 @@ class App(tk.Tk):
         self.vn_clock_var.set(now.strftime("%H:%M:%S  %Y-%m-%d  UTC+7"))
         self.after(1000, self._update_vietnam_clock)
 
+    def _update_mode_toggle_button(self):
+        if not hasattr(self, "mode_toggle_btn"):
+            return
+        if self.current_workspace_mode == "monte_carlo":
+            self.mode_toggle_btn.configure(text="Chế độ mô phỏng")
+        else:
+            self.mode_toggle_btn.configure(text="Chế độ thống kê")
+
+    def toggle_workspace_mode(self):
+        if self.current_workspace_mode == "normal":
+            self.show_monte_carlo_mode()
+        else:
+            self.show_normal_mode()
+
     def show_monte_carlo_mode(self):
         if self.current_workspace_mode == "monte_carlo":
             return
@@ -7329,7 +7471,8 @@ class App(tk.Tk):
         for widget in self.normal_widgets:
             widget.grid_remove()
         self.monte_carlo_panel.grid(row=1, column=0, rowspan=6, sticky="nsew")
-        self.status_var.set("Status: Monte Carlo statistical mode")
+        self._update_mode_toggle_button()
+        self.status_var.set("Status: chế độ thống kê")
 
     def show_normal_mode(self):
         if self.current_workspace_mode == "normal":
@@ -7338,7 +7481,8 @@ class App(tk.Tk):
         self.monte_carlo_panel.grid_remove()
         for widget in self.normal_widgets:
             widget.grid()
-        self.status_var.set("Status: normal simulation mode")
+        self._update_mode_toggle_button()
+        self.status_var.set("Status: chế độ mô phỏng")
 
     def _operation_mode_from_scenario(self) -> str:
         headway = self.scenario.get("headway", {}) if isinstance(self.scenario.get("headway", {}), dict) else {}
@@ -8634,14 +8778,10 @@ class App(tk.Tk):
     def instant_stop_train(self, train_id: str):
         for t in self.sim.trains:
             if t.id == train_id:
-                t.speed = 0.0
                 t.enter_trip_mode("INSTANT STOP", t.reported_pos)
                 t.emergency_recovery_hold = False
-                t.prev_accel = 0.0
                 t.ato_target_speed = 0.0
                 t.service_brake_latch = False
-                t.standstill_required = True
-                t.standstill_anchor_pos = t.pos
                 t.atp_state = "ATP_TRIP"
                 t.atp_alert = "INSTANT STOP"
                 t.atp_brake = "EMERGENCY"
@@ -8679,15 +8819,20 @@ class App(tk.Tk):
         active = not any(train.dcs_fault_active for train in self.sim.trains)
         for train in self.sim.trains:
             train.set_fault("DCS", active, self.sim.sim_time_s)
-        self.status_var.set("Status: DCS loss applied" if active else "Status: DCS loss cleared")
+        self.status_var.set(
+            "Status: DCS loss applied"
+            if active
+            else "Status: DCS loss cleared; emergency recovery still required for tripped trains"
+        )
 
     def clear_all_faults(self):
         for train in self.sim.trains:
             train.set_fault("DCS", False, self.sim.sim_time_s)
             train.set_fault("ATO", False, self.sim.sim_time_s)
             train.set_fault("ATP", False, self.sim.sim_time_s)
-            train.reset_non_emergency_stop_latches()
-        self.status_var.set("Status: cleared train faults")
+            if not (train.trip_mode or train.emg_latch or train.emergency_stop or train.emergency_recovery_hold):
+                train.reset_non_emergency_stop_latches()
+        self.status_var.set("Status: cleared fault flags; use Safe Confirmed/Resume for tripped trains")
 
     def apply_psr(self, segment_str: str, psr_str: str):
         try:
