@@ -834,15 +834,12 @@ class ATPEnvelopeEngine:
             stopping_distance_with_buildup(train.speed, a_service, BRAKE_BUILDUP_S) + STOP_TARGET_BUFFER_M,
         )
         stop_activation_distance = max(stop_activation_distance, ATO_TARGET_PREP_MAX_M)
-        safety_restriction_stop_active = (
-            train.last_dispatched_eoa_reason in {"SAFETY_RESTRICTION", "DCS_TIMEOUT", "EMERGENCY"}
-            or train.station_reject_reason
-            in {"STATION_FULL", "NO_FREE_PLATFORM", "ALL_LINES_OCCUPIED", "ROUTE_CONFLICT", "STATION_LINE_OCCUPIED"}
-        )
-        # Station safety holds are real stop targets; supervise them as soon as issued so curves do not step down late.
+        eoa_stop_target_available = math.isfinite(train.distance_to_eoa)
+        # EOA is always a vital stop target. Supervising it continuously keeps moving-block ATP
+        # curves from stepping down when the train crosses a late activation threshold.
         stop_target_active = (
             train.commanded_stop
-            or safety_restriction_stop_active
+            or eoa_stop_target_available
             or train.distance_to_eoa <= stop_activation_distance
         )
         if stop_target_active:
@@ -4713,6 +4710,9 @@ class Simulation:
             and train.station_state in {"READY_TO_DEPART", "DEPARTING"}
             and train.speed <= kmh_to_ms(5.0)
         ):
+            _station_start, station_end = self._station_bounds(self.scheduled_stops[train.last_station_idx])
+            if train.pos > station_end + STOP_ACCURACY_TOL_M:
+                return False
             authority_ahead_m = packet.eoa_m - train.reported_pos
             return authority_ahead_m < DEPARTURE_RELEASE_MIN_AUTHORITY_M
         if current_station is None or train.active_scheduled_stop is None:
@@ -5102,7 +5102,11 @@ class Simulation:
                 reason = "DCS_TIMEOUT"
             elif train.departure_hold:
                 reason = "SAFETY_RESTRICTION"
-            elif train.station_reject_reason in {"STATION_FULL", "NO_FREE_PLATFORM", "ALL_LINES_OCCUPIED", "ROUTE_CONFLICT", "STATION_LINE_OCCUPIED"}:
+            elif (
+                train.station_reject_reason
+                in {"STATION_FULL", "NO_FREE_PLATFORM", "ALL_LINES_OCCUPIED", "ROUTE_CONFLICT", "STATION_LINE_OCCUPIED"}
+                and (station_stop_eoa is None or packet.eoa_m >= station_stop_eoa - 1e-6)
+            ):
                 reason = "SAFETY_RESTRICTION"
             elif self.block_mode == "fixed_block" and station_stop_eoa is None:
                 reason = "FIXED_BLOCK"

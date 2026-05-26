@@ -207,7 +207,7 @@ def test_timetable_station_departure_uses_schedule_not_headway_hold():
         raise AssertionError("timetable train should be released once scheduled dwell/hold is complete")
 
 
-def test_safety_restriction_eoa_is_supervised_before_min_activation_distance():
+def test_moving_block_eoa_is_supervised_before_min_activation_distance():
     scenario = normalize_scenario(
         {
             "track": {"segments": [{"start_m": 0, "end_m": 2000, "gradient": 0.0, "psr_kmh": 80.0}]},
@@ -231,15 +231,15 @@ def test_safety_restriction_eoa_is_supervised_before_min_activation_distance():
 
     train.last_dispatched_eoa_reason = "LEADER_PROTECTION"
     leader_atp = train.atp_engine.compute(train)
-    if leader_atp.stop_target_active:
-        raise AssertionError("non-stop leader authority should not force early stop-target supervision")
+    if not leader_atp.stop_target_active:
+        raise AssertionError("moving-block EOA should be supervised before the late activation threshold")
 
     train.last_dispatched_eoa_reason = "SAFETY_RESTRICTION"
     safety_atp = train.atp_engine.compute(train)
     if not safety_atp.stop_target_active:
         raise AssertionError("safety-restriction EOA should be supervised before the late activation threshold")
-    if safety_atp.curves["P"] >= leader_atp.curves["P"]:
-        raise AssertionError("safety-restriction stop curve should reduce the permitted curve continuously from distance")
+    if abs(safety_atp.curves["P"] - leader_atp.curves["P"]) > 1e-9:
+        raise AssertionError("EOA stop supervision should not depend on the EOA update reason")
 
 
 def test_adaptive_hold_when_front_train_is_slow():
@@ -496,7 +496,7 @@ def main() -> int:
     test_timetable_releases_on_exact_planned_times()
     test_timetable_keeps_moving_block_speed_cap_until_schedule_hold()
     test_timetable_station_departure_uses_schedule_not_headway_hold()
-    test_safety_restriction_eoa_is_supervised_before_min_activation_distance()
+    test_moving_block_eoa_is_supervised_before_min_activation_distance()
     test_adaptive_hold_when_front_train_is_slow()
     test_eoa_tracks_nearest_train_ahead_without_overgrant()
     test_off_mode_uses_fixed_block_runtime_authority()
