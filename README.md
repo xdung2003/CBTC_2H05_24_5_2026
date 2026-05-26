@@ -6,9 +6,9 @@ Mục tiêu của dự án là học tập, phân tích và kiểm thử logic m
 
 Tài liệu nên đọc kèm:
 
-- [docs/ATC_SYSTEM_REQUIREMENTS_SPEC.md](docs/ATC_SYSTEM_REQUIREMENTS_SPEC.md)
-- [docs/ATC_SIMULATION_PARAMETER_BASELINE.md](docs/ATC_SIMULATION_PARAMETER_BASELINE.md)
-- [docs/ATC_VERIFICATION_MATRIX.md](docs/ATC_VERIFICATION_MATRIX.md)
+- [CBTC_SIM/DOCS/ATC_SYSTEM_REQUIREMENTS_SPEC.md](CBTC_SIM/DOCS/ATC_SYSTEM_REQUIREMENTS_SPEC.md)
+- [CBTC_SIM/DOCS/ATC_SIMULATION_PARAMETER_BASELINE.md](CBTC_SIM/DOCS/ATC_SIMULATION_PARAMETER_BASELINE.md)
+- [CBTC_SIM/DOCS/ATC_VERIFICATION_MATRIX.md](CBTC_SIM/DOCS/ATC_VERIFICATION_MATRIX.md)
 
 ## Tính Năng Hiện Tại
 
@@ -24,19 +24,22 @@ Tài liệu nên đọc kèm:
 - Các chế độ điều tiết giãn cách: tắt điều tiết, giãn cách cố định và theo thời khóa biểu.
 - Đồng hồ thời gian thực chuẩn Việt Nam trên phần đầu giao diện.
 - Chế độ Monte Carlo để chạy nhiều kịch bản ngẫu nhiên và tổng hợp xác suất/KPI.
-- Lưu kịch bản YAML và xuất báo cáo vận hành ra thư mục [reports](reports), gồm JSON và các bảng CSV phụ.
+- Lưu kịch bản YAML và xuất báo cáo vận hành ra thư mục [CBTC_SIM/REPORT](CBTC_SIM/REPORT), gồm JSON và các bảng CSV phụ.
 
 ## Cấu Trúc Mã Nguồn
 
-- [CBTC_SIM/main_gui.py](CBTC_SIM/main_gui.py): ứng dụng Tkinter, vòng lặp mô phỏng, logic tàu, ATP/ATO, định tuyến ga và hiển thị ATS.
-- [CBTC_SIM/core_engine.py](CBTC_SIM/core_engine.py): các thành phần lõi như tính quyền chạy, giám sát DCS, điều khiển trên tàu và mô hình phanh an toàn.
-- [CBTC_SIM/physics.py](CBTC_SIM/physics.py): đổi đơn vị, tính khoảng cách phanh, lực kéo, lực cản, khối lượng tương đương và giới hạn giật.
-- [CBTC_SIM/config.py](CBTC_SIM/config.py): các tham số nền như bước thời gian, lực phanh, khối lượng và biên an toàn.
-- [CBTC_SIM/scenario_loader.py](CBTC_SIM/scenario_loader.py): đọc, chuẩn hóa và lưu kịch bản YAML.
-- [CBTC_SIM/headway_manager.py](CBTC_SIM/headway_manager.py): điều tiết xuất phát và ghi nhận giãn cách thực tế giữa các đoàn tàu.
-- [CBTC_SIM/monte_carlo.py](CBTC_SIM/monte_carlo.py): chạy Monte Carlo không cần giao diện và tổng hợp KPI xác suất.
-- [CBTC_SIM/reporting.py](CBTC_SIM/reporting.py): tạo báo cáo JSON và các bảng CSV.
-- Các file `*_regression_test.py`: kiểm thử hồi quy cho vật lý, ATP/ATO, lỗi, ga, giãn cách, Monte Carlo và báo cáo.
+- [CBTC_SIM/run.py](CBTC_SIM/run.py): file chạy GUI chính.
+- [CBTC_SIM/GUI](CBTC_SIM/GUI): giao diện gốc, trong đó `main_gui.py` là module GUI/runtime chính.
+- [CBTC_SIM/MONITOR](CBTC_SIM/MONITOR): các panel giám sát như Analytics, Engineering, Infrastructure, Dataflow, Diagnostic và TrainView.
+- [CBTC_SIM/FAULT_SETTING](CBTC_SIM/FAULT_SETTING): nhóm nút điều khiển, chỉnh sửa và fault/setting trong giao diện. Tên dùng `_` thay cho `&` để import Python hợp lệ.
+- [CBTC_SIM/REPORT](CBTC_SIM/REPORT): module xuất báo cáo và thư mục chứa báo cáo JSON/CSV.
+- [CBTC_SIM/CONFIG](CBTC_SIM/CONFIG): tham số cố định, capacity baseline và loader kịch bản.
+- [CBTC_SIM/OPERATION](CBTC_SIM/OPERATION): các chế độ vận hành Fixed, Headway target và Timetable.
+- [CBTC_SIM/MONTECARLO](CBTC_SIM/MONTECARLO): chế độ thống kê Monte Carlo.
+- [CBTC_SIM/DOCS](CBTC_SIM/DOCS): tài liệu, kịch bản YAML và timetable.
+- [CBTC_SIM/SUBSYSTEMS](CBTC_SIM/SUBSYSTEMS): các phân hệ ATP, ATO, ZC, DCS, train runtime, physics và core signalling.
+- [CBTC_SIM/TEST](CBTC_SIM/TEST): toàn bộ smoke/regression test.
+- [CBTC_SIM/__init__.py](CBTC_SIM/__init__.py): export API chung của package; các wrapper root cũ đã được xóa sau khi import được chuyển sang cấu trúc mới.
 
 ## Cách Chạy
 
@@ -55,35 +58,35 @@ pip install -r requirements.txt
 Chạy giao diện từ thư mục gốc:
 
 ```powershell
-python CBTC_SIM/main_gui.py
+python CBTC_SIM/run.py
 ```
 
 Hoặc:
 
 ```powershell
 cd CBTC_SIM
-python main_gui.py
+python run.py
 ```
 
 Chạy kiểm thử:
 
 ```powershell
-python CBTC_SIM/smoke_test.py
-python CBTC_SIM/physics_regression_test.py
-python CBTC_SIM/atp_brake_curve_regression_test.py
-python CBTC_SIM/ato_profile_regression_test.py
-python CBTC_SIM/fault_regression_test.py
-python CBTC_SIM/station_regression_test.py
-python CBTC_SIM/headway_regression_test.py
-python CBTC_SIM/monte_carlo_regression_test.py
-python CBTC_SIM/analytics_report_regression_test.py
+python CBTC_SIM/TEST/smoke_test.py
+python CBTC_SIM/TEST/physics_regression_test.py
+python CBTC_SIM/TEST/atp_brake_curve_regression_test.py
+python CBTC_SIM/TEST/ato_profile_regression_test.py
+python CBTC_SIM/TEST/fault_regression_test.py
+python CBTC_SIM/TEST/station_regression_test.py
+python CBTC_SIM/TEST/headway_regression_test.py
+python CBTC_SIM/TEST/monte_carlo_regression_test.py
+python CBTC_SIM/TEST/analytics_report_regression_test.py
 ```
 
 Bộ kiểm thử hiện là các tập lệnh độc lập, chưa dùng pytest. Khi sửa logic mô phỏng, tối thiểu nên chạy kiểm thử khói và các kiểm thử liên quan trực tiếp. Khi chuẩn bị phát hành hoặc thay đổi hành vi rộng, nên chạy toàn bộ danh sách trên.
 
 ## Giao Diện Chính
 
-Khi mở ứng dụng, phần mềm tự tải kịch bản mặc định [CBTC_SIM/default_scenario.yaml](CBTC_SIM/default_scenario.yaml). Giao diện được bố trí như một bàn làm việc kỹ thuật:
+Khi mở ứng dụng, phần mềm tự tải kịch bản mặc định [CBTC_SIM/DOCS/default_scenario.yaml](CBTC_SIM/DOCS/default_scenario.yaml). Giao diện được bố trí như một bàn làm việc kỹ thuật:
 
 - phía trên là thanh điều khiển;
 - chính giữa là sơ đồ tuyến ATS 2D;
@@ -167,7 +170,7 @@ Trong YAML, `headway.mode` và `block_mode` vẫn là hai trường riêng để
 
 Với `Headway target`, phần mềm đặt `block_mode: moving_block` và `headway.mode: fixed`. ZC vẫn cấp EOA theo phân khu di động; bộ điều tiết chỉ giữ hoặc thả tàu ở nguồn/tại ga theo `target_headway_s`. Actual headway chỉ được ghi khi tàu thật sự qua cổng dispatch, nên số đo có thể khác mục tiêu nếu route ga, dwell, PSR/TSR, DCS hoặc ATP đang giới hạn chạy tàu.
 
-Với `Timetable`, phần mềm vẫn dùng nền `moving_block` nhưng mục tiêu khai thác chuyển từ “giữ headway” sang “bám giờ đến/đi”. Lịch có thể nạp từ YAML/YML hoặc bảng markdown như [CBTC_SIM/timetable_vi_sample.md](CBTC_SIM/timetable_vi_sample.md). Trong lịch markdown, `S1` thường là mốc xuất phát/source, `S2` là ga đầu tiên trong `scheduled_stops`, `S3` là ga thứ hai và tiếp tục theo thứ tự. Các trường report quan trọng gồm `scheduled_arrival_time_s`, `schedule_variance_s`, `planned_dwell_s` và `station_wait_s`.
+Với `Timetable`, phần mềm vẫn dùng nền `moving_block` nhưng mục tiêu khai thác chuyển từ “giữ headway” sang “bám giờ đến/đi”. Lịch có thể nạp từ YAML/YML hoặc bảng markdown như [CBTC_SIM/DOCS/timetable_vi_sample.md](CBTC_SIM/DOCS/timetable_vi_sample.md). Trong lịch markdown, `S1` thường là mốc xuất phát/source, `S2` là ga đầu tiên trong `scheduled_stops`, `S3` là ga thứ hai và tiếp tục theo thứ tự. Các trường report quan trọng gồm `scheduled_arrival_time_s`, `schedule_variance_s`, `planned_dwell_s` và `station_wait_s`.
 
 Trong `Timetable`, tàu chạy theo base moving block: ATO được phép đưa tàu lên tốc độ tối đa còn hợp lệ dưới ATP, PSR/TSR và EOA. Nếu tàu đến sớm, phần mềm ưu tiên cân bằng bằng dwell/schedule hold tại ga thay vì ép giảm tốc sớm trên đường. Nếu tàu đến trễ, tàu tiếp tục chạy theo cap tối đa hợp lệ để phục hồi lịch nhưng không vượt ATP. Khi chỉnh lịch, nên dùng arrival thực tế trong report để đặt mốc đến/đi hợp lý; sau khi sửa file markdown cần nạp lại timetable để scenario dùng dữ liệu mới.
 
@@ -238,7 +241,7 @@ Các sự kiện đang được ghi gồm mất gói DCS, quá thời gian chờ
 
 ## Chế Độ Monte Carlo
 
-Monte Carlo dùng [CBTC_SIM/monte_carlo.py](CBTC_SIM/monte_carlo.py) để chạy nhiều bản sao mô phỏng không cần giao diện từ kịch bản hiện tại. Chế độ này không thay thế mô phỏng thường; nó là lớp chạy hàng loạt để trả lời các câu hỏi xác suất.
+Monte Carlo dùng [CBTC_SIM/MONTECARLO/monte_carlo.py](CBTC_SIM/MONTECARLO/monte_carlo.py) để chạy nhiều bản sao mô phỏng không cần giao diện từ kịch bản hiện tại. Chế độ này không thay thế mô phỏng thường; nó là lớp chạy hàng loạt để trả lời các câu hỏi xác suất.
 
 Mỗi mẫu sẽ sao chép kịch bản gốc, lấy ngẫu nhiên một số tham số, áp tạm thời vào mô phỏng, chạy đến giới hạn thời gian rồi gom KPI. Để chạy nhanh 100 hoặc 1000 mẫu, chế độ này tắt dấu vết chi tiết, tắt nhật ký sự kiện nặng và chỉ tính thống kê chi tiết ở cuối mỗi mẫu. Sau mỗi mẫu, các tham số toàn cục được khôi phục để không ảnh hưởng chế độ thường.
 
@@ -306,7 +309,7 @@ Tính năng căn chỉnh chính xác gần điểm dừng có trong logic mô ph
 
 ## Kịch Bản YAML
 
-Kịch bản được đọc bằng [CBTC_SIM/scenario_loader.py](CBTC_SIM/scenario_loader.py). File mặc định là [CBTC_SIM/default_scenario.yaml](CBTC_SIM/default_scenario.yaml).
+Kịch bản được đọc bằng [CBTC_SIM/CONFIG/scenario_loader.py](CBTC_SIM/CONFIG/scenario_loader.py). File mặc định là [CBTC_SIM/DOCS/default_scenario.yaml](CBTC_SIM/DOCS/default_scenario.yaml).
 
 Các nhóm cấu hình chính gồm tên kịch bản, hiển thị, mặc định của tàu, đoạn tuyến, ga dừng, tàu ban đầu, nguồn tàu, điều kiện tuyến, điều tiết giãn cách và tham số phân khu cố định. Tên khóa YAML vẫn giữ bằng tiếng Anh vì đây là định dạng dữ liệu mà chương trình đọc trực tiếp.
 
@@ -379,7 +382,7 @@ Các bí danh chế độ lái:
 
 ## Xuất Báo Cáo
 
-Nút xuất báo cáo gọi [CBTC_SIM/reporting.py](CBTC_SIM/reporting.py) và ghi file vào [reports](reports) với tên dạng:
+Nút xuất báo cáo gọi [CBTC_SIM/REPORT/reporting.py](CBTC_SIM/REPORT/reporting.py) và ghi file vào [CBTC_SIM/REPORT](CBTC_SIM/REPORT) với tên dạng:
 
 ```text
 YYYYMMDD_HHMMSS_<ten_kich_ban>.json
@@ -445,7 +448,7 @@ Những nguyên tắc cốt lõi khi sửa phần mềm:
 ## Giới Hạn Hiện Tại
 
 - Nhiều tham số ATP/ATO vẫn là giả định mô phỏng và cần đối chiếu tài liệu khi sửa.
-- `main_gui.py` vẫn còn trộn nhiều logic mô phỏng và giao diện.
+- `CBTC_SIM/GUI/main_gui.py` vẫn còn trộn nhiều logic mô phỏng và giao diện; các module domain mới đang gom import theo cấu trúc `CONFIG`, `OPERATION`, `SUBSYSTEMS`, `MONITOR`, `REPORT` và `MONTECARLO`.
 - Một số bảng giao diện cũ còn tồn tại trong mã để giữ hàm gọi lại, nhưng không hiển thị trong không gian làm việc hiện tại.
 - Nguồn tàu trong YAML có khai báo vị trí và chiều dài, nhưng khi chạy hiện vẫn dùng vùng nguồn cố định `-200..0`.
 - Mô phỏng ưu tiên hành vi an toàn khi có sự cố và khả năng quan sát hơn độ chính xác vật lý/chứng nhận.
@@ -465,5 +468,5 @@ Khi thay đổi logic an toàn hoặc vận hành, nên cập nhật đồng th�
 
 1. mã trong `CBTC_SIM`;
 2. README này;
-3. tài liệu liên quan trong [docs](docs);
+3. tài liệu liên quan trong [CBTC_SIM/DOCS](CBTC_SIM/DOCS);
 4. ma trận kiểm chứng nếu thay đổi hành vi kiểm thử.
