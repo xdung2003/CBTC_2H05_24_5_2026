@@ -20,40 +20,206 @@ track:
   - start_m: 0.0
     end_m: 800.0
     gradient: 0.02
-    psr_kmh: 40.0
+    psr_kmh: 60.0
   - start_m: 800.0
     end_m: 1000.0
     gradient: 0.05
-    psr_kmh: 30.0
+    psr_kmh: 40.0
   - start_m: 1000.0
     end_m: 1800.0
     gradient: -0.06
-    psr_kmh: 40.0
+    psr_kmh: 60.0
   - start_m: 1800.0
     end_m: 2000.0
     gradient: -0.01
-    psr_kmh: 30.0
+    psr_kmh: 40.0
+  - start_m: 2000.0
+    end_m: 2800.0
+    gradient: -0.01
+    psr_kmh: 50.0
+  - start_m: 2800.0
+    end_m: 3000.0
+    gradient: -0.01
+    psr_kmh: 40.0
 scheduled_stops:
 - name: STATION_1000
   pos_m: 1000.0
   length_m: 160.0
-  capacity: 4
+  capacity: 3
   dwell_s: 30.0
 - name: STATION_2000
   pos_m: 2000.0
   length_m: 160.0
-  capacity: 3
+  capacity: 4
+  dwell_s: 30.0
+- name: STATION_3000
+  pos_m: 3000.0
+  length_m: 160.0
+  capacity: 4
   dwell_s: 30.0
 trains: []
 source_trains:
 - name: SRC
   start_m: -200.0
   length_m: 200.0
-  capacity: 7
-  total_trains: 7
+  capacity: 4
+  total_trains: 4
 headway:
   mode: fixed
   target_headway_s: 80.0
+  timetable_s:
+  - 24.020203000000038
+  - 154.02020300000004
+  - 269.02020300000004
+  - 404.02020300000004
+  timetable_file: C:/Users/xuan1/Desktop/how to learn fullstacks/ATP/CBTC_SIM/timetable_vi_sample.md
+  timetable_records:
+  - train_id: T01
+    station: S1
+    arrival_text: --
+    arrival_clock_s: null
+    arrival_time_s: null
+    dwell_text: --
+    dwell_s: null
+    departure_text: 08:40:00
+    departure_clock_s: 31200.0
+    departure_time_s: 24.020203000000038
+    profile: Normal
+    note: --
+  - train_id: T01
+    station: S2
+    arrival_text: 08:42:25
+    arrival_clock_s: 31345.0
+    arrival_time_s: 169.02020300000004
+    dwell_text: 32s
+    dwell_s: 32.0
+    departure_text: 08:42:57
+    departure_clock_s: 31377.0
+    departure_time_s: 201.02020300000004
+    profile: Normal
+    note: --
+  - train_id: T01
+    station: S3
+    arrival_text: 08:45:10
+    arrival_clock_s: 31510.0
+    arrival_time_s: 334.02020300000004
+    dwell_text: --
+    dwell_s: null
+    departure_text: --
+    departure_clock_s: null
+    departure_time_s: null
+    profile: --
+    note: --
+  - train_id: T02
+    station: S1
+    arrival_text: --
+    arrival_clock_s: null
+    arrival_time_s: null
+    dwell_text: --
+    dwell_s: null
+    departure_text: 08:42:10
+    departure_clock_s: 31330.0
+    departure_time_s: 154.02020300000004
+    profile: Fast
+    note: --
+  - train_id: T02
+    station: S2
+    arrival_text: 08:44:15
+    arrival_clock_s: 31455.0
+    arrival_time_s: 279.02020300000004
+    dwell_text: 25s
+    dwell_s: 25.0
+    departure_text: 08:44:40
+    departure_clock_s: 31480.0
+    departure_time_s: 304.02020300000004
+    profile: Normal
+    note: --
+  - train_id: T02
+    station: S3
+    arrival_text: 08:47:05
+    arrival_clock_s: 31625.0
+    arrival_time_s: 449.02020300000004
+    dwell_text: --
+    dwell_s: null
+    departure_text: --
+    departure_clock_s: null
+    departure_time_s: null
+    profile: --
+    note: --
+  - train_id: T03
+    station: S1
+    arrival_text: --
+    arrival_clock_s: null
+    arrival_time_s: null
+    dwell_text: --
+    dwell_s: null
+    departure_text: 08:44:05
+    departure_clock_s: 31445.0
+    departure_time_s: 269.02020300000004
+    profile: Eco
+    note: --
+  - train_id: T03
+    station: S2
+    arrival_text: 08:47:20
+    arrival_clock_s: 31640.0
+    arrival_time_s: 464.02020300000004
+    dwell_text: 45s
+    dwell_s: 45.0
+    departure_text: 08:48:05
+    departure_clock_s: 31685.0
+    departure_time_s: 509.02020300000004
+    profile: Normal
+    note: --
+  - train_id: T03
+    station: S3
+    arrival_text: 08:51:05
+    arrival_clock_s: 31865.0
+    arrival_time_s: 689.020203
+    dwell_text: --
+    dwell_s: null
+    departure_text: --
+    departure_clock_s: null
+    departure_time_s: null
+    profile: --
+    note: --
+  - train_id: T04
+    station: S1
+    arrival_text: --
+    arrival_clock_s: null
+    arrival_time_s: null
+    dwell_text: --
+    dwell_s: null
+    departure_text: 08:46:20
+    departure_clock_s: 31580.0
+    departure_time_s: 404.02020300000004
+    profile: Normal
+    note: --
+  - train_id: T04
+    station: S2
+    arrival_text: 08:49:05
+    arrival_clock_s: 31745.0
+    arrival_time_s: 569.020203
+    dwell_text: 30s
+    dwell_s: 30.0
+    departure_text: 08:49:35
+    departure_clock_s: 31775.0
+    departure_time_s: 599.020203
+    profile: Normal
+    note: --
+  - train_id: T04
+    station: S3
+    arrival_text: 08:52:00
+    arrival_clock_s: 31920.0
+    arrival_time_s: 744.020203
+    dwell_text: --
+    dwell_s: null
+    departure_text: --
+    departure_clock_s: null
+    departure_time_s: null
+    profile: --
+    note: --
+  timetable_wall_clock: true
+  timetable_loaded_clock_s: 31175.979797
 capacity_baseline:
   blocks_per_section: 4
 line_conditions: []

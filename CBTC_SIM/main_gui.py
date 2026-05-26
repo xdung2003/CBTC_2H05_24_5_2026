@@ -5,6 +5,7 @@ from tkinter import filedialog, ttk
 import random
 import time
 import math
+import re
 import sys
 import threading
 import queue
@@ -58,6 +59,7 @@ SOURCE_TRAIN_EXIT_M = 0.0
 SOURCE_TRAIN_STAGING_CLEARANCE_M = 35.0
 SOURCE_VISIBLE_ACTIVE_TRAINS = 2
 MIN_PASSENGER_DWELL_S = 25.0
+MIN_TIMETABLE_RECOVERY_DWELL_S = 20.0
 PARALLEL_ROMAN_LABELS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"]
 PARALLEL_RELEASE_MARGIN_M = 5.0
 DEPARTURE_RELEASE_MIN_AUTHORITY_M = 30.0
@@ -146,9 +148,9 @@ HIGH_SPEED_TIME_MARGIN_GAIN = 0.35
 HIGH_SPEED_SPEED_TOL_GAIN_KMH = 3.0
 TARGET_CURVE_RESERVE_LOW_M = 20.0
 TARGET_CURVE_RESERVE_HIGH_M = 140.0
-ATO_TARGET_PREP_MAX_M = 1000.0
+ATO_TARGET_PREP_MAX_M = 280.0
 ATP_TARGET_INTERVENTION_MIN_M = 400.0
-STOP_TARGET_MIN_ACTIVATION_M = 400.0
+STOP_TARGET_MIN_ACTIVATION_M = 280.0
 STOP_TARGET_BUFFER_M = 80.0
 # Moving-block overlap beyond the granted EOA, reserved by ZC before the protected point.
 # Small stop SvL offset used for precise stopping at an authority end
@@ -201,7 +203,7 @@ DOCKING_ZONE_M = 12.0
 DOCKING_SPEED_KMH = 4.0
 FINAL_CREEP_ZONE_M = 2.0
 FINAL_CREEP_MIN_SPEED_KMH = 1.8
-ATO_TARGET_DROP_RATE_KMH_S = 3.0
+ATO_TARGET_DROP_RATE_KMH_S = 8.0
 FINAL_APPROACH_MAX_SPEED_KMH = 5.0
 FINAL_APPROACH_MIN_SPEED_KMH = 2.5
 FINAL_APPROACH_SBI_FLOOR_KMH = 3.5
@@ -1096,7 +1098,9 @@ class ATOPilotingEngine:
             ato_piloting_speed,
             release_speed_profile(atp.actual_distance_to_stop, kmh_to_ms(RELEASE_SPEED_KMH)),
         )
-        desired_target = min(ato_piloting_speed, ato_stop_limit)
+        desired_target = ato_piloting_speed
+        if atp.target_active or train.commanded_stop or atp.release_active:
+            desired_target = min(desired_target, ato_stop_limit)
         if atp.target_active and not train.commanded_stop and not atp.release_active:
             if train.vital_speed > atp.curves["W"]:
                 desired_target = min(desired_target, max(0.0, atp.curves["P"] - kmh_to_ms(1.0)))
@@ -1258,6 +1262,10 @@ class Train:
         self.protection_lane = 0
         self.source_name = train_cfg.get("source_name")
         self.source_lane = None
+        self.schedule_service_id = train_cfg.get("schedule_service_id")
+        self.schedule_profile = str(train_cfg.get("schedule_profile", "") or "")
+        self.schedule_records = [dict(record) for record in train_cfg.get("schedule_records", [])]
+        self.schedule_planned_dispatch_s = train_cfg.get("schedule_planned_dispatch_s")
         self.station_lane = None
         self.assigned_station_id = None
         self.assigned_station_line_id = None
@@ -3074,6 +3082,17 @@ class Simulation:
             self.block_mode = "fixed_block" if explicit_off_mode else "moving_block"
         self.headway_manager = HeadwayManager.from_scenario(scenario)
         self.scheduled_stops = [dict(stop) for stop in scenario.get("scheduled_stops", [])]
+        self.timetable_services = self._build_timetable_services(scenario)
+        headway_runtime = scenario.get("headway", {}) if isinstance(scenario.get("headway", {}), dict) else {}
+        self.timetable_wall_clock = bool(headway_runtime.get("timetable_wall_clock", False))
+        self.timetable_loaded_clock_s = (
+            float(headway_runtime.get("timetable_loaded_clock_s"))
+            if headway_runtime.get("timetable_loaded_clock_s") is not None
+            else None
+        )
+        self.timetable_clock_scale = max(1.0, float(headway_runtime.get("timetable_clock_scale", 1.0) or 1.0))
+        self._timetable_clock_anchor_real_s = time.monotonic()
+        self._timetable_clock_anchor_operational_s = 0.0
         self.fixed_blocks = self._build_fixed_blocks(scenario)
         self.station_route_states: List[Dict[str, Any]] = []
         self.parallel_release_locks: Dict[Tuple[str, int], float] = {}
@@ -3125,6 +3144,7 @@ class Simulation:
         self.zc = ZoneController(self.trains, self.track_end_m, self.block_mode, self.fixed_blocks)
         self.tsr_zones = []
         self.sim_time_s = 0.0
+        self._reset_timetable_clock_anchor()
         self.analytics = {
             "min_headway_s": None,
             "target_headway_s": self.headway_manager.nominal_target_headway_s(),
@@ -3210,7 +3230,11 @@ class Simulation:
             self.detect_station_lines(station_idx)
 
     def _make_source_train_config(self, source: Dict[str, Any], train_id: str, start_pos: float, lane: int = 0) -> Dict[str, Any]:
-        return {
+        sequence = int(source.get("_pending_sequence", 0) or 0)
+        service = self._timetable_service_for_sequence(sequence)
+        if service:
+            train_id = str(service.get("train_id", train_id))
+        cfg = {
             "id": train_id,
             "start_pos": start_pos,
             "length_m": float(self.scenario["train_defaults"]["length_m"]),
@@ -3225,6 +3249,89 @@ class Simulation:
             "source_name": str(source.get("name", "SRC")),
             "source_lane": lane,
         }
+        if service:
+            cfg["schedule_service_id"] = service.get("train_id")
+            cfg["schedule_profile"] = service.get("profile", "")
+            cfg["schedule_records"] = service.get("records", [])
+            cfg["schedule_planned_dispatch_s"] = service.get("planned_dispatch_time_s")
+        return cfg
+
+    def _build_timetable_services(self, scenario: Dict[str, Any]) -> List[Dict[str, Any]]:
+        headway = scenario.get("headway", {}) if isinstance(scenario.get("headway", {}), dict) else {}
+        records = [dict(record) for record in headway.get("timetable_records", []) or []]
+        services: Dict[str, Dict[str, Any]] = {}
+        for record in records:
+            train_id = str(record.get("train_id", "")).strip()
+            if not train_id:
+                continue
+            service = services.setdefault(train_id, {"train_id": train_id, "records": []})
+            service["records"].append(record)
+            if service.get("planned_dispatch_time_s") is None and record.get("departure_time_s") is not None:
+                service["planned_dispatch_time_s"] = float(record.get("departure_time_s"))
+            if not service.get("profile") and record.get("profile") not in {None, "", "--"}:
+                service["profile"] = str(record.get("profile"))
+        result = list(services.values())
+        result.sort(
+            key=lambda service: min(
+                (
+                    float(record.get("departure_time_s"))
+                    for record in service.get("records", [])
+                    if record.get("departure_time_s") is not None
+                ),
+                default=float("inf"),
+            )
+        )
+        return result
+
+    def _timetable_service_for_sequence(self, sequence: int) -> Dict[str, Any] | None:
+        if self.headway_manager.mode != "timetable" or sequence <= 0:
+            return None
+        idx = sequence - 1
+        if 0 <= idx < len(self.timetable_services):
+            return self.timetable_services[idx]
+        return None
+
+    def _vietnam_clock_seconds(self) -> float:
+        vietnam_tz = timezone(timedelta(hours=7))
+        now = datetime.now(vietnam_tz)
+        return float(now.hour * 3600 + now.minute * 60 + now.second + now.microsecond / 1_000_000.0)
+
+    def _clock_delay_from_reference_s(self, clock_s: float, reference_clock_s: float) -> float:
+        day_s = 24.0 * 3600.0
+        return (float(clock_s) - float(reference_clock_s)) % day_s
+
+    def _reset_timetable_clock_anchor(self) -> None:
+        self._timetable_clock_anchor_real_s = time.monotonic()
+        if self.timetable_wall_clock and self.timetable_loaded_clock_s is not None:
+            self._timetable_clock_anchor_operational_s = self._clock_delay_from_reference_s(
+                self._vietnam_clock_seconds(),
+                self.timetable_loaded_clock_s,
+            )
+        else:
+            self._timetable_clock_anchor_operational_s = self.sim_time_s
+
+    def set_timetable_clock_scale(self, scale: float) -> None:
+        current_operational_s = self._timetable_operational_time_s()
+        self.timetable_clock_scale = max(1.0, float(scale))
+        self._timetable_clock_anchor_operational_s = current_operational_s
+        self._timetable_clock_anchor_real_s = time.monotonic()
+
+    def _timetable_operational_time_s(self) -> float:
+        if (
+            self.headway_manager.mode == "timetable"
+            and self.timetable_wall_clock
+            and self.timetable_loaded_clock_s is not None
+        ):
+            elapsed_real_s = max(0.0, time.monotonic() - getattr(self, "_timetable_clock_anchor_real_s", time.monotonic()))
+            return float(getattr(self, "_timetable_clock_anchor_operational_s", 0.0)) + elapsed_real_s * float(
+                getattr(self, "timetable_clock_scale", 1.0)
+            )
+        return self.sim_time_s
+
+    def timetable_display_clock_s(self) -> float | None:
+        if not (self.headway_manager.mode == "timetable" and self.timetable_wall_clock and self.timetable_loaded_clock_s is not None):
+            return None
+        return (self.timetable_loaded_clock_s + self._timetable_operational_time_s()) % (24.0 * 3600.0)
 
     def _source_staging_head_pos(self) -> float:
         train_length = float(self.scenario["train_defaults"]["length_m"])
@@ -3306,7 +3413,9 @@ class Simulation:
                 sequence = generated + idx + 1
                 start_pos = self._source_staging_head_pos()
                 train_id = self._next_source_train_id(source, sequence)
+                source["_pending_sequence"] = sequence
                 train = Train(self._make_source_train_config(source, train_id, start_pos, lane))
+                source.pop("_pending_sequence", None)
                 train.source_lane = lane
                 self.trains.append(train)
             source["generated"] = generated + to_stage
@@ -3518,7 +3627,9 @@ class Simulation:
                 continue
             self.generated_train_counter += 1
             train_id = self._next_source_train_id(source, generated + 1)
+            source["_pending_sequence"] = generated + 1
             train = Train(self._make_source_train_config(source, train_id, start_pos, 0))
+            source.pop("_pending_sequence", None)
             dispatched_front_gap_m = max(
                 (
                     existing.pos - SOURCE_TRAIN_EXIT_M
@@ -3530,7 +3641,7 @@ class Simulation:
             tsr_active = bool(self.tsr_zones)
             decision = self.headway_manager.decide(
                 train,
-                self.sim_time_s,
+                self._timetable_operational_time_s(),
                 dispatched_front_pos_m=dispatched_front_gap_m,
                 tsr_active=tsr_active,
             )
@@ -3588,7 +3699,7 @@ class Simulation:
                 dispatched_front_gap_m = max(released_front_gaps, default=None)
             decision = self.headway_manager.decide(
                 train,
-                self.sim_time_s,
+                self._timetable_operational_time_s(),
                 dispatched_front_pos_m=dispatched_front_gap_m,
                 tsr_active=bool(self.tsr_zones),
             )
@@ -3946,7 +4057,7 @@ class Simulation:
         train.standstill_required = True
         train.standstill_anchor_pos = train.pos
         self._set_train_station_state(train, station_idx, "STOPPED_AT_PLATFORM", "aligned_stop")
-        train.dwell_remaining_s = self._station_dwell_time_s(station_idx, stop)
+        train.dwell_remaining_s = self._station_dwell_time_s(station_idx, stop, train)
         self._record_station_arrival(station_idx, train, train.dwell_remaining_s)
         train.next_scheduled_stop_idx += 1
         self._set_train_station_state(train, station_idx, "DWELLING", "dwell_started")
@@ -4108,9 +4219,40 @@ class Simulation:
     def _is_final_scheduled_station(self, station_idx: int | None) -> bool:
         return station_idx is not None and station_idx == len(self.scheduled_stops) - 1
 
-    def _station_dwell_time_s(self, station_idx: int | None, stop: Dict[str, Any]) -> float:
+    def _schedule_record_for_train_station(self, train: Train | None, stop: Dict[str, Any], station_idx: int | None = None) -> Dict[str, Any] | None:
+        if train is None or self.headway_manager.mode != "timetable":
+            return None
+        station_name = str(stop.get("name", "")).strip().lower()
+        station_aliases = {station_name}
+        if station_idx is not None:
+            station_aliases.add(f"s{station_idx + 2}".lower())
+        for record in getattr(train, "schedule_records", []) or []:
+            if str(record.get("station", "")).strip().lower() in station_aliases:
+                return dict(record)
+        return None
+
+    def _station_dwell_time_s(self, station_idx: int | None, stop: Dict[str, Any], train: Train | None = None) -> float:
         if self._is_terminal_station(station_idx) or self._is_final_scheduled_station(station_idx):
             return float("inf")
+        schedule_record = self._schedule_record_for_train_station(train, stop, station_idx)
+        if schedule_record is not None:
+            planned_departure_s = schedule_record.get("departure_time_s")
+            planned_arrival_s = schedule_record.get("arrival_time_s")
+            operational_time_s = self._timetable_operational_time_s()
+            late_for_schedule = planned_arrival_s is not None and operational_time_s > float(planned_arrival_s)
+            if late_for_schedule:
+                late_s = operational_time_s - float(planned_arrival_s)
+                scheduled_dwell_s = schedule_record.get("dwell_s")
+                if scheduled_dwell_s is None and planned_departure_s is not None:
+                    scheduled_dwell_s = max(0.0, float(planned_departure_s) - float(planned_arrival_s))
+                if scheduled_dwell_s is not None:
+                    return max(MIN_TIMETABLE_RECOVERY_DWELL_S, float(scheduled_dwell_s) - late_s)
+                return max(MIN_TIMETABLE_RECOVERY_DWELL_S, MIN_PASSENGER_DWELL_S - late_s)
+            if planned_departure_s is not None:
+                return max(MIN_PASSENGER_DWELL_S, float(planned_departure_s) - operational_time_s)
+            scheduled_dwell_s = schedule_record.get("dwell_s")
+            if scheduled_dwell_s is not None:
+                return max(MIN_PASSENGER_DWELL_S, float(scheduled_dwell_s))
         minimum_departure_s = self.sim_time_s + MIN_PASSENGER_DWELL_S
         if station_idx is None:
             return MIN_PASSENGER_DWELL_S
@@ -4159,6 +4301,20 @@ class Simulation:
             return 0.0
         return max(0.0, previous + target_headway_s - self.sim_time_s)
 
+    def _station_schedule_departure_hold_s(self, station_idx: int | None, train: Train) -> float:
+        if station_idx is None or self.headway_manager.mode != "timetable":
+            return 0.0
+        if not (0 <= station_idx < len(self.scheduled_stops)):
+            return 0.0
+        record = self._schedule_record_for_train_station(train, self.scheduled_stops[station_idx], station_idx)
+        if record is None or record.get("departure_time_s") is None:
+            return 0.0
+        operational_time_s = self._timetable_operational_time_s()
+        planned_arrival_s = record.get("arrival_time_s")
+        if planned_arrival_s is not None and operational_time_s > float(planned_arrival_s):
+            return 0.0
+        return max(0.0, float(record["departure_time_s"]) - operational_time_s)
+
     def _record_station_arrival(self, station_idx: int, train: Train, dwell_s: float) -> None:
         previous = self.station_last_arrival_s.get(station_idx)
         self.station_last_arrival_s[station_idx] = self.sim_time_s
@@ -4166,11 +4322,22 @@ class Simulation:
         if previous is not None:
             arrival_headway_s = max(0.0, self.sim_time_s - previous)
             self.station_arrival_headway_actual_s.setdefault(station_idx, []).append(arrival_headway_s)
+        schedule_record = (
+            self._schedule_record_for_train_station(train, self.scheduled_stops[station_idx], station_idx)
+            if 0 <= station_idx < len(self.scheduled_stops)
+            else None
+        )
+        schedule_variance_s = None
+        if schedule_record is not None and schedule_record.get("arrival_time_s") is not None:
+            schedule_variance_s = self._timetable_operational_time_s() - float(schedule_record["arrival_time_s"])
         self.analytics.setdefault("station_arrivals", {}).setdefault(station_idx, []).append(
             {
                 "train_id": train.id,
                 "arrival_time_s": self.sim_time_s,
                 "arrival_headway_s": arrival_headway_s,
+                "scheduled_arrival_time_s": None if schedule_record is None else schedule_record.get("arrival_time_s"),
+                "schedule_station": None if schedule_record is None else schedule_record.get("station"),
+                "schedule_variance_s": schedule_variance_s,
                 "planned_dwell_s": dwell_s,
                 "passenger_dwell_s": dwell_s,
                 "station_wait_s": dwell_s,
@@ -4383,14 +4550,17 @@ class Simulation:
             return True
         state = self.station_route_states[station_idx] if station_idx < len(self.station_route_states) else {}
         line = self._station_line_for_lane(station_idx, train.station_lane)
+        # A reserved receive route is route authority, not yet stop authority.
+        # Keep the station stop EOA out until the train enters the commanded-stop
+        # approach; otherwise ATP/ATO starts braking hundreds of metres too early.
         if line is not None and line.get("reserved_by_train_id") == train.id:
-            return True
+            return self._train_overlaps_station(train, stop)
         return (
             (
                 state.get("route_lane") == train.station_lane
                 and state.get("assigned_train_id") == train.id
             )
-            or self._train_overlaps_station(train, stop)
+            and self._train_overlaps_station(train, stop)
         )
 
     def _zone_cleared_by_train(self, train: Train, zone_end_m: float, follower: Train) -> bool:
@@ -4717,6 +4887,10 @@ class Simulation:
             if train.dwell_remaining_s != float("inf"):
                 train.dwell_remaining_s = max(0.0, train.dwell_remaining_s - DT)
             if train.dwell_remaining_s <= 0.0:
+                schedule_hold_s = self._station_schedule_departure_hold_s(station_idx, train)
+                if schedule_hold_s > 0.0:
+                    train.dwell_remaining_s = schedule_hold_s
+                    return immediate_packet_required
                 headway_hold_s = self._station_departure_headway_hold_s(station_idx)
                 if headway_hold_s > 0.0:
                     train.dwell_remaining_s = headway_hold_s
@@ -4779,7 +4953,7 @@ class Simulation:
             train.standstill_required = True
             train.standstill_anchor_pos = train.pos
             self._set_train_station_state(train, station_idx, "STOPPED_AT_PLATFORM", "aligned_stop")
-            train.dwell_remaining_s = self._station_dwell_time_s(station_idx, stop)
+            train.dwell_remaining_s = self._station_dwell_time_s(station_idx, stop, train)
             self._record_station_arrival(station_idx, train, train.dwell_remaining_s)
             train.next_scheduled_stop_idx += 1
             self._set_train_station_state(train, station_idx, "DWELLING", "dwell_started")
@@ -4791,6 +4965,34 @@ class Simulation:
 
     def stop(self):
         self.running = False
+
+    def _timetable_regulated_speed_cap_kmh(self, train: Train, base_cap_kmh: float) -> Tuple[float, str]:
+        if self.headway_manager.mode != "timetable" or train.active_scheduled_stop is None:
+            return base_cap_kmh, ""
+        station_idx = self._station_index_for_stop(train.active_scheduled_stop)
+        if station_idx is None:
+            return base_cap_kmh, ""
+        record = self._schedule_record_for_train_station(train, train.active_scheduled_stop, station_idx)
+        if record is None or record.get("arrival_time_s") is None:
+            return base_cap_kmh, ""
+        distance_m = max(0.0, float(train.active_scheduled_stop["pos_m"]) - train.pos)
+        if distance_m <= STOP_ACCURACY_TOL_M:
+            return base_cap_kmh, ""
+        remaining_s = float(record["arrival_time_s"]) - self._timetable_operational_time_s()
+        profile = str(getattr(train, "schedule_profile", "") or record.get("profile", "") or "").lower()
+        if remaining_s <= 0.0:
+            return base_cap_kmh, "TIMETABLE_LATE_FAST"
+        required_kmh = distance_m / max(remaining_s, 1.0) * 3.6
+        if required_kmh >= base_cap_kmh * 0.70:
+            return base_cap_kmh, "TIMETABLE_RECOVER"
+        slack_ratio = max(0.0, min(1.0, 1.0 - required_kmh / max(base_cap_kmh, 1.0)))
+        min_slack_ratio = 0.40 if profile == "eco" else 0.30
+        early_time_buffer_s = max(20.0, distance_m / max(kmh_to_ms(base_cap_kmh), 0.1) * 0.35)
+        if slack_ratio < min_slack_ratio or remaining_s < early_time_buffer_s:
+            return base_cap_kmh, "TIMETABLE_ON_TIME"
+        eco_cap = 35.0 if profile == "eco" else base_cap_kmh
+        regulated = max(20.0, min(base_cap_kmh, eco_cap, required_kmh * 1.25 + 6.0))
+        return regulated, "TIMETABLE_EARLY_COAST"
 
     def _dispatch_safe_packets(self, with_delay: bool):
         self._update_parallel_protection_zones()
@@ -4837,6 +5039,17 @@ class Simulation:
                 continue
             delay_s = random.uniform(DCS_DELAY_MIN_S, DCS_DELAY_MAX_S) if with_delay else 0.0
             packet = safe_packets[train.id]
+            regulated_cap_kmh, regulation_reason = self._timetable_regulated_speed_cap_kmh(train, packet.tsr_kmh)
+            if regulation_reason and regulated_cap_kmh < packet.tsr_kmh - 1e-6:
+                variants = dict(packet.variants)
+                variants["schedule_regulation"] = regulation_reason
+                variants["schedule_speed_cap_kmh"] = regulated_cap_kmh
+                packet = SafeMovementPacket(
+                    eoa_m=packet.eoa_m,
+                    tsr_kmh=regulated_cap_kmh,
+                    variants=variants,
+                    issued_time_s=packet.issued_time_s,
+                )
             if train.departure_hold or train.id in departure_holds or self._needs_station_departure_authority_hold(train, packet):
                 hold_eoa = departure_holds.get(train.id)
                 terminal_station_hold = (
@@ -6239,6 +6452,19 @@ class InfrastructurePanel(ttk.Frame):
         self.text.configure(yscrollcommand=vscroll.set, xscrollcommand=hscroll.set)
 
     def update_data(self, sim: Simulation):
+        def fmt_schedule_variance(value: Any) -> str:
+            if value is None:
+                return "--"
+            try:
+                variance = float(value)
+            except (TypeError, ValueError):
+                return "--"
+            if abs(variance) < 0.05:
+                return "0.0s"
+            if variance < 0.0:
+                return f"+{abs(variance):.1f}s"
+            return f"-{variance:.1f}s"
+
         lines = ["Asset                State                 Notes"]
         lines.append("-" * 72)
         if getattr(sim, "block_mode", "moving_block") == "fixed_block":
@@ -6267,6 +6493,41 @@ class InfrastructurePanel(ttk.Frame):
             for idx, zone in enumerate(sim.tsr_zones, 1):
                 lines.append(
                     f"TSR-{idx:02d} {float(zone['start']):>5.0f}-{float(zone['end']):<5.0f}  ACTIVE               limit={float(zone['speed']):.0f} km/h"
+                )
+        timetable_records = list((getattr(sim, "scenario", {}) or {}).get("headway", {}).get("timetable_records", []) or [])
+        if timetable_records:
+            lines.append("")
+            lines.append("Lich trinh chay tau")
+            lines.append("-" * 104)
+            lines.append("Tau   Ga    Den        Dung   Di         Profile   Som+/Tre-")
+            lines.append("-" * 104)
+            variance_by_key: Dict[Tuple[str, str], float] = {}
+            for station in sim.analytics.get("station_passenger_metrics", []):
+                for arrival in station.get("arrivals", []):
+                    station_name = str(station.get("station_name", "")).strip().lower()
+                    schedule_station = str(arrival.get("schedule_station", "")).strip().lower()
+                    variance = arrival.get("schedule_variance_s")
+                    train_id = str(arrival.get("train_id", "")).strip().lower()
+                    if train_id and variance is not None:
+                        if station_name:
+                            variance_by_key[(train_id, station_name)] = float(variance)
+                        if schedule_station:
+                            variance_by_key[(train_id, schedule_station)] = float(variance)
+            for record in timetable_records:
+                arrival = str(record.get("arrival_text") or "--")
+                dwell = str(record.get("dwell_text") or "--")
+                departure = str(record.get("departure_text") or "--")
+                train_key = str(record.get("train_id", "")).strip().lower()
+                station_key = str(record.get("station", "")).strip().lower()
+                variance = variance_by_key.get((train_key, station_key))
+                lines.append(
+                    f"{str(record.get('train_id', '--')):<5} "
+                    f"{str(record.get('station', '--')):<5} "
+                    f"{arrival:<10} "
+                    f"{dwell:<6} "
+                    f"{departure:<10} "
+                    f"{str(record.get('profile', '--')):<9} "
+                    f"{fmt_schedule_variance(variance)}"
                 )
         lines.append("")
         for idx, train in enumerate(sim.trains, 1):
@@ -7073,6 +7334,7 @@ class App(tk.Tk):
         self.current_workspace_mode = "normal"
         self.operation_mode_var = tk.StringVar(value=self._operation_mode_from_scenario())
         self.operation_mechanism_var = tk.StringVar(value="")
+        self.operation_selected_status_var = tk.StringVar(value="")
         self.headway_target_var = tk.StringVar(value=str(self.scenario.get("headway", {}).get("target_headway_s", 180.0)))
         self.timetable_file_var = tk.StringVar(value=str(self.scenario.get("headway", {}).get("timetable_file", "")))
         adaptive_cfg = self.scenario.get("headway", {}).get("adaptive", {}) or {}
@@ -7240,10 +7502,18 @@ class App(tk.Tk):
         self.timetable_label = ttk.Label(headway_frame, text="Schedule file")
         self.timetable_entry = ttk.Entry(headway_frame, textvariable=self.timetable_file_var, width=42)
         self.timetable_button = ttk.Button(headway_frame, text="Load YAML/MD", command=self.load_timetable_file)
+        self.timetable_set_after_now_button = ttk.Button(
+            headway_frame,
+            text="Set +1.5 min",
+            command=self.set_timetable_after_now,
+        )
         self.tph_label = ttk.Label(headway_frame, text="Trains/hour")
         self.tph_entry = ttk.Entry(headway_frame, textvariable=self.adaptive_tph_var, width=10)
-        ttk.Button(headway_frame, text="Apply + Reset", command=self.apply_headway_block_settings).grid(row=0, column=8, padx=(0, 6))
-        ttk.Button(headway_frame, text="Reload Values", command=self.reload_headway_block_values).grid(row=0, column=9)
+        ttk.Button(headway_frame, text="Apply + Reset", command=self.apply_headway_block_settings).grid(row=0, column=9, padx=(0, 6))
+        ttk.Button(headway_frame, text="Reload Values", command=self.reload_headway_block_values).grid(row=0, column=10)
+        ttk.Label(headway_frame, textvariable=self.operation_selected_status_var, style="Status.TLabel").grid(
+            row=1, column=0, columnspan=11, sticky="w", pady=(6, 0)
+        )
         self._refresh_operation_mode_controls()
 
         workspace = ttk.PanedWindow(self.content, orient=tk.HORIZONTAL)
@@ -7446,7 +7716,17 @@ class App(tk.Tk):
     def _update_vietnam_clock(self):
         vietnam_tz = timezone(timedelta(hours=7))
         now = datetime.now(vietnam_tz)
-        self.vn_clock_var.set(now.strftime("%H:%M:%S  %Y-%m-%d  UTC+7"))
+        display_clock_s = self.sim.timetable_display_clock_s() if hasattr(self, "sim") else None
+        if display_clock_s is None:
+            self.vn_clock_var.set(now.strftime("%H:%M:%S  %Y-%m-%d  UTC+7"))
+        else:
+            total_s = int(display_clock_s) % (24 * 3600)
+            hour = total_s // 3600
+            minute = (total_s % 3600) // 60
+            second = total_s % 60
+            self.vn_clock_var.set(
+                f"{hour:02d}:{minute:02d}:{second:02d}  {now:%Y-%m-%d}  UTC+7  x{self.time_scale}"
+            )
         self.after(1000, self._update_vietnam_clock)
 
     def _update_mode_toggle_button(self):
@@ -7506,6 +7786,37 @@ class App(tk.Tk):
             return "adaptive"
         return "headway_target"
 
+    def _operation_mode_label_for_key(self, key: str) -> str:
+        labels = {
+            "fixed_block": "1 Fixed-block",
+            "headway_target": "2 Headway target",
+            "timetable": "3 Timetable",
+            "adaptive": "4 Adaptive tph",
+        }
+        return labels.get(key, "2 Headway target")
+
+    def _active_operation_mode_key(self) -> str:
+        if getattr(self.sim, "block_mode", "moving_block") == "fixed_block":
+            return "fixed_block"
+        mode = str(getattr(self.sim.headway_manager, "mode", "fixed")).lower()
+        if mode == "timetable":
+            return "timetable"
+        if mode == "adaptive":
+            return "adaptive"
+        return "headway_target"
+
+    def _update_operation_mode_status(self):
+        if not hasattr(self, "operation_selected_status_var"):
+            return
+        selected_key = self._operation_mode_key()
+        active_key = self._active_operation_mode_key()
+        selected_label = self._operation_mode_label_for_key(selected_key)
+        active_label = self._operation_mode_label_for_key(active_key)
+        pending = " | Chưa apply" if selected_key != active_key else ""
+        self.operation_selected_status_var.set(
+            f"Đang chọn: {selected_label} | Sẽ chạy: {selected_label} | Đang chạy: {active_label}{pending}"
+        )
+
     def _refresh_operation_mode_controls(self):
         for widget in (
             getattr(self, "blocks_label", None),
@@ -7515,6 +7826,7 @@ class App(tk.Tk):
             getattr(self, "timetable_label", None),
             getattr(self, "timetable_entry", None),
             getattr(self, "timetable_button", None),
+            getattr(self, "timetable_set_after_now_button", None),
             getattr(self, "tph_label", None),
             getattr(self, "tph_entry", None),
         ):
@@ -7533,9 +7845,11 @@ class App(tk.Tk):
             self.timetable_label.grid(row=0, column=4, padx=(0, 4), sticky="w")
             self.timetable_entry.grid(row=0, column=5, columnspan=2, padx=(0, 8), sticky="ew")
             self.timetable_button.grid(row=0, column=7, padx=(0, 8), sticky="w")
+            self.timetable_set_after_now_button.grid(row=0, column=8, padx=(0, 8), sticky="w")
         elif mode == "adaptive":
             self.tph_label.grid(row=0, column=4, padx=(0, 4), sticky="w")
             self.tph_entry.grid(row=0, column=5, padx=(0, 8), sticky="w")
+        self._update_operation_mode_status()
 
     def _extract_timetable_seconds(self, payload: Any) -> List[float]:
         if isinstance(payload, dict):
@@ -7562,6 +7876,256 @@ class App(tk.Tk):
             return sorted(value for value in values if value >= 0.0)
         return []
 
+    def _parse_timetable_clock_s(self, value: Any) -> float | None:
+        text = str(value or "").strip()
+        if not text or text in {"--", "-"}:
+            return None
+        match = re.search(r"\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b", text)
+        if not match:
+            return None
+        hour = int(match.group(1))
+        minute = int(match.group(2))
+        second = int(match.group(3) or 0)
+        if minute >= 60 or second >= 60:
+            return None
+        return float(hour * 3600 + minute * 60 + second)
+
+    def _parse_timetable_dwell_s(self, value: Any) -> float | None:
+        text = str(value or "").strip().lower()
+        if not text or text in {"--", "-"}:
+            return None
+        match = re.search(r"(\d+(?:\.\d+)?)\s*s", text)
+        if match:
+            return float(match.group(1))
+        try:
+            return float(text)
+        except ValueError:
+            return None
+
+    def _looks_like_train_id(self, text: str) -> bool:
+        return re.fullmatch(r"T\d+", text.strip(), flags=re.IGNORECASE) is not None
+
+    def _looks_like_station_id(self, text: str) -> bool:
+        return re.fullmatch(r"S\d+", text.strip(), flags=re.IGNORECASE) is not None
+
+    def _normalize_markdown_cell(self, text: str) -> str:
+        return re.sub(r"<[^>]+>", " ", text).strip()
+
+    def _append_timetable_record(
+        self,
+        records: List[Dict[str, Any]],
+        train_id: str | None,
+        station: str | None,
+        arrival: Any,
+        dwell: Any,
+        departure: Any,
+        profile: Any,
+        note: Any = "",
+    ) -> None:
+        if not train_id or not station:
+            return
+        arrival_clock_s = self._parse_timetable_clock_s(arrival)
+        departure_clock_s = self._parse_timetable_clock_s(departure)
+        records.append(
+            {
+                "train_id": str(train_id).strip(),
+                "station": str(station).strip(),
+                "arrival_text": str(arrival or "").strip(),
+                "arrival_clock_s": arrival_clock_s,
+                "arrival_time_s": arrival_clock_s,
+                "dwell_text": str(dwell or "").strip(),
+                "dwell_s": self._parse_timetable_dwell_s(dwell),
+                "departure_text": str(departure or "").strip(),
+                "departure_clock_s": departure_clock_s,
+                "departure_time_s": departure_clock_s,
+                "profile": str(profile or "").strip(),
+                "note": str(note or "").strip(),
+            }
+        )
+
+    def _extract_vietnamese_markdown_timetable(self, text: str) -> Tuple[List[float], List[Dict[str, Any]]]:
+        records: List[Dict[str, Any]] = []
+        current_train: str | None = None
+        plain_lines: List[str] = []
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            if "|" in line:
+                cells = [self._normalize_markdown_cell(cell) for cell in line.strip("|").split("|")]
+                cells = [cell for cell in cells if cell]
+                if not cells or all(set(cell) <= {"-", ":"} for cell in cells):
+                    continue
+                header_text = " ".join(cells).lower()
+                if "tàu" in header_text or "arrival" in header_text or "giờ" in header_text:
+                    continue
+                if len(cells) >= 6:
+                    if self._looks_like_train_id(cells[0]):
+                        current_train = cells[0].upper()
+                        offset = 1
+                    else:
+                        offset = 0
+                    if len(cells) - offset >= 5 and self._looks_like_station_id(cells[offset]):
+                        note = " ".join(cells[offset + 5 :]) if len(cells) - offset > 5 else ""
+                        self._append_timetable_record(
+                            records,
+                            current_train,
+                            cells[offset],
+                            cells[offset + 1],
+                            cells[offset + 2],
+                            cells[offset + 3],
+                            cells[offset + 4],
+                            note,
+                        )
+                continue
+            plain_lines.append(line)
+
+        idx = 0
+        while idx < len(plain_lines):
+            line = plain_lines[idx]
+            if self._looks_like_train_id(line):
+                current_train = line.upper()
+                idx += 1
+                continue
+            if self._looks_like_station_id(line) and idx + 4 < len(plain_lines):
+                station = line
+                arrival = plain_lines[idx + 1]
+                dwell = plain_lines[idx + 2]
+                departure = plain_lines[idx + 3]
+                profile = plain_lines[idx + 4]
+                note_parts: List[str] = []
+                idx += 5
+                while idx < len(plain_lines) and not self._looks_like_train_id(plain_lines[idx]) and not self._looks_like_station_id(plain_lines[idx]):
+                    note_parts.append(plain_lines[idx])
+                    idx += 1
+                self._append_timetable_record(records, current_train, station, arrival, dwell, departure, profile, " ".join(note_parts))
+                continue
+            idx += 1
+
+        first_departures: Dict[str, float] = {}
+        for record in records:
+            departure_s = record.get("departure_time_s")
+            train_id = str(record.get("train_id", ""))
+            if departure_s is None or not train_id:
+                continue
+            first_departures.setdefault(train_id, float(departure_s))
+        if not first_departures:
+            return [], records
+        origin_s = min(first_departures.values())
+        timetable_s = sorted(max(0.0, value - origin_s) for value in first_departures.values())
+        for record in records:
+            for key in ("arrival_time_s", "departure_time_s"):
+                if record.get(key) is not None:
+                    record[key] = max(0.0, float(record[key]) - origin_s)
+        return timetable_s, records
+
+    def _vietnam_clock_seconds(self) -> float:
+        vietnam_tz = timezone(timedelta(hours=7))
+        now = datetime.now(vietnam_tz)
+        return float(now.hour * 3600 + now.minute * 60 + now.second + now.microsecond / 1_000_000.0)
+
+    def _clock_delay_from_now_s(self, clock_s: float, now_clock_s: float) -> float:
+        day_s = 24.0 * 3600.0
+        return (float(clock_s) - float(now_clock_s)) % day_s
+
+    def _wall_clock_timetable_values(
+        self,
+        records: List[Dict[str, Any]],
+        fallback_values: List[float],
+        now_clock_s: float | None = None,
+    ) -> Tuple[List[float], List[Dict[str, Any]]]:
+        if not records:
+            return fallback_values, records
+        now_clock_s = self._vietnam_clock_seconds() if now_clock_s is None else float(now_clock_s)
+        first_departures: Dict[str, float] = {}
+        for record in records:
+            train_id = str(record.get("train_id", "")).strip()
+            clock_s = record.get("departure_clock_s")
+            if train_id and clock_s is not None:
+                first_departures.setdefault(train_id, float(clock_s))
+        if not first_departures:
+            return fallback_values, records
+
+        values = sorted(self._clock_delay_from_now_s(clock_s, now_clock_s) for clock_s in first_departures.values())
+        adjusted_records: List[Dict[str, Any]] = []
+        for record in records:
+            adjusted = dict(record)
+            for clock_key, time_key in (("arrival_clock_s", "arrival_time_s"), ("departure_clock_s", "departure_time_s")):
+                clock_s = adjusted.get(clock_key)
+                if clock_s is not None:
+                    adjusted[time_key] = self._clock_delay_from_now_s(float(clock_s), now_clock_s)
+            adjusted_records.append(adjusted)
+        return values, adjusted_records
+
+    def _format_timetable_clock_s(self, clock_s: float) -> str:
+        total_s = int(round(float(clock_s))) % int(24.0 * 3600.0)
+        hour = total_s // 3600
+        minute = (total_s % 3600) // 60
+        second = total_s % 60
+        return f"{hour:02d}:{minute:02d}:{second:02d}"
+
+    def set_timetable_after_now(self):
+        headway = dict(self.scenario.get("headway", {}) or {})
+        values = [float(value) for value in (headway.get("timetable_s", []) or [])]
+        records = [dict(record) for record in (headway.get("timetable_records", []) or [])]
+        if not values and not records:
+            self.status_var.set("Status: load a timetable before setting +1.5 min")
+            return
+
+        now_clock_s = self._vietnam_clock_seconds()
+        target_first_departure_s = 90.0
+        first_departures: Dict[str, float] = {}
+        for record in records:
+            train_id = str(record.get("train_id", "")).strip()
+            departure_s = record.get("departure_time_s")
+            if train_id and departure_s is not None:
+                first_departures.setdefault(train_id, float(departure_s))
+        if first_departures:
+            origin_s = min(first_departures.values())
+        elif values:
+            origin_s = min(values)
+        else:
+            self.status_var.set("Status: timetable has no departure times to shift")
+            return
+
+        if values:
+            shifted_values = sorted(max(0.0, target_first_departure_s + value - origin_s) for value in values)
+        else:
+            shifted_values = sorted(
+                max(0.0, target_first_departure_s + value - origin_s)
+                for value in first_departures.values()
+            )
+        shifted_records: List[Dict[str, Any]] = []
+        for record in records:
+            shifted = dict(record)
+            for clock_key, time_key, text_key in (
+                ("arrival_clock_s", "arrival_time_s", "arrival_text"),
+                ("departure_clock_s", "departure_time_s", "departure_text"),
+            ):
+                old_time_s = shifted.get(time_key)
+                if old_time_s is None:
+                    continue
+                new_time_s = max(0.0, target_first_departure_s + float(old_time_s) - origin_s)
+                new_clock_s = (now_clock_s + new_time_s) % (24.0 * 3600.0)
+                shifted[time_key] = new_time_s
+                shifted[clock_key] = new_clock_s
+                shifted[text_key] = self._format_timetable_clock_s(new_clock_s)
+            shifted_records.append(shifted)
+
+        headway["mode"] = "timetable"
+        headway["timetable_s"] = shifted_values
+        if shifted_records:
+            headway["timetable_records"] = shifted_records
+            headway["timetable_wall_clock"] = True
+        headway["timetable_loaded_clock_s"] = now_clock_s
+        self.scenario["headway"] = headway
+        self.sim.scenario["headway"] = deepcopy(headway)
+        self.operation_mode_var.set("3 Timetable")
+        self._refresh_operation_mode_controls()
+        self.on_reset_simulation()
+        first_clock = self._format_timetable_clock_s(now_clock_s + target_first_departure_s)
+        self.status_var.set(f"Status: timetable first departure set to {first_clock} (+1.5 min) and reset simulation")
+
     def load_timetable_file(self):
         path = filedialog.askopenfilename(
             title="Load timetable",
@@ -7576,21 +8140,33 @@ class App(tk.Tk):
             if path.lower().endswith((".yaml", ".yml")):
                 values = self._extract_timetable_seconds(yaml.safe_load(text) or {})
             else:
-                values = []
-                for token in text.replace(",", " ").replace("|", " ").split():
-                    try:
-                        values.append(float(token))
-                    except ValueError:
-                        continue
-                values = sorted(value for value in values if value >= 0.0)
+                timetable_loaded_clock_s = self._vietnam_clock_seconds()
+                values, records = self._extract_vietnamese_markdown_timetable(text)
+                if not values:
+                    values = []
+                    for token in text.replace(",", " ").replace("|", " ").split():
+                        try:
+                            values.append(float(token))
+                        except ValueError:
+                            continue
+                    values = sorted(value for value in values if value >= 0.0)
+                    records = []
+                else:
+                    values, records = self._wall_clock_timetable_values(records, values, now_clock_s=timetable_loaded_clock_s)
             headway = dict(self.scenario.get("headway", {}) or {})
             headway["mode"] = "timetable"
             headway["timetable_s"] = values
             headway["timetable_file"] = path
+            if path.lower().endswith(".md"):
+                headway["timetable_records"] = records
+                headway["timetable_wall_clock"] = True
+                headway["timetable_loaded_clock_s"] = timetable_loaded_clock_s
             self.scenario["headway"] = headway
+            self.sim.scenario["headway"] = deepcopy(headway)
             self.operation_mode_var.set("3 Timetable")
             self._refresh_operation_mode_controls()
-            self.status_var.set(f"Status: loaded timetable with {len(values)} departures")
+            self.on_reset_simulation()
+            self.status_var.set(f"Status: loaded timetable with {len(values)} train departures and reset simulation")
         except Exception as exc:
             self.status_var.set(f"Status: failed to load timetable: {exc}")
 
@@ -8297,6 +8873,7 @@ class App(tk.Tk):
         was_running = self.sim.running
         self.sim.stop()
         self.sim.load_scenario(self.scenario)
+        self.sim.set_timetable_clock_scale(self.time_scale)
         self._update_control_track_profile()
         self._reset_runtime_buffers()
         self.edit_undo_stack.clear()
@@ -8306,6 +8883,7 @@ class App(tk.Tk):
         self.ats_overview_panel.update_data(self.sim)
         self.infrastructure_panel.update_data(self.sim)
         self.limits_panel.update_limits(self.sim.track_profile, self.sim.tsr_zones)
+        self._update_operation_mode_status()
         if was_running:
             self.sim.start()
         self.sim_paused = False
@@ -8314,6 +8892,7 @@ class App(tk.Tk):
 
     def set_time_scale(self, scale: int):
         self.time_scale = max(1, int(scale))
+        self.sim.set_timetable_clock_scale(self.time_scale)
         self._update_time_scale_buttons()
         self.status_var.set(f"Status: time scale x{self.time_scale}")
 

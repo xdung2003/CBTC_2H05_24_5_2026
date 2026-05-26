@@ -108,6 +108,18 @@ def test_actual_headway_is_measured_between_consecutive_dispatch_pairs():
         raise AssertionError("average actual headway should be the mean of measured pair headways")
 
 
+def test_timetable_releases_on_exact_planned_times():
+    sim = main_gui.Simulation(make_source_scenario({"mode": "timetable", "timetable_s": [0.0, 130.0, 245.0, 380.0]}, 4))
+    run_until_dispatches(sim, 4, max_steps=9000)
+    dispatch_times = sorted(sim.headway_manager.stats.release_times_s.values())
+    expected = [0.0, 130.0, 245.0, 380.0]
+    if len(dispatch_times) < len(expected):
+        raise AssertionError("timetable did not dispatch every planned train")
+    for actual, planned in zip(dispatch_times, expected):
+        if abs(actual - planned) > main_gui.DT + 1e-9:
+            raise AssertionError(f"timetable dispatch {actual:.2f}s did not match planned {planned:.2f}s")
+
+
 def test_adaptive_hold_when_front_train_is_slow():
     sim = main_gui.Simulation(
         make_source_scenario(
@@ -359,6 +371,7 @@ def test_collision_detection_latches_trip_and_records_event():
 def main() -> int:
     test_fixed_headway_dispatch_spacing()
     test_actual_headway_is_measured_between_consecutive_dispatch_pairs()
+    test_timetable_releases_on_exact_planned_times()
     test_adaptive_hold_when_front_train_is_slow()
     test_eoa_tracks_nearest_train_ahead_without_overgrant()
     test_off_mode_uses_fixed_block_runtime_authority()

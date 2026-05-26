@@ -1,0 +1,473 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-05-26T09:29:49",
+  "scenario": {
+    "name": "Kịch bản mặc định",
+    "source_path": "C:\\Users\\xuan1\\Desktop\\how to learn fullstacks\\ATP\\CBTC_SIM\\default_scenario.yaml",
+    "track_min_m": -220.0,
+    "track_max_m": 3000.0,
+    "track_end_m": 3000.0
+  },
+  "simulation": {
+    "time_s": 516.0000000000488,
+    "train_count": 4,
+    "tsr_count": 0,
+    "block_mode": "moving_block",
+    "debug_trace_rows": 0,
+    "runtime_dynamics": "FORCE_BALANCE"
+  },
+  "analytics": {
+    "min_headway_s": 79.79999999999842,
+    "target_headway_s": 80.0,
+    "actual_headways_s": [
+      79.79999999999842,
+      80.09999999999546,
+      79.89999999999716
+    ],
+    "actual_headway_pairs": [
+      {
+        "front_train_id": "SRC_1",
+        "following_train_id": "SRC_2",
+        "front_dispatch_time_s": 22.300000000000047,
+        "following_dispatch_time_s": 102.09999999999847,
+        "actual_headway_s": 79.79999999999842
+      },
+      {
+        "front_train_id": "SRC_2",
+        "following_train_id": "SRC_3",
+        "front_dispatch_time_s": 102.09999999999847,
+        "following_dispatch_time_s": 182.19999999999393,
+        "actual_headway_s": 80.09999999999546
+      },
+      {
+        "front_train_id": "SRC_3",
+        "following_train_id": "SRC_4",
+        "front_dispatch_time_s": 182.19999999999393,
+        "following_dispatch_time_s": 262.0999999999911,
+        "actual_headway_s": 79.89999999999716
+      }
+    ],
+    "current_open_headway_s": 275.90000000005807,
+    "min_actual_headway_s": 79.79999999999842,
+    "avg_actual_headway_s": 79.93333333333035,
+    "max_actual_headway_s": 80.09999999999546,
+    "headway_deviation_s": [],
+    "avg_abs_headway_deviation_s": null,
+    "dispatch_delay_s": [],
+    "avg_dispatch_delay_s": 0.0,
+    "station_passenger_metrics": [
+      {
+        "station_index": 0,
+        "station_name": "STATION_1000",
+        "arrival_headways_s": [
+          79.79999999999548,
+          80.20000000000115,
+          79.80000000001814
+        ],
+        "departure_headways_s": [
+          80.09999999999545,
+          80.0000000000083,
+          80.00000000001819
+        ],
+        "avg_arrival_headway_s": 79.93333333333827,
+        "avg_departure_headway_s": 80.03333333334065,
+        "headway_deviation_s": [
+          0.09999999999544684,
+          8.29913915367797e-12,
+          1.8189894035458565e-11
+        ],
+        "arrivals": [
+          {
+            "train_id": "SRC_1",
+            "arrival_time_s": 116.19999999999767,
+            "arrival_headway_s": null,
+            "scheduled_arrival_time_s": null,
+            "schedule_station": null,
+            "schedule_variance_s": null,
+            "planned_dwell_s": 25.0,
+            "passenger_dwell_s": 25.0,
+            "station_wait_s": 25.0,
+            "avg_station_arrival_headway_s": 79.93333333333827
+          },
+          {
+            "train_id": "SRC_2",
+            "arrival_time_s": 195.99999999999315,
+            "arrival_headway_s": 79.79999999999548,
+            "scheduled_arrival_time_s": null,
+            "schedule_station": null,
+            "schedule_variance_s": null,
+            "planned_dwell_s": 25.200000000004508,
+            "passenger_dwell_s": 25.200000000004508,
+            "station_wait_s": 25.200000000004508,
+            "avg_station_arrival_headway_s": 79.93333333333827
+          },
+          {
+            "train_id": "SRC_3",
+            "arrival_time_s": 276.1999999999943,
+            "arrival_headway_s": 80.20000000000115,
+            "scheduled_arrival_time_s": null,
+            "schedule_station": null,
+            "schedule_variance_s": null,
+            "planned_dwell_s": 25.099999999997408,
+            "passenger_dwell_s": 25.099999999997408,
+            "station_wait_s": 25.099999999997408,
+            "avg_station_arrival_headway_s": 79.93333333333827
+          },
+          {
+            "train_id": "SRC_4",
+            "arrival_time_s": 356.00000000001245,
+            "arrival_headway_s": 79.80000000001814,
+            "scheduled_arrival_time_s": null,
+            "schedule_station": null,
+            "schedule_variance_s": null,
+            "planned_dwell_s": 25.299999999987563,
+            "passenger_dwell_s": 25.299999999987563,
+            "station_wait_s": 25.299999999987563,
+            "avg_station_arrival_headway_s": 79.93333333333827
+          }
+        ]
+      },
+      {
+        "station_index": 1,
+        "station_name": "STATION_2000",
+        "arrival_headways_s": [
+          80.20000000001824
+        ],
+        "departure_headways_s": [
+          80.20000000001824
+        ],
+        "avg_arrival_headway_s": 80.20000000001824,
+        "avg_departure_headway_s": 80.20000000001824,
+        "headway_deviation_s": [
+          0.20000000001823537
+        ],
+        "arrivals": [
+          {
+            "train_id": "SRC_1",
+            "arrival_time_s": 258.0999999999902,
+            "arrival_headway_s": null,
+            "scheduled_arrival_time_s": null,
+            "schedule_station": null,
+            "schedule_variance_s": null,
+            "planned_dwell_s": 25.0,
+            "passenger_dwell_s": 25.0,
+            "station_wait_s": 25.0,
+            "avg_station_arrival_headway_s": 80.20000000001824
+          },
+          {
+            "train_id": "SRC_2",
+            "arrival_time_s": 338.3000000000084,
+            "arrival_headway_s": 80.20000000001824,
+            "scheduled_arrival_time_s": null,
+            "schedule_station": null,
+            "schedule_variance_s": null,
+            "planned_dwell_s": 25.0,
+            "passenger_dwell_s": 25.0,
+            "station_wait_s": 25.0,
+            "avg_station_arrival_headway_s": 80.20000000001824
+          }
+        ]
+      }
+    ],
+    "trains_per_hour": 45.03753127606507,
+    "traction_work_kwh": 131.25158649279038,
+    "brake_work_kwh": 42.57167273457649,
+    "coast_distance_m": 0.0,
+    "total_distance_m": 0.0,
+    "ebi_count": 4,
+    "sbi_count": 27,
+    "collision_count": 0,
+    "active_collision_count": 0,
+    "collision_events": [],
+    "journey_times": {}
+  },
+  "trains": [
+    {
+      "id": "SRC_1",
+      "drive_mode": "ATO",
+      "pos_m": 2006.6854805937749,
+      "reported_pos_m": 2006.6854805937749,
+      "speed_kmh": 0.0,
+      "eoa_m": 2145.25,
+      "svl_m": 2145.5,
+      "target_distance_m": 138.81451940622514,
+      "distance_to_eoa_m": 137.3645194062251,
+      "distance_to_train_ahead_m": null,
+      "collision_latched": false,
+      "collision_partner_id": "",
+      "collision_overlap_m": 0.0,
+      "psr_kmh": 60.0,
+      "headway_s": null,
+      "headway_dispatch_released": true,
+      "headway_actual_dispatched": true,
+      "headway_hold_reason": "HEADWAY_RELEASED",
+      "headway_target_s": 80.0,
+      "headway_planned_dispatch_s": 0.0,
+      "headway_dispatch_delay_s": 0.0,
+      "atp_state": "ATP_EMERGENCY",
+      "atp_action": "EBI",
+      "atp_alert": "DEPARTURE HOLD",
+      "ato_state": "ATO_HOLD",
+      "ato_profile_phase": "",
+      "ato_traction_command": 0.0,
+      "ato_brake_command": 0.0,
+      "ato_brake_mode": "none",
+      "ato_door_mode": "READY",
+      "door_authorized": false,
+      "door_open_allowed": false,
+      "precise_stop_state": "TRACKING",
+      "commanded_stop": false,
+      "zero_speed_detected": true,
+      "train_integrity_confirmed": true,
+      "odometry_error_m": 0.0,
+      "safe_packet_valid": true,
+      "safe_packet_age_s": 0.20000000000004547,
+      "dcs_muted": false,
+      "analytics": {
+        "distance_m": 2111.6854805937746,
+        "traction_work_kwh": 33.97906324902664,
+        "brake_work_kwh": 5.737491815394835,
+        "coast_distance_m": 0.0,
+        "runtime_accel_ms2": 0.0,
+        "runtime_traction_force_n": 0.0,
+        "runtime_brake_force_n": 343867.92452830187,
+        "runtime_resistance_force_n": 0.0,
+        "runtime_grade_force_n": 0.0,
+        "runtime_used_legacy_fallback": false
+      },
+      "curves_kmh": {
+        "P": 45.34603080648905,
+        "W": 45.84603080648905,
+        "SBD": 47.34603080648905,
+        "EBD": 51.39794417557883,
+        "SBI": 46.84603080648905,
+        "EBI": 50.89794417557883
+      }
+    },
+    {
+      "id": "SRC_2",
+      "drive_mode": "ATO",
+      "pos_m": 2008.5041730661558,
+      "reported_pos_m": 2008.5041730661558,
+      "speed_kmh": 0.0,
+      "eoa_m": 2145.25,
+      "svl_m": 2145.5,
+      "target_distance_m": 136.99582693384423,
+      "distance_to_eoa_m": 135.54582693384418,
+      "distance_to_train_ahead_m": null,
+      "collision_latched": false,
+      "collision_partner_id": "",
+      "collision_overlap_m": 0.0,
+      "psr_kmh": 60.0,
+      "headway_s": null,
+      "headway_dispatch_released": true,
+      "headway_actual_dispatched": true,
+      "headway_hold_reason": "HEADWAY_RELEASED",
+      "headway_target_s": 80.0,
+      "headway_planned_dispatch_s": 80.0,
+      "headway_dispatch_delay_s": 0.0,
+      "atp_state": "ATP_EMERGENCY",
+      "atp_action": "EBI",
+      "atp_alert": "DEPARTURE HOLD",
+      "ato_state": "ATO_HOLD",
+      "ato_profile_phase": "",
+      "ato_traction_command": 0.0,
+      "ato_brake_command": 0.0,
+      "ato_brake_mode": "none",
+      "ato_door_mode": "READY",
+      "door_authorized": false,
+      "door_open_allowed": false,
+      "precise_stop_state": "TRACKING",
+      "commanded_stop": false,
+      "zero_speed_detected": true,
+      "train_integrity_confirmed": true,
+      "odometry_error_m": 0.0,
+      "safe_packet_valid": true,
+      "safe_packet_age_s": 0.20000000000004547,
+      "dcs_muted": false,
+      "analytics": {
+        "distance_m": 2113.504173066155,
+        "traction_work_kwh": 34.00416929992856,
+        "brake_work_kwh": 5.703275420664559,
+        "coast_distance_m": 0.0,
+        "runtime_accel_ms2": 0.0,
+        "runtime_traction_force_n": 0.0,
+        "runtime_brake_force_n": 343867.92452830187,
+        "runtime_resistance_force_n": 0.0,
+        "runtime_grade_force_n": 0.0,
+        "runtime_used_legacy_fallback": false
+      },
+      "curves_kmh": {
+        "P": 45.01789919475556,
+        "W": 45.51789919475556,
+        "SBD": 47.017899194755564,
+        "EBD": 51.04774223734342,
+        "SBI": 46.517899194755564,
+        "EBI": 50.54774223734342
+      }
+    },
+    {
+      "id": "SRC_3",
+      "drive_mode": "ATO",
+      "pos_m": 1692.4961905572818,
+      "reported_pos_m": 1693.2961905572818,
+      "speed_kmh": 0.0,
+      "eoa_m": 1836.4854805937748,
+      "svl_m": 1836.7354805937748,
+      "target_distance_m": 143.43929003649305,
+      "distance_to_eoa_m": 141.3892900364931,
+      "distance_to_train_ahead_m": null,
+      "collision_latched": false,
+      "collision_partner_id": "",
+      "collision_overlap_m": 0.0,
+      "psr_kmh": 60.0,
+      "headway_s": 2541.8929003649305,
+      "headway_dispatch_released": true,
+      "headway_actual_dispatched": true,
+      "headway_hold_reason": "HEADWAY_RELEASED",
+      "headway_target_s": 80.0,
+      "headway_planned_dispatch_s": 160.0,
+      "headway_dispatch_delay_s": 0.0,
+      "atp_state": "ATP_EMERGENCY",
+      "atp_action": "EBI",
+      "atp_alert": "STANDSTILL MON",
+      "ato_state": "ATO_HOLD",
+      "ato_profile_phase": "",
+      "ato_traction_command": 0.0,
+      "ato_brake_command": 0.0,
+      "ato_brake_mode": "none",
+      "ato_door_mode": "READY",
+      "door_authorized": false,
+      "door_open_allowed": false,
+      "precise_stop_state": "TRACKING",
+      "commanded_stop": false,
+      "zero_speed_detected": true,
+      "train_integrity_confirmed": true,
+      "odometry_error_m": 0.8,
+      "safe_packet_valid": true,
+      "safe_packet_age_s": 0.20000000000004547,
+      "dcs_muted": false,
+      "analytics": {
+        "distance_m": 1797.4961905572818,
+        "traction_work_kwh": 31.605505009392793,
+        "brake_work_kwh": 13.65149637127541,
+        "coast_distance_m": 0.0,
+        "runtime_accel_ms2": 0.0,
+        "runtime_traction_force_n": 0.0,
+        "runtime_brake_force_n": 343867.92452830187,
+        "runtime_resistance_force_n": 0.0,
+        "runtime_grade_force_n": 0.0,
+        "runtime_used_legacy_fallback": false
+      },
+      "curves_kmh": {
+        "P": 23.868246261879428,
+        "W": 24.368246261879428,
+        "SBD": 25.86824626187943,
+        "EBD": 32.3968986725271,
+        "SBI": 25.36824626187943,
+        "EBI": 31.8968986725271
+      }
+    },
+    {
+      "id": "SRC_4",
+      "drive_mode": "ATO",
+      "pos_m": 1426.5520276911814,
+      "reported_pos_m": 1427.3520276911813,
+      "speed_kmh": 0.0,
+      "eoa_m": 1522.4961905572818,
+      "svl_m": 1522.7461905572818,
+      "target_distance_m": 95.39416286610049,
+      "distance_to_eoa_m": 93.34416286610053,
+      "distance_to_train_ahead_m": null,
+      "collision_latched": false,
+      "collision_partner_id": "",
+      "collision_overlap_m": 0.0,
+      "psr_kmh": 60.0,
+      "headway_s": 2059.4416286610044,
+      "headway_dispatch_released": true,
+      "headway_actual_dispatched": true,
+      "headway_hold_reason": "HEADWAY_RELEASED",
+      "headway_target_s": 80.0,
+      "headway_planned_dispatch_s": 240.0,
+      "headway_dispatch_delay_s": 0.0,
+      "atp_state": "ATP_EMERGENCY",
+      "atp_action": "EBI",
+      "atp_alert": "STANDSTILL MON",
+      "ato_state": "ATO_HOLD",
+      "ato_profile_phase": "",
+      "ato_traction_command": 0.0,
+      "ato_brake_command": 0.0,
+      "ato_brake_mode": "none",
+      "ato_door_mode": "READY",
+      "door_authorized": false,
+      "door_open_allowed": false,
+      "precise_stop_state": "TRACKING",
+      "commanded_stop": false,
+      "zero_speed_detected": true,
+      "train_integrity_confirmed": true,
+      "odometry_error_m": 0.8,
+      "safe_packet_valid": true,
+      "safe_packet_age_s": 0.0,
+      "dcs_muted": false,
+      "analytics": {
+        "distance_m": 1531.5520276911805,
+        "traction_work_kwh": 31.662848934442394,
+        "brake_work_kwh": 17.479409127241684,
+        "coast_distance_m": 0.0,
+        "runtime_accel_ms2": 0.0,
+        "runtime_traction_force_n": 0.0,
+        "runtime_brake_force_n": 343867.92452830187,
+        "runtime_resistance_force_n": 0.0,
+        "runtime_grade_force_n": 0.0,
+        "runtime_used_legacy_fallback": false
+      },
+      "curves_kmh": {
+        "P": 18.837906895644362,
+        "W": 19.337906895644366,
+        "SBD": 20.83790689564437,
+        "EBD": 26.205184925215747,
+        "SBI": 20.33790689564437,
+        "EBI": 25.705184925215743
+      }
+    }
+  ],
+  "track_segments": [
+    {
+      "start_m": 0.0,
+      "end_m": 800.0,
+      "gradient": 0.02,
+      "psr_kmh": 60.0
+    },
+    {
+      "start_m": 800.0,
+      "end_m": 1000.0,
+      "gradient": 0.05,
+      "psr_kmh": 40.0
+    },
+    {
+      "start_m": 1000.0,
+      "end_m": 1800.0,
+      "gradient": -0.06,
+      "psr_kmh": 60.0
+    },
+    {
+      "start_m": 1800.0,
+      "end_m": 2000.0,
+      "gradient": -0.01,
+      "psr_kmh": 40.0
+    },
+    {
+      "start_m": 2000.0,
+      "end_m": 2800.0,
+      "gradient": -0.01,
+      "psr_kmh": 60.0
+    },
+    {
+      "start_m": 2800.0,
+      "end_m": 3000.0,
+      "gradient": -0.01,
+      "psr_kmh": 50.0
+    }
+  ],
+  "tsr_zones": []
+}

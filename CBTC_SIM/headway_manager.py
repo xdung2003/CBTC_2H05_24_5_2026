@@ -136,7 +136,13 @@ class HeadwayManager:
             return HeadwayDecision(train.id, "RELEASE_DISPATCH", "HEADWAY_DISABLED_OR_ALREADY_RELEASED", 0.0, None, 0.0)
 
         sequence_index = len(self.released_train_ids)
-        planned_time = self._planned_time_for_sequence(sequence_index)
+        planned_time = None
+        if self.mode == "timetable":
+            train_planned_time = getattr(train, "schedule_planned_dispatch_s", None)
+            if train_planned_time is not None:
+                planned_time = float(train_planned_time)
+        if planned_time is None:
+            planned_time = self._planned_time_for_sequence(sequence_index)
         target = self._effective_target_headway_s(tsr_active)
         self.stats.target_headway_s = target
 
@@ -151,7 +157,7 @@ class HeadwayManager:
             )
 
         last_release = max(self.stats.release_times_s.values(), default=None)
-        if last_release is not None and target > 0.0 and now_s - last_release + 1e-9 < target:
+        if self.mode != "timetable" and last_release is not None and target > 0.0 and now_s - last_release + 1e-9 < target:
             return HeadwayDecision(
                 train.id,
                 "HOLD",
