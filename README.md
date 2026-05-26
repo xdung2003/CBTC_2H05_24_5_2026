@@ -21,7 +21,7 @@ Tài liệu nên đọc kèm:
 - Màn hình tổng quan ATS để xem tuyến, ga, nguồn tàu, giới hạn tốc độ, điều kiện tuyến, vị trí tàu, khoảng cách và trạng thái giữ tàu.
 - Sửa hạ tầng trên giao diện: thêm/sửa/xóa ga, nguồn tàu, đoạn tốc độ, đoạn dốc, chiều dài tuyến và điều kiện tuyến.
 - Hoàn tác/làm lại cho các thay đổi hạ tầng.
-- Các chế độ điều tiết giãn cách: tắt điều tiết, giãn cách cố định, theo thời khóa biểu và thích nghi theo điều kiện tuyến.
+- Các chế độ điều tiết giãn cách: tắt điều tiết, giãn cách cố định và theo thời khóa biểu.
 - Đồng hồ thời gian thực chuẩn Việt Nam trên phần đầu giao diện.
 - Chế độ Monte Carlo để chạy nhiều kịch bản ngẫu nhiên và tổng hợp xác suất/KPI.
 - Lưu kịch bản YAML và xuất báo cáo vận hành ra thư mục [reports](reports), gồm JSON và các bảng CSV phụ.
@@ -148,7 +148,6 @@ Giãn cách trong kịch bản hoặc trên thanh công cụ là mục tiêu v�
 | Tắt điều tiết | Không giữ tàu theo giãn cách kế hoạch. | Chỉ còn các điều kiện nguồn tàu, đường chạy và an toàn. |
 | Cố định | Các đoàn tàu được xuất phát theo một khoảng thời gian mục tiêu. | Chưa đến thời điểm kế hoạch hoặc chưa đủ khoảng từ lần xuất phát trước. |
 | Thời khóa biểu | Tàu xuất phát theo danh sách thời điểm định trước. | Chưa đến giờ trong thời khóa biểu. |
-| Thích nghi | Giống cố định, nhưng có thể tăng giãn cách khi có vùng tốc độ tạm thời và kiểm tra thêm khoảng cách tới tàu trước. | Chưa đủ thời gian, chưa đủ khoảng cách hoặc đang chịu ảnh hưởng của vùng hạn chế. |
 
 Bộ điều tiết giãn cách chỉ quyết định giữ hay thả tàu tại cổng xuất phát. Nó không cấp quyền chạy, không tính điểm kết thúc quyền chạy và không vượt quyền ATP.
 
@@ -156,16 +155,21 @@ Trên giao diện, cấu hình vận hành được gom về một ô `Operation
 
 | Mode trên giao diện | Cơ chế MA/EOA | Tham số hiện ra |
 | --- | --- | --- |
-| `1 Fixed-block` | `fixed_block` | Số block/khu gian (`blocks_per_section`). |
-| `2 Headway target` | `moving_block` | Target seconds, ví dụ 80 giây giữa hai lần dispatch. |
-| `3 Timetable` | `moving_block` | Nút load lịch trình từ file YAML/YML hoặc MD. |
-| `4 Adaptive tph` | `moving_block` | Số lượt tàu/giờ; phần mềm đổi sang headway mục tiêu tương ứng. |
+| `Fixed-block` | `fixed_block` | Số block/khu gian (`blocks_per_section`). |
+| `Headway target` | `moving_block` | Target seconds, ví dụ 80 giây giữa hai lần dispatch. |
+| `Timetable` | `moving_block` | Nút load lịch trình từ file YAML/YML hoặc MD. |
 
 Trong YAML, `headway.mode` và `block_mode` vẫn là hai trường riêng để lưu dữ liệu:
 
 - `headway.mode: fixed` nghĩa là điều tiết thời gian xuất phát theo một khoảng mục tiêu. Đây không phải là bảo đảm cứ đúng khoảng đó có một tàu tới ga.
 - `block_mode: moving_block` nghĩa là ZC cấp quyền chạy theo phân khu di động, dùng bảo vệ tàu phía trước.
 - `block_mode: fixed_block` nghĩa là ZC cấp quyền chạy theo các phân khu cố định ngoài ga. Đây là mode fixed-block mới.
+
+Với `Headway target`, phần mềm đặt `block_mode: moving_block` và `headway.mode: fixed`. ZC vẫn cấp EOA theo phân khu di động; bộ điều tiết chỉ giữ hoặc thả tàu ở nguồn/tại ga theo `target_headway_s`. Actual headway chỉ được ghi khi tàu thật sự qua cổng dispatch, nên số đo có thể khác mục tiêu nếu route ga, dwell, PSR/TSR, DCS hoặc ATP đang giới hạn chạy tàu.
+
+Với `Timetable`, phần mềm vẫn dùng nền `moving_block` nhưng mục tiêu khai thác chuyển từ “giữ headway” sang “bám giờ đến/đi”. Lịch có thể nạp từ YAML/YML hoặc bảng markdown như [CBTC_SIM/timetable_vi_sample.md](CBTC_SIM/timetable_vi_sample.md). Trong lịch markdown, `S1` thường là mốc xuất phát/source, `S2` là ga đầu tiên trong `scheduled_stops`, `S3` là ga thứ hai và tiếp tục theo thứ tự. Các trường report quan trọng gồm `scheduled_arrival_time_s`, `schedule_variance_s`, `planned_dwell_s` và `station_wait_s`.
+
+Trong `Timetable`, tàu chạy theo base moving block: ATO được phép đưa tàu lên tốc độ tối đa còn hợp lệ dưới ATP, PSR/TSR và EOA. Nếu tàu đến sớm, phần mềm ưu tiên cân bằng bằng dwell/schedule hold tại ga thay vì ép giảm tốc sớm trên đường. Nếu tàu đến trễ, tàu tiếp tục chạy theo cap tối đa hợp lệ để phục hồi lịch nhưng không vượt ATP. Khi chỉnh lịch, nên dùng arrival thực tế trong report để đặt mốc đến/đi hợp lý; sau khi sửa file markdown cần nạp lại timetable để scenario dùng dữ liệu mới.
 
 ## Fixed-Block Runtime Mode
 
@@ -208,6 +212,8 @@ Các chuyển trạng thái quan trọng:
 - lỗi ATP, dừng khẩn hoặc dừng tức thời có thể giữ tàu trong trạng thái trip/phanh khẩn cho đến khi được xử lý.
 
 ATP tính các đường giám sát như tốc độ cho phép, cảnh báo, phanh thường và phanh khẩn từ điểm kết thúc quyền chạy, giới hạn tốc độ, độ dốc, sai số vị trí và mô hình phanh. ATO hoặc lái thủ công chỉ được sinh lệnh vận hành nằm dưới các giới hạn đó.
+
+Trong mọi chế độ khai thác, EOA của moving-block hoặc fixed-block được xem là stop target an toàn và được supervise liên tục. Đường cong ATP vì vậy không chỉ bật khi tàu đã tới gần EOA, giúp tránh sụt curve đột ngột tại ngưỡng kích hoạt muộn. Route ga, tail-clear, sức chứa ga và departure hold vẫn có thể rút EOA về gần hơn, nhưng không chế độ khai thác nào được bỏ qua giới hạn EOA hoặc nâng tốc độ mục tiêu cao hơn ATP.
 
 ## Giám Sát, Nhật Ký Và Bảng Biểu
 

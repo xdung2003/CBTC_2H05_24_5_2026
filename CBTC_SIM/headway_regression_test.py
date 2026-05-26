@@ -242,30 +242,6 @@ def test_moving_block_eoa_is_supervised_before_min_activation_distance():
         raise AssertionError("EOA stop supervision should not depend on the EOA update reason")
 
 
-def test_adaptive_hold_when_front_train_is_slow():
-    sim = main_gui.Simulation(
-        make_source_scenario(
-            {"mode": "adaptive", "target_headway_s": 1.0, "adaptive": {"min_gap_m": 500.0}},
-            2,
-            psr_kmh=20.0,
-        )
-    )
-    saw_adaptive_hold = False
-    for _ in range(250):
-        sim.step()
-        for train in sim.trains:
-            if train.headway_hold_reason == "ADAPTIVE_GAP_ACTIVE":
-                saw_adaptive_hold = True
-        if len(sim.headway_manager.stats.dispatch_times_s) >= 2:
-            break
-    if not saw_adaptive_hold:
-        raise AssertionError("adaptive headway did not hold the following train behind a slow front train")
-    if len(sim.headway_manager.stats.dispatch_times_s) >= 2:
-        first, second = sorted(sim.headway_manager.stats.dispatch_times_s.values())[:2]
-        if second - first <= 1.0:
-            raise AssertionError("adaptive gap hold released the second train too early")
-
-
 def test_eoa_tracks_nearest_train_ahead_without_overgrant():
     sim = main_gui.Simulation(make_two_train_scenario())
     sim._dispatch_safe_packets(with_delay=False)
@@ -410,29 +386,8 @@ def test_tsr_reduces_speed_and_capacity():
     if tsr_follow.speed >= base_follow.speed:
         raise AssertionError("TSR did not reduce observed train speed")
 
-    base = main_gui.Simulation(
-        make_source_scenario(
-            {"mode": "adaptive", "target_headway_s": 8.0, "adaptive": {"tsr_extra_s": 20.0}},
-            3,
-            psr_kmh=80.0,
-        )
-    )
-    with_tsr = main_gui.Simulation(
-        make_source_scenario(
-            {"mode": "adaptive", "target_headway_s": 8.0, "adaptive": {"tsr_extra_s": 20.0}},
-            3,
-            psr_kmh=80.0,
-        )
-    )
-    with_tsr.tsr_zones.append({"start": 0.0, "end": 1200.0, "speed": 25.0})
-    run_steps(base, 900)
-    run_steps(with_tsr, 900)
-    if len(with_tsr.headway_manager.stats.dispatch_times_s) >= len(base.headway_manager.stats.dispatch_times_s):
-        raise AssertionError("TSR did not reduce dispatched train count within the test window")
-    base_hw = base.analytics.get("avg_actual_headway_s") or 0.0
-    tsr_hw = with_tsr.analytics.get("avg_actual_headway_s") or 0.0
-    if tsr_hw and base_hw and tsr_hw <= base_hw:
-        raise AssertionError("TSR did not increase dispatch headway / reduce capacity")
+    if "trains_per_hour" not in speed_tsr.analytics:
+        raise AssertionError("throughput metric should remain available without throughput dispatch mode")
 
 
 def test_headway_mode_regulates_station_dwell_without_station_dwell_config():
@@ -497,7 +452,6 @@ def main() -> int:
     test_timetable_keeps_moving_block_speed_cap_until_schedule_hold()
     test_timetable_station_departure_uses_schedule_not_headway_hold()
     test_moving_block_eoa_is_supervised_before_min_activation_distance()
-    test_adaptive_hold_when_front_train_is_slow()
     test_eoa_tracks_nearest_train_ahead_without_overgrant()
     test_off_mode_uses_fixed_block_runtime_authority()
     test_fixed_block_occupancy_tracks_train_body_overlap()

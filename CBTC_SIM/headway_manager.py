@@ -60,20 +60,11 @@ class HeadwayManager:
         mode: str = "off",
         target_headway_s: float = 0.0,
         timetable_s: List[float] | None = None,
-        adaptive_min_headway_s: float | None = None,
-        adaptive_tsr_extra_s: float = 20.0,
-        adaptive_min_gap_m: float = 0.0,
     ):
-        self.mode = str(mode or "off").lower()
+        requested_mode = str(mode or "off").lower()
+        self.mode = requested_mode if requested_mode in {"off", "fixed", "timetable"} else "fixed"
         self.target_headway_s = max(0.0, float(target_headway_s))
         self.timetable_s = sorted(float(item) for item in (timetable_s or []))
-        self.adaptive_min_headway_s = (
-            max(0.0, float(adaptive_min_headway_s))
-            if adaptive_min_headway_s is not None
-            else self.target_headway_s
-        )
-        self.adaptive_tsr_extra_s = max(0.0, float(adaptive_tsr_extra_s))
-        self.adaptive_min_gap_m = max(0.0, float(adaptive_min_gap_m))
         self.released_train_ids: set[str] = set()
         self.stats = HeadwayStats(target_headway_s=self.nominal_target_headway_s())
 
@@ -82,16 +73,10 @@ class HeadwayManager:
         cfg = scenario.get("headway", {}) or {}
         if not isinstance(cfg, dict):
             cfg = {}
-        adaptive = cfg.get("adaptive", {}) or {}
-        if not isinstance(adaptive, dict):
-            adaptive = {}
         return cls(
             mode=str(cfg.get("mode", "off")),
             target_headway_s=float(cfg.get("target_headway_s", cfg.get("fixed_headway_s", 0.0))),
             timetable_s=list(cfg.get("timetable_s", cfg.get("timetable", [])) or []),
-            adaptive_min_headway_s=adaptive.get("min_headway_s", cfg.get("adaptive_min_headway_s")),
-            adaptive_tsr_extra_s=float(adaptive.get("tsr_extra_s", cfg.get("adaptive_tsr_extra_s", 20.0))),
-            adaptive_min_gap_m=float(adaptive.get("min_gap_m", cfg.get("adaptive_min_gap_m", 0.0))),
         )
 
     def nominal_target_headway_s(self) -> float:
@@ -99,12 +84,10 @@ class HeadwayManager:
             gaps = [right - left for left, right in zip(self.timetable_s, self.timetable_s[1:]) if right > left]
             if gaps:
                 return sum(gaps) / len(gaps)
-        if self.mode == "adaptive":
-            return self.adaptive_min_headway_s
         return self.target_headway_s
 
     def enabled(self) -> bool:
-        return self.mode in {"fixed", "timetable", "adaptive"} and (
+        return self.mode in {"fixed", "timetable"} and (
             self.nominal_target_headway_s() > 0.0 or bool(self.timetable_s)
         )
 
@@ -120,10 +103,7 @@ class HeadwayManager:
         return sequence_index * target if target > 0.0 else None
 
     def _effective_target_headway_s(self, tsr_active: bool) -> float:
-        target = self.nominal_target_headway_s()
-        if self.mode == "adaptive" and tsr_active:
-            target += self.adaptive_tsr_extra_s
-        return target
+        return self.nominal_target_headway_s()
 
     def decide(
         self,
@@ -166,14 +146,6 @@ class HeadwayManager:
                 planned_time,
                 0.0,
             )
-
-        if (
-            self.mode == "adaptive"
-            and self.adaptive_min_gap_m > 0.0
-            and dispatched_front_pos_m is not None
-            and dispatched_front_pos_m < self.adaptive_min_gap_m
-        ):
-            return HeadwayDecision(train.id, "HOLD", "ADAPTIVE_GAP_ACTIVE", target, planned_time, 0.0)
 
         delay = max(0.0, now_s - planned_time) if planned_time is not None else 0.0
         self.released_train_ids.add(train.id)

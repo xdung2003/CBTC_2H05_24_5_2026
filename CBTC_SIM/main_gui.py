@@ -3700,10 +3700,7 @@ class Simulation:
                     and existing.pos > SOURCE_TRAIN_EXIT_M
                 )
             ]
-            if self.headway_manager.mode == "adaptive" and self.headway_manager.released_train_ids and not released_front_gaps:
-                dispatched_front_gap_m = 0.0
-            else:
-                dispatched_front_gap_m = max(released_front_gaps, default=None)
+            dispatched_front_gap_m = max(released_front_gaps, default=None)
             decision = self.headway_manager.decide(
                 train,
                 self._timetable_operational_time_s(),
@@ -6808,6 +6805,193 @@ class DiagnosticsPanel(ttk.Frame):
             self.text.yview_moveto(y_first)
 
 
+class DataFlowPanel(ttk.Frame):
+    def __init__(self, master: tk.Widget, scale_factor: float):
+        super().__init__(master, padding=int(8 * scale_factor), style="Panel.TFrame")
+        self.scale_factor = scale_factor
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(2, weight=1)
+        self.rowconfigure(3, weight=1)
+        ttk.Label(self, text="Dataflow Monitor", style="SectionTitle.TLabel").grid(row=0, column=0, sticky="w")
+        self.summary_var = tk.StringVar(value="")
+        ttk.Label(self, textvariable=self.summary_var, style="Muted.TLabel").grid(
+            row=1,
+            column=0,
+            sticky="w",
+            pady=(int(2 * scale_factor), int(6 * scale_factor)),
+        )
+        self.canvas = tk.Canvas(
+            self,
+            height=int(430 * scale_factor),
+            background=APP_THEME["canvas"],
+            highlightthickness=1,
+            highlightbackground=APP_THEME["border"],
+        )
+        self.canvas.grid(row=2, column=0, sticky="nsew")
+
+        text_frame = ttk.Frame(self, style="Panel.TFrame")
+        text_frame.grid(row=3, column=0, sticky="nsew", pady=(int(6 * scale_factor), 0))
+        text_frame.columnconfigure(0, weight=1)
+        text_frame.rowconfigure(0, weight=1)
+        self.text = tk.Text(
+            text_frame,
+            height=int(10 * scale_factor),
+            state="disabled",
+            wrap="none",
+            font=("Consolas", int(8 * scale_factor)),
+            background=APP_THEME["log_bg"],
+            foreground=APP_THEME["text"],
+            insertbackground=APP_THEME["text"],
+            highlightthickness=1,
+            highlightbackground=APP_THEME["border"],
+        )
+        self.text.grid(row=0, column=0, sticky="nsew")
+        vscroll = ttk.Scrollbar(text_frame, orient="vertical", command=self.text.yview)
+        vscroll.grid(row=0, column=1, sticky="ns")
+        hscroll = ttk.Scrollbar(text_frame, orient="horizontal", command=self.text.xview)
+        hscroll.grid(row=1, column=0, sticky="ew")
+        self.text.configure(yscrollcommand=vscroll.set, xscrollcommand=hscroll.set)
+
+    def _node(self, x: float, y: float, w: float, h: float, title: str, body: str, fill: str, outline: str | None = None):
+        c = self.canvas
+        outline = outline or APP_THEME["border"]
+        c.create_rectangle(x, y, x + w, y + h, fill=fill, outline=outline, width=2)
+        c.create_text(
+            x + 8,
+            y + 8,
+            anchor="nw",
+            text=title,
+            fill=APP_THEME["text"],
+            font=("Consolas", int(9 * self.scale_factor), "bold"),
+        )
+        if body:
+            c.create_text(
+                x + 8,
+                y + 28,
+                anchor="nw",
+                text=body,
+                fill=APP_THEME["muted"],
+                font=("Consolas", int(8 * self.scale_factor)),
+            )
+
+    def _packet_arrow(
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        label: str,
+        color: str,
+        phase: float,
+        dashed: bool = False,
+    ):
+        c = self.canvas
+        dash = (4, 3) if dashed else None
+        c.create_line(x1, y1, x2, y2, fill=color, width=2, arrow=tk.LAST, dash=dash)
+        lx = x1 + (x2 - x1) * 0.5
+        ly = y1 + (y2 - y1) * 0.5
+        c.create_rectangle(lx - 36, ly - 9, lx + 36, ly + 9, fill=APP_THEME["canvas"], outline="")
+        c.create_text(lx, ly, text=label, fill=color, font=("Consolas", int(7 * self.scale_factor), "bold"))
+        packet_x = x1 + (x2 - x1) * phase
+        packet_y = y1 + (y2 - y1) * phase
+        c.create_oval(packet_x - 4, packet_y - 4, packet_x + 4, packet_y + 4, fill=color, outline="")
+
+    def update_data(self, sim: Simulation):
+        trains = sorted(sim.trains, key=lambda item: item.id)
+        dcs_ok = sum(1 for train in trains if train.safe_packet_valid)
+        self.summary_var.set(
+            f"Live packet paths  |  trains={len(trains)}  stations={len(sim.scheduled_stops)}  "
+            f"sources={len(getattr(sim, 'source_trains', []))}  DCS healthy={dcs_ok}/{len(trains)}"
+        )
+
+        c = self.canvas
+        c.delete("all")
+        width = max(760, int(c.winfo_width() or 760))
+        height = max(400, int(c.winfo_height() or 400))
+        node_w = max(118, int(128 * self.scale_factor))
+        node_h = max(58, int(62 * self.scale_factor))
+        zc_x = width * 0.50 - node_w / 2
+        top_y = 18
+        train_y = 210
+        ats_pos = (width * 0.18 - node_w / 2, top_y)
+        zc_pos = (zc_x, top_y)
+        dcs_pos = (width * 0.82 - node_w / 2, top_y)
+
+        headway_mode = getattr(sim.headway_manager, "mode", "off")
+        self._node(ats_pos[0], ats_pos[1], node_w, node_h, "ATS", f"mode={headway_mode}\nroutes/stops", APP_THEME["card"])
+        self._node(zc_pos[0], zc_pos[1], node_w, node_h, "ZC", f"{sim.block_mode}\nMA packets", "#ffe7b8")
+        self._node(dcs_pos[0], dcs_pos[1], node_w, node_h, "DCS", f"OK {dcs_ok}/{len(trains)}\nradio link", APP_THEME["card_alt"])
+        phase_base = (sim.sim_time_s * 0.55) % 1.0
+        self._packet_arrow(ats_pos[0] + node_w, ats_pos[1] + node_h / 2, zc_pos[0], zc_pos[1] + node_h / 2, "route/headway", APP_THEME["accent"], phase_base)
+        self._packet_arrow(zc_pos[0], zc_pos[1] + node_h / 2 + 12, ats_pos[0] + node_w, ats_pos[1] + node_h / 2 + 12, "line status", "#2f7f8f", (phase_base + 0.45) % 1.0)
+        self._packet_arrow(zc_pos[0] + node_w, zc_pos[1] + node_h / 2, dcs_pos[0], dcs_pos[1] + node_h / 2, "safe pkt", "#4f8f3a", (phase_base + 0.2) % 1.0)
+
+        if trains:
+            left_margin = 18
+            usable_w = max(1, width - left_margin * 2 - node_w)
+            count = max(1, len(trains))
+            for idx, train in enumerate(trains):
+                x = left_margin + (usable_w * idx / max(1, count - 1) if count > 1 else usable_w / 2)
+                y = train_y
+                link_ok = train.safe_packet_valid and not train.dcs_muted
+                outline = APP_THEME["ok"] if link_ok else APP_THEME["danger"]
+                body = (
+                    f"ATP {train.atp_state.replace('ATP_', '')}\n"
+                    f"ATO {train.ato_state.replace('ATO_', '')}"
+                )
+                self._node(x, y, node_w, node_h, train.id, body, APP_THEME["card"], outline=outline)
+                src_x = dcs_pos[0] + node_w / 2
+                src_y = dcs_pos[1] + node_h
+                dst_x = x + node_w / 2
+                dst_y = y
+                color = APP_THEME["ok"] if link_ok else APP_THEME["danger"]
+                self._packet_arrow(src_x, src_y, dst_x, dst_y, "ZC->CC", color, (phase_base + idx * 0.17) % 1.0, dashed=not link_ok)
+                self._packet_arrow(dst_x, dst_y - 10, zc_pos[0] + node_w / 2, zc_pos[1] + node_h, "pos", "#2f7f8f", (phase_base + 0.55 + idx * 0.13) % 1.0)
+                self._packet_arrow(x + 16, y + node_h + 10, x + node_w - 16, y + node_h + 10, "ATP<>ATO", "#8a4f9f", (phase_base + idx * 0.21) % 1.0)
+
+        asset_y = max(train_y + node_h + 48, height - max(58, int(56 * self.scale_factor)))
+        source_count = len(getattr(sim, "source_trains", []))
+        station_count = len(sim.scheduled_stops)
+        asset_count = max(1, source_count + station_count)
+        asset_w = max(96, int(108 * self.scale_factor))
+        for idx, source in enumerate(getattr(sim, "source_trains", [])):
+            x = 18 + idx * min(asset_w + 14, max(90, (width - 36) / asset_count))
+            body = f"{int(source.get('generated', 0))}/{int(source.get('total_trains', 0))} trains"
+            self._node(x, asset_y, asset_w, 46, str(source.get("name", "SRC")), body, "#fff1cc", outline="#000000")
+            self._packet_arrow(x + asset_w / 2, asset_y, ats_pos[0] + node_w / 2, ats_pos[1] + node_h, "src", APP_THEME["muted"], (phase_base + 0.35) % 1.0)
+        for idx, stop in enumerate(sim.scheduled_stops):
+            x_index = source_count + idx
+            x = 18 + x_index * min(asset_w + 14, max(90, (width - 36) / asset_count))
+            state = sim.station_route_states[idx] if idx < len(getattr(sim, "station_route_states", [])) else {}
+            occupied = sum(1 for line in state.get("lines", []) if line.get("occupied_by_train_id"))
+            capacity = max(1, int(stop.get("capacity", 1)))
+            self._node(x, asset_y, asset_w, 46, str(stop.get("name", f"STA{idx + 1}")), f"occ {occupied}/{capacity}", "#fff1cc")
+            self._packet_arrow(x + asset_w / 2, asset_y, ats_pos[0] + node_w / 2, ats_pos[1] + node_h, "station", APP_THEME["muted"], (phase_base + idx * 0.11) % 1.0)
+
+        lines = [
+            "Time     From        To          Packet / State",
+            "-" * 92,
+        ]
+        for train in trains:
+            link = "MUTE" if train.dcs_muted else "OK" if train.safe_packet_valid else "TIMEOUT"
+            lines.append(
+                f"{sim.sim_time_s:7.1f}s ZC          {train.id:<10} MA eoa={train.eoa:>7.1f}m psr={train.psr_kmh:>5.1f} "
+                f"age={train.safe_packet_age_s:>4.1f}s link={link}"
+            )
+            lines.append(
+                f"{sim.sim_time_s:7.1f}s {train.id:<11} ZC          POS report={train.reported_pos:>7.1f}m "
+                f"speed={ms_to_kmh(train.speed):>5.1f}km/h"
+            )
+            lines.append(
+                f"{sim.sim_time_s:7.1f}s {train.id + '/ATP':<11} {train.id + '/ATO':<10} "
+                f"ATP={train.atp_state:<14} ATO={train.ato_state:<12} action={train.atp_action or 'NONE'}"
+            )
+        self.text.configure(state="normal")
+        self.text.delete("1.0", "end")
+        self.text.insert("1.0", "\n".join(lines))
+        self.text.configure(state="disabled")
+
+
 class AnalyticsPanel(ttk.Frame):
     def __init__(self, master: tk.Widget, scale_factor: float):
         super().__init__(master, padding=int(8 * scale_factor), style="Panel.TFrame")
@@ -7341,9 +7525,6 @@ class App(tk.Tk):
         self.operation_selected_status_var = tk.StringVar(value="")
         self.headway_target_var = tk.StringVar(value=str(self.scenario.get("headway", {}).get("target_headway_s", 180.0)))
         self.timetable_file_var = tk.StringVar(value=str(self.scenario.get("headway", {}).get("timetable_file", "")))
-        adaptive_cfg = self.scenario.get("headway", {}).get("adaptive", {}) or {}
-        adaptive_target_s = float(adaptive_cfg.get("min_headway_s", self.scenario.get("headway", {}).get("target_headway_s", 180.0)) or 180.0)
-        self.adaptive_tph_var = tk.StringVar(value=f"{3600.0 / adaptive_target_s:.1f}" if adaptive_target_s > 0.0 else "20")
         self.blocks_per_section_var = tk.StringVar(
             value=str(self.scenario.get("capacity_baseline", {}).get("blocks_per_section", 4))
         )
@@ -7491,7 +7672,7 @@ class App(tk.Tk):
         self.operation_mode_combo = ttk.Combobox(
             headway_frame,
             textvariable=self.operation_mode_var,
-            values=("1 Fixed-block", "2 Headway target", "3 Timetable", "4 Adaptive tph"),
+            values=("Fixed-block", "Headway target", "Timetable"),
             state="readonly",
             width=20,
         )
@@ -7511,8 +7692,6 @@ class App(tk.Tk):
             text="Set +1.5 min",
             command=self.set_timetable_after_now,
         )
-        self.tph_label = ttk.Label(headway_frame, text="Trains/hour")
-        self.tph_entry = ttk.Entry(headway_frame, textvariable=self.adaptive_tph_var, width=10)
         ttk.Button(headway_frame, text="Apply + Reset", command=self.apply_headway_block_settings).grid(row=0, column=9, padx=(0, 6))
         ttk.Button(headway_frame, text="Reload Values", command=self.reload_headway_block_values).grid(row=0, column=10)
         ttk.Label(headway_frame, textvariable=self.operation_selected_status_var, style="Status.TLabel").grid(
@@ -7622,8 +7801,9 @@ class App(tk.Tk):
         infra_tab = ttk.Frame(dock_tabs, style="Shell.TFrame")
         engineering_tab = ttk.Frame(dock_tabs, style="Shell.TFrame")
         diagnostics_tab = ttk.Frame(dock_tabs, style="Shell.TFrame")
+        dataflow_tab = ttk.Frame(dock_tabs, style="Shell.TFrame")
         analytics_tab = ttk.Frame(dock_tabs, style="Shell.TFrame")
-        for tab in (infra_tab, engineering_tab, diagnostics_tab, analytics_tab):
+        for tab in (infra_tab, engineering_tab, diagnostics_tab, dataflow_tab, analytics_tab):
             tab.columnconfigure(0, weight=1)
             tab.rowconfigure(0, weight=1)
         self.infrastructure_panel = InfrastructurePanel(infra_tab, self.scale_factor)
@@ -7632,12 +7812,15 @@ class App(tk.Tk):
         self.engineering_panel.grid(row=0, column=0, sticky="nsew", padx=int(6 * self.scale_factor), pady=int(6 * self.scale_factor))
         self.diagnostics_panel = DiagnosticsPanel(diagnostics_tab, self.scale_factor)
         self.diagnostics_panel.grid(row=0, column=0, sticky="nsew", padx=int(6 * self.scale_factor), pady=int(6 * self.scale_factor))
+        self.dataflow_panel = DataFlowPanel(dataflow_tab, self.scale_factor)
+        self.dataflow_panel.grid(row=0, column=0, sticky="nsew", padx=int(6 * self.scale_factor), pady=int(6 * self.scale_factor))
         self.analytics_panel = AnalyticsPanel(analytics_tab, self.scale_factor)
         self.analytics_panel.grid(row=0, column=0, sticky="nsew", padx=int(6 * self.scale_factor), pady=int(6 * self.scale_factor))
         self.limits_panel = SpeedLimitsPanel(infra_tab, self.scale_factor)
         dock_tabs.add(infra_tab, text="Infrastructure")
         dock_tabs.add(engineering_tab, text="Engineering")
         dock_tabs.add(diagnostics_tab, text="Diagnostics")
+        dock_tabs.add(dataflow_tab, text="Dataflow")
         dock_tabs.add(analytics_tab, text="Analytics")
 
         button_row = ttk.Frame(self.content, padding=(0, 8, 0, 0), style="Shell.TFrame")
@@ -7650,6 +7833,7 @@ class App(tk.Tk):
         self.infrastructure_panel.update_data(self.sim)
         self.engineering_panel.update_data(self.sim)
         self.diagnostics_panel.update_data(self.sim, self.event_log)
+        self.dataflow_panel.update_data(self.sim)
         self.analytics_panel.update_data(self.sim)
         self.limits_panel.update_limits(self.sim.track_profile, self.sim.tsr_zones)
         self.normal_widgets = [status_row, summary_frame, headway_frame, workspace, button_row]
@@ -7773,31 +7957,26 @@ class App(tk.Tk):
         mode = str(headway.get("mode", "off")).lower()
         block_mode = str(getattr(self, "sim", None).block_mode if hasattr(self, "sim") else self.scenario.get("block_mode", "")).lower()
         if block_mode in {"fixed", "fixed_block"}:
-            return "1 Fixed-block"
+            return "Fixed-block"
         if mode == "timetable":
-            return "3 Timetable"
-        if mode == "adaptive":
-            return "4 Adaptive tph"
-        return "2 Headway target"
+            return "Timetable"
+        return "Headway target"
 
     def _operation_mode_key(self) -> str:
         value = self.operation_mode_var.get().strip().lower()
-        if value.startswith("1"):
+        if value.startswith("fixed") or value.startswith("1"):
             return "fixed_block"
-        if value.startswith("3"):
+        if value.startswith("time") or value.startswith("3"):
             return "timetable"
-        if value.startswith("4"):
-            return "adaptive"
         return "headway_target"
 
     def _operation_mode_label_for_key(self, key: str) -> str:
         labels = {
-            "fixed_block": "1 Fixed-block",
-            "headway_target": "2 Headway target",
-            "timetable": "3 Timetable",
-            "adaptive": "4 Adaptive tph",
+            "fixed_block": "Fixed-block",
+            "headway_target": "Headway target",
+            "timetable": "Timetable",
         }
-        return labels.get(key, "2 Headway target")
+        return labels.get(key, "Headway target")
 
     def _active_operation_mode_key(self) -> str:
         if getattr(self.sim, "block_mode", "moving_block") == "fixed_block":
@@ -7805,8 +7984,6 @@ class App(tk.Tk):
         mode = str(getattr(self.sim.headway_manager, "mode", "fixed")).lower()
         if mode == "timetable":
             return "timetable"
-        if mode == "adaptive":
-            return "adaptive"
         return "headway_target"
 
     def _update_operation_mode_status(self):
@@ -7831,8 +8008,6 @@ class App(tk.Tk):
             getattr(self, "timetable_entry", None),
             getattr(self, "timetable_button", None),
             getattr(self, "timetable_set_after_now_button", None),
-            getattr(self, "tph_label", None),
-            getattr(self, "tph_entry", None),
         ):
             if widget is not None:
                 widget.grid_remove()
@@ -7850,9 +8025,6 @@ class App(tk.Tk):
             self.timetable_entry.grid(row=0, column=5, columnspan=2, padx=(0, 8), sticky="ew")
             self.timetable_button.grid(row=0, column=7, padx=(0, 8), sticky="w")
             self.timetable_set_after_now_button.grid(row=0, column=8, padx=(0, 8), sticky="w")
-        elif mode == "adaptive":
-            self.tph_label.grid(row=0, column=4, padx=(0, 4), sticky="w")
-            self.tph_entry.grid(row=0, column=5, padx=(0, 8), sticky="w")
         self._update_operation_mode_status()
 
     def _extract_timetable_seconds(self, payload: Any) -> List[float]:
@@ -8124,7 +8296,7 @@ class App(tk.Tk):
         headway["timetable_loaded_clock_s"] = now_clock_s
         self.scenario["headway"] = headway
         self.sim.scenario["headway"] = deepcopy(headway)
-        self.operation_mode_var.set("3 Timetable")
+        self.operation_mode_var.set("Timetable")
         self._refresh_operation_mode_controls()
         self.on_reset_simulation()
         first_clock = self._format_timetable_clock_s(now_clock_s + target_first_departure_s)
@@ -8167,7 +8339,7 @@ class App(tk.Tk):
                 headway["timetable_loaded_clock_s"] = timetable_loaded_clock_s
             self.scenario["headway"] = headway
             self.sim.scenario["headway"] = deepcopy(headway)
-            self.operation_mode_var.set("3 Timetable")
+            self.operation_mode_var.set("Timetable")
             self._refresh_operation_mode_controls()
             self.on_reset_simulation()
             self.status_var.set(f"Status: loaded timetable with {len(values)} train departures and reset simulation")
@@ -8179,9 +8351,6 @@ class App(tk.Tk):
         headway = self.scenario.get("headway", {}) if isinstance(self.scenario.get("headway", {}), dict) else {}
         self.headway_target_var.set(str(headway.get("target_headway_s", 180.0)))
         self.timetable_file_var.set(str(headway.get("timetable_file", "")))
-        adaptive = headway.get("adaptive", {}) if isinstance(headway.get("adaptive", {}), dict) else {}
-        adaptive_target_s = float(adaptive.get("min_headway_s", headway.get("target_headway_s", 180.0)) or 180.0)
-        self.adaptive_tph_var.set(f"{3600.0 / adaptive_target_s:.1f}" if adaptive_target_s > 0.0 else "20")
         self.blocks_per_section_var.set(str(self.scenario.get("capacity_baseline", {}).get("blocks_per_section", 4)))
         self._refresh_operation_mode_controls()
         self.status_var.set("Status: operation mode values reloaded")
@@ -8203,19 +8372,6 @@ class App(tk.Tk):
         elif mode == "timetable":
             headway["mode"] = "timetable"
             headway["timetable_file"] = self.timetable_file_var.get()
-            self.scenario["block_mode"] = "moving_block"
-        else:
-            headway["mode"] = "adaptive"
-            try:
-                tph = max(0.1, float(self.adaptive_tph_var.get()))
-            except ValueError:
-                tph = 20.0
-                self.adaptive_tph_var.set("20")
-            target_s = 3600.0 / tph
-            headway["target_headway_s"] = target_s
-            adaptive = dict(headway.get("adaptive", {}) or {})
-            adaptive["min_headway_s"] = target_s
-            headway["adaptive"] = adaptive
             self.scenario["block_mode"] = "moving_block"
         self.scenario["headway"] = headway
         capacity = dict(self.scenario.get("capacity_baseline", {}) or {})
@@ -9473,6 +9629,7 @@ class App(tk.Tk):
                 self.infrastructure_panel.update_data(self.sim)
                 self.engineering_panel.update_data(self.sim)
                 self.diagnostics_panel.update_data(self.sim, self.event_log)
+                self.dataflow_panel.update_data(self.sim)
                 self.analytics_panel.update_data(self.sim)
         self.after(int(DT * 1000), self.tick)
 
