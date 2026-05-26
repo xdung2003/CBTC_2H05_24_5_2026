@@ -1,0 +1,5 @@
+train_id,drive_mode,pos_m,speed_kmh,distance_to_eoa_m,distance_to_train_ahead_m,headway_s,atp_action,ato_profile_phase,traction_work_kwh,brake_work_kwh,coast_distance_m,distance_m,runtime_accel_ms2,runtime_traction_force_n,runtime_brake_force_n,sbi_count,ebi_count,collision_count,collision_latched,collision_partner_id,collision_overlap_m
+SRC_1,ATO,3000.0,0.0,-1.449999999999818,,,,,40.297710209063446,2.7606184203236546,0.0,3104.999999999993,0.0,0.0,0.0,31,0,0,False,,0.0
+SRC_2,ATO,3000.0,0.0,-1.449999999999818,,,,,40.29919183772785,2.566079443541687,0.0,3105.000000000005,0.0,0.0,0.0,31,0,0,False,,0.0
+SRC_3,ATO,3000.0,0.0,-1.449999999999818,,,,,40.20803151188234,2.671035203669792,0.0,3105.0000000000005,0.0,0.0,0.0,31,0,0,False,,0.0
+SRC_4,ATO,3000.0,0.0,-1.449999999999818,,,,,40.300805495878514,2.5834633205195585,0.0,3104.999999999995,0.0,0.0,0.0,31,0,0,False,,0.0
