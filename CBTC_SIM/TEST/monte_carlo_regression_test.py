@@ -55,9 +55,32 @@ def test_monte_carlo_dwell_sampling_respects_minimum():
         raise AssertionError("Monte Carlo sampled dwell below minimum passenger dwell")
 
 
+def test_route_release_delay_does_not_clamp_source_headway():
+    scenario = make_scenario()
+    scenario["source_trains"] = [{"name": "SRC", "capacity": 4, "total_trains": 4}]
+    scenario["headway"] = {"mode": "fixed", "target_headway_s": 120.0}
+    previous = main_gui.TURNOUT_LOCK_S
+    try:
+        main_gui.TURNOUT_LOCK_S = 180.0
+        sim = main_gui.Simulation(scenario)
+        for _ in range(int(700.0 / main_gui.DT)):
+            sim.step()
+            if len(sim.headway_manager.stats.dispatch_times_s) >= 4:
+                break
+    finally:
+        main_gui.TURNOUT_LOCK_S = previous
+    actual = sim.headway_manager.stats.actual_headways_s
+    if len(actual) < 3:
+        raise AssertionError("source headway test did not dispatch all source trains")
+    avg_actual = sum(actual) / len(actual)
+    if avg_actual > 130.0:
+        raise AssertionError(f"route release lock clamped source headway to {avg_actual:.1f}s")
+
+
 def main() -> int:
     test_monte_carlo_batch_returns_statistical_results()
     test_monte_carlo_dwell_sampling_respects_minimum()
+    test_route_release_delay_does_not_clamp_source_headway()
     print("monte carlo regression ok")
     return 0
 

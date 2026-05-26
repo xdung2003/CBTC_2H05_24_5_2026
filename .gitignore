@@ -23,3 +23,8 @@ Thumbs.db
 # Generated / temporary files
 *.tmp
 *.bak
+
+# Packaging outputs
+build/
+dist/
+*.spec

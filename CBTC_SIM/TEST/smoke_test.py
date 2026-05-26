@@ -46,8 +46,8 @@ def main() -> int:
 
     if default_scenario["trains"]:
         raise AssertionError("default_scenario.yaml should stage trains through source_trains")
-    if sum(source.get("total_trains", 0) for source in default_scenario["source_trains"]) != 7:
-        raise AssertionError("default_scenario.yaml should define 7 source trains")
+    if sum(source.get("total_trains", 0) for source in default_scenario["source_trains"]) != 4:
+        raise AssertionError("default_scenario.yaml should define 4 source trains")
     default_source = default_scenario["source_trains"][0]
     if default_source["start_m"] != -200 or default_source["length_m"] != 200:
         raise AssertionError("default source train should be fixed at -200..0")
@@ -208,12 +208,14 @@ def main() -> int:
         raise AssertionError("ATO should see the rate-limited open-line ATP curve, not the one-tick raw drop")
 
     default_curve_sim = main_gui.Simulation(default_scenario)
+    default_depot_name = str(default_scenario["source_trains"][0].get("name", "DEPOT"))
+    default_curve_watch_ids = {f"{default_depot_name}_2", f"{default_depot_name}_3"}
     previous_p_curve: dict[str, float] = {}
     for _ in range(2200):
         default_curve_sim.step()
         in_debug_window = 195.0 <= default_curve_sim.sim_time_s <= 210.0
         for train in default_curve_sim.trains:
-            if train.id not in {"SRC_2", "SRC_3"} or not in_debug_window:
+            if train.id not in default_curve_watch_ids or not in_debug_window:
                 continue
             p_curve_kmh = main_gui.ms_to_kmh(train.curves["P"])
             previous = previous_p_curve.get(train.id)
@@ -229,23 +231,26 @@ def main() -> int:
     dense_source_curve_scenario = load_scenario(docs_dir / "default_scenario.yaml")
     dense_source_curve_scenario["source_trains"][0]["capacity"] = 8
     dense_source_curve_scenario["source_trains"][0]["total_trains"] = 8
+    dense_depot_name = str(dense_source_curve_scenario["source_trains"][0].get("name", "DEPOT"))
+    dense_watch_ids = {f"{dense_depot_name}_5", f"{dense_depot_name}_7"}
+    dense_departure_watch_id = f"{dense_depot_name}_2"
     dense_source_curve_sim = main_gui.Simulation(dense_source_curve_scenario)
     dense_previous_p_curve: dict[str, float] = {}
     seen_departure_section_after_station_1000 = False
     for _ in range(3600):
         dense_source_curve_sim.step()
         for train in dense_source_curve_sim.trains:
-            if train.id in {"SRC_5", "SRC_7"} and 850.0 <= train.pos <= 1005.0:
+            if train.id in dense_watch_ids and 850.0 <= train.pos <= 1005.0:
                 p_curve_kmh = main_gui.ms_to_kmh(train.curves["P"])
                 previous = dense_previous_p_curve.get(train.id)
                 if previous is not None and previous - p_curve_kmh > 8.0:
                     raise AssertionError("dense source ATP P curve should not collapse near STATION_1000")
                 dense_previous_p_curve[train.id] = p_curve_kmh
             for event in train.pop_pending_events():
-                if event["event"] == "ATP_EMERGENCY_INTERVENTION" and train.id in {"SRC_5", "SRC_7"}:
+                if event["event"] == "ATP_EMERGENCY_INTERVENTION" and train.id in dense_watch_ids:
                     raise AssertionError("dense source followers must not trip on stale station reservation ATP collapse")
             if (
-                train.id == "SRC_2"
+                train.id == dense_departure_watch_id
                 and train.station_state == "DEPARTING"
                 and train.last_station_idx == 0
                 and train.station_lane is not None

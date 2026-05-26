@@ -37,7 +37,7 @@ DRIVE_MODE_ALIASES = {
 }
 
 DEFAULT_SCENARIO: Dict[str, Any] = {
-    "name": "Default CBTC Scenario",
+    "name": "Cau hinh tuyen mac dinh",
     "display": {
         "window_title": "CBTC ATC Simulation - Single Monitor",
         "track_min_m": -220.0,
@@ -194,7 +194,7 @@ def normalize_scenario(data: Dict[str, Any], source_path: str | None = None) -> 
     trains = _normalize_trains(merged["trains"], train_defaults)
     scheduled_stops = _normalize_scheduled_stops(merged.get("scheduled_stops", []))
     return {
-        "name": str(merged.get("name", "Scenario")),
+        "name": str(merged.get("name", "Line Configuration")),
         "source_path": source_path,
         "window_title": str(display.get("window_title", DEFAULT_SCENARIO["display"]["window_title"])),
         "track_min_m": track_min_m,
@@ -250,7 +250,7 @@ def scenario_to_yaml_data(sim: Any, scenario: Dict[str, Any]) -> Dict[str, Any]:
         capacity = int(source.get("capacity", 2))
         source_trains.append(
             {
-                "name": source.get("name", "SRC"),
+                "name": source.get("name", "DEPOT"),
                 "start_m": source.get("start_m", -200.0),
                 "length_m": source.get("length_m", 200.0),
                 "capacity": capacity,
@@ -259,7 +259,7 @@ def scenario_to_yaml_data(sim: Any, scenario: Dict[str, Any]) -> Dict[str, Any]:
         )
 
     return {
-        "name": str(scenario.get("name", "Scenario")),
+        "name": str(scenario.get("name", "Line Configuration")),
         "display": {
             "window_title": window_title,
             "track_min_m": track_min_m,

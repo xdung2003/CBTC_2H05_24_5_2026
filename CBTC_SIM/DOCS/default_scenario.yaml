@@ -1,4 +1,4 @@
-name: Kịch bản mặc định
+name: Cấu hình tuyến mặc định
 display:
   window_title: CBTC ATC Simulation - Single Monitor
   track_min_m: -220.0
@@ -46,7 +46,7 @@ scheduled_stops:
   dwell_s: 30.0
 trains: []
 source_trains:
-- name: SRC
+- name: DEPOT
   start_m: -200.0
   length_m: 200.0
   capacity: 4

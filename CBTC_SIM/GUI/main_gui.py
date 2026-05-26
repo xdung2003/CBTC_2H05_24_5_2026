@@ -65,6 +65,7 @@ PARALLEL_RELEASE_MARGIN_M = 5.0
 DEPARTURE_RELEASE_MIN_AUTHORITY_M = 30.0
 STATION_ROUTE_APPROACH_M = 800.0
 TURNOUT_LOCK_S = 5.0
+SOURCE_RELEASE_LOCK_S = 5.0
 LINE_CENTER_SPACING_M = 4.0
 APP_THEME = {
     "bg": "#f5ebe9",
@@ -1364,6 +1365,7 @@ class Train:
             if active:
                 self.dcs_mute_windows.append({"start_s": now_s, "end_s": now_s + 3600.0})
                 self.dcs_muted = True
+                self.log_event("DCS_LOSS_ACTIVE", "fault_injected")
             else:
                 self.dcs_mute_windows = []
                 self.dcs_muted = False
@@ -1376,6 +1378,7 @@ class Train:
                 self.drive_mode = "LMD"
                 self.mode_transition_reason = "ATO fault: degraded to limited manual"
                 self.ato_state = "ATO_FAULT"
+                self.ato_target_speed = 0.0
             elif self.requested_drive_mode == "ATO" and self.safe_packet_valid:
                 self.drive_mode = "ATO"
                 self.mode_transition_reason = ""
@@ -1388,6 +1391,7 @@ class Train:
                 self.atp_action = "EBI"
                 self.atp_brake = "EMERGENCY"
                 self.emg_latch = True
+                self.log_event("ATP_FAULT_FAIL_SAFE_TRIP", "fault_injected")
             else:
                 self.atp_fault_active = False
 
@@ -2099,6 +2103,7 @@ class Train:
         if self.ato_fault_active:
             self.drive_mode = "LMD"
             self.ato_state = "ATO_FAULT"
+            self.ato_target_speed = 0.0
             self.mode_transition_reason = "ATO fault: degraded to limited manual"
         if self.atp_fault_active:
             self.enter_trip_mode("ATP FAULT", self.reported_pos)
@@ -2858,6 +2863,7 @@ class Train:
         if self.ato_fault_active:
             self.drive_mode = "LMD"
             self.ato_state = "ATO_FAULT"
+            self.ato_target_speed = 0.0
         if self.atp_fault_active:
             self.atp_state = "ATP_TRIP"
             self.atp_alert = "ATP FAULT"
@@ -3109,7 +3115,7 @@ class Simulation:
             total_trains = max(0, int(source.get("total_trains", capacity)))
             self.source_trains.append(
                 {
-                    "name": str(source.get("name", f"SRC_{idx + 1}")),
+                    "name": str(source.get("name", f"DEPOT_{idx + 1}")),
                     "start_m": SOURCE_TRAIN_START_M,
                     "length_m": SOURCE_TRAIN_LENGTH_M,
                     "capacity": capacity,
@@ -3253,7 +3259,7 @@ class Simulation:
             "color": self.color_palette[len(self.trains) % len(self.color_palette)],
             "track_profile": self.track_profile,
             "scheduled_stops": self.scheduled_stops,
-            "source_name": str(source.get("name", "SRC")),
+            "source_name": str(source.get("name", "DEPOT")),
             "source_lane": lane,
         }
         if service:
@@ -3347,11 +3353,11 @@ class Simulation:
         return min(max_head, max(min_head, SOURCE_TRAIN_START_M + train_length))
 
     def _next_source_train_id(self, source: Dict[str, Any], sequence: int) -> str:
-        train_id = f"{source.get('name', 'SRC')}_{sequence}"
+        train_id = f"{source.get('name', 'DEPOT')}_{sequence}"
         existing_ids = {train.id for train in self.trains}
         while train_id in existing_ids:
             self.generated_train_counter += 1
-            train_id = f"SRC_{self.generated_train_counter}"
+            train_id = f"DEPOT_{self.generated_train_counter}"
         return train_id
 
     def _source_train_matches(self, train: Train, source_name: str) -> bool:
@@ -3381,7 +3387,7 @@ class Simulation:
         if index < 0 or index >= len(self.source_trains):
             return
         source = self.source_trains[index]
-        source_name = str(source.get("name", "SRC"))
+        source_name = str(source.get("name", "DEPOT"))
         match_name = previous_name or source_name
         total = max(0, int(source.get("total_trains", source.get("capacity", 0))))
         owned = self._source_owned_trains(match_name)
@@ -4610,7 +4616,8 @@ class Simulation:
 
     def _arm_parallel_release_lock(self, zone_id: str, lane: int):
         key = (zone_id, int(lane))
-        self.parallel_release_locks[key] = max(float(self.parallel_release_locks.get(key, 0.0)), TURNOUT_LOCK_S)
+        lock_s = SOURCE_RELEASE_LOCK_S if zone_id == "SOURCE" else TURNOUT_LOCK_S
+        self.parallel_release_locks[key] = max(float(self.parallel_release_locks.get(key, 0.0)), lock_s)
 
     def _tick_parallel_release_locks(self):
         expired = []
@@ -4928,6 +4935,14 @@ class Simulation:
         stop = train.scheduled_stops[train.next_scheduled_stop_idx]
         station_idx = self._station_index_for_stop(stop)
         distance_to_stop = stop["pos_m"] - train.pos
+        service_decel = equivalent_mass_adjusted_accel(BRAKE_FORCE_N / max(train.mass, 1.0))
+        dynamic_stop_activation_m = max(
+            STOP_TARGET_MIN_ACTIVATION_M,
+            ATO_TARGET_PREP_MAX_M,
+            stopping_distance_with_buildup(train.speed, service_decel, BRAKE_BUILDUP_S)
+            + train.speed * P_TIME_S
+            + STOP_TARGET_BUFFER_M,
+        )
         if self._train_still_holding_previous_station_line(train, station_idx):
             train.active_scheduled_stop = None
             train.commanded_stop = False
@@ -4935,7 +4950,7 @@ class Simulation:
                 self._set_train_station_state(train, train.last_station_idx, "DEPARTING", "between_stations")
             return False
         train.active_scheduled_stop = stop
-        train.commanded_stop = 0.0 <= distance_to_stop <= STOP_TARGET_MIN_ACTIVATION_M
+        train.commanded_stop = 0.0 <= distance_to_stop <= dynamic_stop_activation_m
         if train.station_lane is None and distance_to_stop <= STATION_ROUTE_APPROACH_M:
             self._set_train_station_state(train, station_idx, "APPROACHING_STATION", "scheduled_stop_approach")
         elif train.station_lane is not None and distance_to_stop > 25.0:
@@ -6957,8 +6972,8 @@ class DataFlowPanel(ttk.Frame):
         for idx, source in enumerate(getattr(sim, "source_trains", [])):
             x = 18 + idx * min(asset_w + 14, max(90, (width - 36) / asset_count))
             body = f"{int(source.get('generated', 0))}/{int(source.get('total_trains', 0))} trains"
-            self._node(x, asset_y, asset_w, 46, str(source.get("name", "SRC")), body, "#fff1cc", outline="#000000")
-            self._packet_arrow(x + asset_w / 2, asset_y, ats_pos[0] + node_w / 2, ats_pos[1] + node_h, "src", APP_THEME["muted"], (phase_base + 0.35) % 1.0)
+            self._node(x, asset_y, asset_w, 46, str(source.get("name", "DEPOT")), body, "#fff1cc", outline="#000000")
+            self._packet_arrow(x + asset_w / 2, asset_y, ats_pos[0] + node_w / 2, ats_pos[1] + node_h, "depot", APP_THEME["muted"], (phase_base + 0.35) % 1.0)
         for idx, stop in enumerate(sim.scheduled_stops):
             x_index = source_count + idx
             x = 18 + x_index * min(asset_w + 14, max(90, (width - 36) / asset_count))
@@ -6997,7 +7012,7 @@ class AnalyticsPanel(ttk.Frame):
         super().__init__(master, padding=int(8 * scale_factor), style="Panel.TFrame")
         self.columnconfigure(0, weight=1)
         self.rowconfigure(2, weight=1)
-        ttk.Label(self, text="Scenario Analytics", style="SectionTitle.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(self, text="Line Configuration Analytics", style="SectionTitle.TLabel").grid(row=0, column=0, sticky="w")
         self.summary_var = tk.StringVar(value="")
         ttk.Label(self, textvariable=self.summary_var, style="Muted.TLabel").grid(row=1, column=0, sticky="w", pady=(int(2 * scale_factor), int(6 * scale_factor)))
         text_frame = ttk.Frame(self, style="Panel.TFrame")
@@ -7041,7 +7056,7 @@ class AnalyticsPanel(ttk.Frame):
         )
 
         lines = [
-            "Scenario KPI",
+            "Line Configuration KPI",
             "-" * 88,
             f"Simulation time        : {sim.sim_time_s:,.1f} s",
             f"Minimum headway        : {min_headway_text}",
@@ -7203,7 +7218,7 @@ class AddElementDialog(tk.Toplevel):
         "Gradient Segment",
         "Line",
         "Line Condition",
-        "Source Train",
+        "Depot",
     ]
 
     FIELD_SETS = {
@@ -7244,9 +7259,9 @@ class AddElementDialog(tk.Toplevel):
             ("end_m", "End (m)", "500"),
             ("condition", "Condition (dry/wet)", "dry"),
         ],
-        "Source Train": [
-            ("name", "Name", "SRC"),
-            ("capacity", "Source trains", "3"),
+        "Depot": [
+            ("name", "Name", "DEPOT"),
+            ("capacity", "Depot trains", "3"),
         ],
     }
 
@@ -7584,7 +7599,7 @@ class App(tk.Tk):
         btns.columnconfigure(0, weight=5)
         sim_group = self._make_button_group(btns, "Simulation Control", 0)
         element_group = self._make_button_group(btns, "Element Editing", 1)
-        scenario_group = self._make_button_group(btns, "Scenario I/O", 2)
+        scenario_group = self._make_button_group(btns, "Line Config I/O", 2)
         mode_group = self._make_button_group(btns, "Mode", 3)
 
         self.start_btn = ttk.Button(sim_group, text="Start", command=self.on_start, style="Accent.TButton")
@@ -7636,7 +7651,7 @@ class App(tk.Tk):
         self._update_edit_history_buttons()
         self._update_run_pause_buttons()
 
-        self.load_btn = ttk.Button(scenario_group, text="Load Scenario", command=self.on_load_scenario)
+        self.load_btn = ttk.Button(scenario_group, text="Load Line Config", command=self.on_load_scenario)
         self.load_btn.grid(row=1, column=0, padx=3, pady=(2, 4), sticky="ew")
         self.save_scenario_btn = ttk.Button(scenario_group, text="Save YAML", command=self.on_save_scenario)
         self.save_scenario_btn.grid(row=1, column=1, padx=3, pady=(2, 4), sticky="ew")
@@ -7652,7 +7667,7 @@ class App(tk.Tk):
         ttk.Label(clock_frame, textvariable=self.vn_clock_var, style="Clock.TLabel").pack(anchor="e")
 
         self.status_var = tk.StringVar(value="Status: stopped")
-        self.scenario_var = tk.StringVar(value=f"Scenario: {self.scenario['name']}")
+        self.scenario_var = tk.StringVar(value=f"Line config: {self.scenario['name']}")
         self.clock_var = tk.StringVar(value="Sim time: 0.0 s")
         self.summary_var = tk.StringVar(value="")
         status_row = ttk.Frame(self.content, padding=(10, 0, 10, 0), style="Shell.TFrame")
@@ -7728,8 +7743,8 @@ class App(tk.Tk):
         self.add_element_btn.grid(row=0, column=0, sticky="ew", padx=2, pady=2)
         self.delete_element_btn = ttk.Button(element_side, text="Delete", command=self.delete_selected_element)
         self.delete_element_btn.grid(row=1, column=0, sticky="ew", padx=2, pady=2)
-        ttk.Button(element_side, text="Source + Train", command=self.add_train_to_selected_source).grid(row=2, column=0, sticky="ew", padx=2, pady=(8, 2))
-        ttk.Button(element_side, text="Source - Train", command=self.remove_train_from_selected_source).grid(row=3, column=0, sticky="ew", padx=2, pady=2)
+        ttk.Button(element_side, text="Depot + Train", command=self.add_train_to_selected_source).grid(row=2, column=0, sticky="ew", padx=2, pady=(8, 2))
+        ttk.Button(element_side, text="Depot - Train", command=self.remove_train_from_selected_source).grid(row=3, column=0, sticky="ew", padx=2, pady=2)
 
         faults_side = ttk.LabelFrame(side_toolbar, text="Selected Train Faults", padding=6)
         faults_side.grid(row=1, column=0, sticky="ew", pady=(0, 8))
@@ -8986,7 +9001,7 @@ class App(tk.Tk):
 
     def on_load_scenario(self):
         selected = filedialog.askopenfilename(
-            title="Load Scenario YAML",
+            title="Load Line Configuration YAML",
             filetypes=[("YAML files", "*.yaml *.yml"), ("All files", "*.*")],
             initialdir=str(DEFAULT_SCENARIO_PATH.parent),
         )
@@ -8997,13 +9012,13 @@ class App(tk.Tk):
         try:
             self.scenario = load_scenario(selected)
         except Exception as exc:
-            self.status_var.set(f"Status: failed to load scenario ({exc})")
+            self.status_var.set(f"Status: failed to load line config ({exc})")
             if was_running:
                 self.sim.start()
             return
         self.sim.load_scenario(self.scenario)
         self.title(self.scenario["window_title"])
-        self.scenario_var.set(f"Scenario: {self.scenario['name']}")
+        self.scenario_var.set(f"Line config: {self.scenario['name']}")
         self.reload_headway_block_values()
         self._update_control_track_profile()
         self._reset_runtime_buffers()
@@ -9011,7 +9026,7 @@ class App(tk.Tk):
         self.edit_redo_stack.clear()
         self._update_edit_history_buttons()
         self.rebuild_train_panels()
-        self.status_var.set(f"Status: loaded scenario from {selected}")
+        self.status_var.set(f"Status: loaded line config from {selected}")
         if was_running:
             self.sim.start()
         self.sim_paused = False
@@ -9088,7 +9103,7 @@ class App(tk.Tk):
         self.sim.load_scenario(self.scenario)
         self.sim.tsr_zones = tsr_zones
         self.title(self.scenario["window_title"])
-        self.scenario_var.set(f"Scenario: {self.scenario['name']}")
+        self.scenario_var.set(f"Line config: {self.scenario['name']}")
         self.reload_headway_block_values()
         self._update_control_track_profile()
         self._reset_runtime_buffers()
@@ -9131,7 +9146,7 @@ class App(tk.Tk):
         target_path = self.scenario.get("source_path")
         if not target_path:
             target_path = filedialog.asksaveasfilename(
-                title="Save Scenario YAML",
+                title="Save Line Configuration YAML",
                 filetypes=[("YAML files", "*.yaml *.yml"), ("All files", "*.*")],
                 defaultextension=".yaml",
                 initialdir=str(DEFAULT_SCENARIO_PATH.parent),
@@ -9141,10 +9156,10 @@ class App(tk.Tk):
         try:
             path = save_scenario_file(self.sim, self.scenario, target_path)
         except Exception as exc:
-            self.status_var.set(f"Status: failed to save scenario ({exc})")
+            self.status_var.set(f"Status: failed to save line config ({exc})")
             return
         self.scenario["source_path"] = str(path)
-        self.status_var.set(f"Status: saved scenario to {path}")
+        self.status_var.set(f"Status: saved line config to {path}")
 
     def open_add_element_dialog(self):
         AddElementDialog(self, self.add_ats_element)
@@ -9228,12 +9243,12 @@ class App(tk.Tk):
         self.ats_overview_panel.update_data(self.sim)
         self.infrastructure_panel.update_data(self.sim)
         self.limits_panel.update_limits(self.sim.track_profile, self.sim.tsr_zones)
-        self.status_var.set(f"Status: source {source.get('name', index)} trains={count}")
+        self.status_var.set(f"Status: depot {source.get('name', index)} trains={count}")
 
     def add_train_to_selected_source(self):
         index = self._selected_source_index()
         if index is None:
-            self.status_var.set("Status: add a Source Train first")
+            self.status_var.set("Status: add a depot first")
             return
         source = self.sim.source_trains[index]
         current = int(source.get("total_trains", source.get("capacity", 0)))
@@ -9242,7 +9257,7 @@ class App(tk.Tk):
     def remove_train_from_selected_source(self):
         index = self._selected_source_index()
         if index is None:
-            self.status_var.set("Status: no Source Train to remove from")
+            self.status_var.set("Status: no depot to remove from")
             return
         source = self.sim.source_trains[index]
         current = int(source.get("total_trains", source.get("capacity", 0)))
@@ -9296,8 +9311,8 @@ class App(tk.Tk):
             }
         if kind == "source_train" and 0 <= index < len(self.sim.source_trains):
             source = self.sim.source_trains[index]
-            return "Source Train", {
-                "name": str(source.get("name", "SRC")),
+            return "Depot", {
+                "name": str(source.get("name", "DEPOT")),
                 "capacity": str(source.get("capacity", 2)),
             }
         return None, {}
@@ -9343,14 +9358,14 @@ class App(tk.Tk):
             elif kind == "source_train" and 0 <= index < len(self.sim.source_trains):
                 self._push_edit_undo()
                 removed = self.sim.source_trains.pop(index)
-                source_name = str(removed.get("name", "SRC"))
+                source_name = str(removed.get("name", "DEPOT"))
                 self.sim.trains = [
                     train for train in self.sim.trains
                     if not self.sim._source_train_matches(train, source_name)
                 ]
                 self.sim._rebuild_after_train_set_change()
                 self.sync_train_panels()
-                self.status_var.set(f"Status: deleted source {removed.get('name', index)}")
+                self.status_var.set(f"Status: deleted depot {removed.get('name', index)}")
             else:
                 self.status_var.set(f"Status: cannot delete {element_key}")
                 return
@@ -9388,7 +9403,7 @@ class App(tk.Tk):
             capacity = int(float(data["capacity"]))
             self.sim.update_source_train(
                 index,
-                data["name"] or f"SRC_{index + 1}",
+                data["name"] or f"DEPOT_{index + 1}",
                 capacity,
                 capacity,
             )
@@ -9478,9 +9493,9 @@ class App(tk.Tk):
             self._push_edit_undo()
             self.sim.line_conditions.append({"start": start_m, "end": end_m, "condition": data["condition"] or "dry"})
             self.status_var.set("Status: added line condition")
-        elif element_type == "Source Train":
+        elif element_type == "Depot":
             self._push_edit_undo()
-            name = data["name"] or f"SRC_{len(self.sim.source_trains) + 1}"
+            name = data["name"] or f"DEPOT_{len(self.sim.source_trains) + 1}"
             capacity = int(float(data["capacity"]))
             self.sim.add_source_train(
                 name,
@@ -9490,7 +9505,7 @@ class App(tk.Tk):
                 capacity,
             )
             self.sync_train_panels()
-            self.status_var.set(f"Status: added source train {name}")
+            self.status_var.set(f"Status: added depot {name}")
         else:
             raise ValueError("Unsupported element type.")
         self.ats_overview_panel.update_data(self.sim)

@@ -237,7 +237,7 @@ def test_dense_default_late_trains_do_not_false_dwell_or_trip():
                 stop_pos = float(train.active_scheduled_stop["pos_m"])
                 if abs(train.pos - stop_pos) > main_gui.STOP_ACCURACY_TOL_M:
                     raise AssertionError(f"{train.id} started dwell away from the scheduled station marker")
-    late_train = next(train for train in sim.trains if train.id == "SRC_5")
+    late_train = max(sim.trains, key=lambda train: int(train.id.rsplit("_", 1)[-1]) if "_" in train.id else 0)
     cleared_first_station = late_train.next_scheduled_stop_idx >= 1 and late_train.pos > 1080.0
     safely_held_at_source = (
         late_train.protection_zone_id == "SOURCE"

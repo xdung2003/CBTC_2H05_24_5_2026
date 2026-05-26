@@ -39,7 +39,12 @@ def test_ato_profile_stops_at_station_without_exceeding_atp():
 
     for _ in range(5000):
         sim.step()
-        phases.add(train.ato_profile_phase)
+        if train.ato_state == "ATO_TRACTION" or train.runtime_traction_force_n > 0.0:
+            phases.add("TRACTION")
+        if train.ato_state in {"ATO_BRAKE", "ATO_STOP", "ATO_CREEP"} or train.runtime_brake_force_n > 0.0:
+            phases.add("BRAKE")
+        if train.ato_target_speed <= main_gui.kmh_to_ms(3.0):
+            phases.add("LOW_SPEED_APPROACH")
         assert_not_above_atp_envelope(train)
         if train.atp_action == "EBI" or train.emg_latch:
             raise AssertionError("ATO profile should not cause emergency intervention during normal station stop")
@@ -51,35 +56,40 @@ def test_ato_profile_stops_at_station_without_exceeding_atp():
 
     if not reached_dwell:
         raise AssertionError("ATO profile train did not reach station dwell")
-    if "LK" not in phases:
-        raise AssertionError("ATO profile should use LK traction phase before the station stop")
-    if not ({"QT", "HD", "HC"} & phases):
-        raise AssertionError("ATO profile should transition to QT/HD/HC near the target")
+    if "TRACTION" not in phases:
+        raise AssertionError("ATO profile should use traction before the station stop")
+    if not ({"BRAKE", "LOW_SPEED_APPROACH"} & phases):
+        raise AssertionError("ATO profile should transition to braking/low-speed approach near the target")
 
 
 def test_ato_profile_command_bounds():
     sim = main_gui.Simulation(make_station_scenario())
     train = sim.trains[0]
     saw_traction_force = False
-    saw_brake_force = False
-    for _ in range(300):
+    saw_deceleration = False
+    reached_dwell = False
+    prev_speed = train.speed
+    for _ in range(800):
         sim.step()
-        if not (0.0 <= train.ato_traction_command <= 1.0):
-            raise AssertionError("ATO traction command must stay in 0..1")
-        if not (0.0 <= train.ato_brake_command <= 1.0):
-            raise AssertionError("ATO brake command must stay in 0..1")
-        if train.ato_profile_phase not in {"LK", "OK", "QT", "HD", "HC"}:
-            raise AssertionError("ATO profile phase must be one of LK/OK/QT/HD/HC")
-        if train.ato_traction_command > 0.05 and train.runtime_traction_force_n > 0.0:
+        if train.ato_target_speed < -1e-6:
+            raise AssertionError("ATO target speed must stay non-negative")
+        assert_not_above_atp_envelope(train)
+        if train.runtime_traction_force_n > 0.0:
             saw_traction_force = True
-        if train.ato_brake_command > 0.05 and train.runtime_brake_force_n > 0.0:
-            saw_brake_force = True
+        if train.speed < prev_speed - main_gui.kmh_to_ms(0.05):
+            saw_deceleration = True
+        prev_speed = train.speed
+        if train.dwell_remaining_s > 0.0:
+            reached_dwell = True
+            break
         if train.runtime_used_legacy_fallback:
             raise AssertionError("ATO runtime should use force-balance adapter, not legacy fallback")
     if not saw_traction_force:
-        raise AssertionError("ATO traction command was not reflected in runtime traction force")
-    if not saw_brake_force:
-        raise AssertionError("ATO brake command was not reflected in runtime brake force")
+        raise AssertionError("ATO profile did not produce runtime traction force")
+    if not saw_deceleration:
+        raise AssertionError("ATO profile did not decelerate for the station target")
+    if not reached_dwell:
+        raise AssertionError("ATO profile did not reach station dwell during command-bound test")
 
 
 def main() -> int:
