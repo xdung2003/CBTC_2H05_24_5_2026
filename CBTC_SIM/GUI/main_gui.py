@@ -7352,7 +7352,7 @@ class MonteCarloPanel(ttk.Frame):
 
         self.columnconfigure(0, weight=1)
         self.rowconfigure(5, weight=1)
-        ttk.Label(self, text="Cháº¿ Ä‘á»™ thá»‘ng kÃª Monte Carlo", style="SectionTitle.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(self, text="Chế độ thống kê Monte Carlo", style="SectionTitle.TLabel").grid(row=0, column=0, sticky="w")
 
         controls = ttk.Frame(self, style="Shell.TFrame")
         controls.grid(row=1, column=0, sticky="ew", pady=(10, 6))
@@ -7365,7 +7365,7 @@ class MonteCarloPanel(ttk.Frame):
         ttk.Entry(controls, textvariable=self.max_time_var, width=8).grid(row=0, column=3, padx=(0, 10))
         ttk.Label(controls, text="Replay ID", style="Status.TLabel").grid(row=0, column=4, padx=(0, 4))
         ttk.Entry(controls, textvariable=self.seed_var, width=10).grid(row=0, column=5, padx=(0, 10))
-        self.run_btn = ttk.Button(controls, text="Cháº¡y thá»‘ng kÃª", command=self.start)
+        self.run_btn = ttk.Button(controls, text="Chạy thống kê", command=self.start)
         self.run_btn.grid(row=0, column=6, padx=(10, 4))
         self.stop_btn = ttk.Button(controls, text="Stop", command=self.stop, state="disabled")
         self.stop_btn.grid(row=0, column=7)
@@ -7391,7 +7391,7 @@ class MonteCarloPanel(ttk.Frame):
             borderwidth=1,
         )
         self.output.grid(row=5, column=0, sticky="nsew", pady=(8, 0))
-        self._set_output("Káº¿t quáº£ thá»‘ng kÃª sáº½ hiá»ƒn thá»‹ táº¡i Ä‘Ã¢y.\n")
+        self._set_output("Kết quả thống kê sẽ hiển thị tại đây.\n")
 
     def _config_from_fields(self) -> MonteCarloConfig:
         seed_text = self.seed_var.get().strip()
@@ -7591,7 +7591,7 @@ class App(tk.Tk):
         self.start_btn.grid(row=1, column=0, padx=3, pady=(2, 4), sticky="ew")
         self.stop_btn = ttk.Button(sim_group, text="II", command=self.on_stop, style="History.TButton", width=3)
         self.stop_btn.grid(row=1, column=1, padx=3, pady=(2, 4), sticky="ew")
-        self.reset_sim_btn = ttk.Button(sim_group, text="âŸ³", command=self.on_reset_simulation, style="History.TButton", width=3)
+        self.reset_sim_btn = ttk.Button(sim_group, text="⟳", command=self.on_reset_simulation, style="History.TButton", width=3)
         self.reset_sim_btn.grid(row=1, column=2, padx=3, pady=(2, 4), sticky="ew")
         for idx, scale in enumerate((1, 2, 5, 10, 100), start=3):
             button = ttk.Button(sim_group, text=f"x{scale}", command=lambda value=scale: self.set_time_scale(value))
@@ -7604,21 +7604,21 @@ class App(tk.Tk):
         self.delete_element_btn = ttk.Button(element_group, text="Delete", command=self.delete_selected_element)
         self.delete_element_btn.grid(row=1, column=1, padx=3, pady=(2, 4), sticky="ew")
         element_group.grid_remove()
-        self.undo_edit_btn = ttk.Button(element_group, text="â†¶", command=self.undo_canvas_edit, width=3, style="History.TButton")
+        self.undo_edit_btn = ttk.Button(element_group, text="↶", command=self.undo_canvas_edit, width=3, style="History.TButton")
         self.undo_edit_btn.grid(row=1, column=2, padx=3, pady=(2, 4), sticky="ew")
-        self.redo_edit_btn = ttk.Button(element_group, text="â†·", command=self.redo_canvas_edit, width=3, style="History.TButton")
+        self.redo_edit_btn = ttk.Button(element_group, text="↷", command=self.redo_canvas_edit, width=3, style="History.TButton")
         self.redo_edit_btn.grid(row=1, column=3, padx=3, pady=(2, 4), sticky="ew")
         self._update_edit_history_buttons()
         self._update_run_pause_buttons()
         self.undo_edit_btn.grid_remove()
         self.redo_edit_btn.grid_remove()
-        self.undo_edit_btn = ttk.Button(sim_group, text="â†¶", command=self.undo_canvas_edit, width=3, style="History.TButton")
-        self.redo_edit_btn = ttk.Button(sim_group, text="â†·", command=self.redo_canvas_edit, width=3, style="History.TButton")
+        self.undo_edit_btn = ttk.Button(sim_group, text="↶", command=self.undo_canvas_edit, width=3, style="History.TButton")
+        self.redo_edit_btn = ttk.Button(sim_group, text="↷", command=self.redo_canvas_edit, width=3, style="History.TButton")
         self.undo_edit_btn.grid(row=1, column=0, padx=3, pady=(2, 4), sticky="ew")
         self.redo_edit_btn.grid(row=1, column=1, padx=3, pady=(2, 4), sticky="ew")
         self.start_btn.grid_configure(column=2)
         self.stop_btn.grid_configure(column=3)
-        self.reset_sim_btn.configure(text="âŸ³")
+        self.reset_sim_btn.configure(text="⟳")
         self.reset_sim_btn.grid_configure(column=4)
         for idx, scale in enumerate((1, 2, 5, 10, 100), start=5):
             self.time_scale_buttons[scale].grid_configure(column=idx)
@@ -7643,7 +7643,7 @@ class App(tk.Tk):
         self.export_btn = ttk.Button(scenario_group, text="Export Report", command=self.on_export_report)
         self.export_btn.grid(row=1, column=2, padx=3, pady=(2, 4), sticky="ew")
 
-        self.mode_toggle_btn = ttk.Button(mode_group, text="Cháº¿ Ä‘á»™ thá»‘ng kÃª", command=self.toggle_workspace_mode)
+        self.mode_toggle_btn = ttk.Button(mode_group, text="Chế độ thống kê", command=self.toggle_workspace_mode)
         self.mode_toggle_btn.grid(row=1, column=0, padx=3, pady=(2, 4), sticky="ew")
 
         clock_frame = ttk.Frame(header, padding=(10, 5, 10, 5), style="Clock.TFrame")
@@ -7921,9 +7921,9 @@ class App(tk.Tk):
         if not hasattr(self, "mode_toggle_btn"):
             return
         if self.current_workspace_mode == "monte_carlo":
-            self.mode_toggle_btn.configure(text="Cháº¿ Ä‘á»™ mÃ´ phá»ng")
+            self.mode_toggle_btn.configure(text="Chế độ mô phỏng")
         else:
-            self.mode_toggle_btn.configure(text="Cháº¿ Ä‘á»™ thá»‘ng kÃª")
+            self.mode_toggle_btn.configure(text="Chế độ thống kê")
 
     def toggle_workspace_mode(self):
         if self.current_workspace_mode == "normal":
@@ -7940,7 +7940,7 @@ class App(tk.Tk):
             widget.grid_remove()
         self.monte_carlo_panel.grid(row=1, column=0, rowspan=6, sticky="nsew")
         self._update_mode_toggle_button()
-        self.status_var.set("Status: cháº¿ Ä‘á»™ thá»‘ng kÃª")
+        self.status_var.set("Status: chế độ thống kê")
 
     def show_normal_mode(self):
         if self.current_workspace_mode == "normal":
@@ -7950,7 +7950,7 @@ class App(tk.Tk):
         for widget in self.normal_widgets:
             widget.grid()
         self._update_mode_toggle_button()
-        self.status_var.set("Status: cháº¿ Ä‘á»™ mÃ´ phá»ng")
+        self.status_var.set("Status: chế độ mô phỏng")
 
     def _operation_mode_from_scenario(self) -> str:
         headway = self.scenario.get("headway", {}) if isinstance(self.scenario.get("headway", {}), dict) else {}
@@ -7993,9 +7993,9 @@ class App(tk.Tk):
         active_key = self._active_operation_mode_key()
         selected_label = self._operation_mode_label_for_key(selected_key)
         active_label = self._operation_mode_label_for_key(active_key)
-        pending = " | ChÆ°a apply" if selected_key != active_key else ""
+        pending = " | Chưa apply" if selected_key != active_key else ""
         self.operation_selected_status_var.set(
-            f"Äang chá»n: {selected_label} | Sáº½ cháº¡y: {selected_label} | Äang cháº¡y: {active_label}{pending}"
+            f"Đang chọn: {selected_label} | Sẽ chạy: {selected_label} | Đang chạy: {active_label}{pending}"
         )
 
     def _refresh_operation_mode_controls(self):
@@ -8133,7 +8133,7 @@ class App(tk.Tk):
                 if not cells or all(set(cell) <= {"-", ":"} for cell in cells):
                     continue
                 header_text = " ".join(cells).lower()
-                if "tÃ u" in header_text or "arrival" in header_text or "giá»" in header_text:
+                if "tàu" in header_text or "arrival" in header_text or "giờ" in header_text:
                     continue
                 if len(cells) >= 6:
                     if self._looks_like_train_id(cells[0]):
