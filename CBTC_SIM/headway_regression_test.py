@@ -120,6 +120,128 @@ def test_timetable_releases_on_exact_planned_times():
             raise AssertionError(f"timetable dispatch {actual:.2f}s did not match planned {planned:.2f}s")
 
 
+def test_timetable_keeps_moving_block_speed_cap_until_schedule_hold():
+    scenario = normalize_scenario(
+        {
+            "track": {"segments": [{"start_m": 0, "end_m": 2400, "gradient": 0.0, "psr_kmh": 80.0}]},
+            "scheduled_stops": [{"name": "S2", "pos_m": 2000.0, "length_m": 160.0, "capacity": 2, "dwell_s": 25.0}],
+            "source_trains": [],
+            "headway": {
+                "mode": "timetable",
+                "timetable_s": [0.0],
+                "timetable_records": [
+                    {
+                        "train_id": "T01",
+                        "station": "S2",
+                        "arrival_time_s": 1000.0,
+                        "departure_time_s": 1040.0,
+                        "profile": "Eco",
+                    }
+                ],
+            },
+            "trains": [
+                {
+                    "id": "T01",
+                    "start_pos": 1200.0,
+                    "drive_mode": "ATO",
+                    "schedule_records": [
+                        {
+                            "train_id": "T01",
+                            "station": "S2",
+                            "arrival_time_s": 1000.0,
+                            "departure_time_s": 1040.0,
+                            "profile": "Eco",
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+    sim = main_gui.Simulation(scenario)
+    train = sim.trains[0]
+    train.schedule_records = [
+        {
+            "train_id": "T01",
+            "station": "S2",
+            "arrival_time_s": 1000.0,
+            "departure_time_s": 1040.0,
+            "profile": "Eco",
+        }
+    ]
+    train.active_scheduled_stop = sim.scheduled_stops[0]
+    regulated, reason = sim._timetable_regulated_speed_cap_kmh(train, 80.0)
+    if regulated != 80.0:
+        raise AssertionError("timetable should keep the moving-block speed cap and balance early running at dwell")
+    if reason != "TIMETABLE_RUN_MAX_DWELL_BALANCE":
+        raise AssertionError("timetable should report max-running schedule balance instead of early coasting")
+
+
+def test_timetable_station_departure_uses_schedule_not_headway_hold():
+    scenario = normalize_scenario(
+        {
+            "track": {"segments": [{"start_m": 0, "end_m": 1800, "gradient": 0.0, "psr_kmh": 80.0}]},
+            "scheduled_stops": [{"name": "S1", "pos_m": 1000.0, "length_m": 160.0, "capacity": 2, "dwell_s": 1.0}],
+            "source_trains": [],
+            "headway": {"mode": "timetable", "timetable_s": [0.0, 100.0]},
+            "trains": [{"id": "T01", "start_pos": 1000.0, "drive_mode": "ATO"}],
+        }
+    )
+    sim = main_gui.Simulation(scenario)
+    train = sim.trains[0]
+    train.active_scheduled_stop = sim.scheduled_stops[0]
+    train.next_scheduled_stop_idx = 1
+    train.commanded_stop = True
+    train.station_lane = 0
+    train.last_station_idx = 0
+    train.dwell_remaining_s = main_gui.DT
+    train.standstill_required = True
+    train.standstill_anchor_pos = train.pos
+    train.zero_speed_detected = True
+    sim.station_last_departure_s[0] = sim.sim_time_s
+
+    sim._update_train_stop_schedule(train)
+
+    if train.dwell_remaining_s > 0.0:
+        raise AssertionError("timetable station departure should not be extended by nominal headway hold")
+    if train.commanded_stop:
+        raise AssertionError("timetable train should be released once scheduled dwell/hold is complete")
+
+
+def test_safety_restriction_eoa_is_supervised_before_min_activation_distance():
+    scenario = normalize_scenario(
+        {
+            "track": {"segments": [{"start_m": 0, "end_m": 2000, "gradient": 0.0, "psr_kmh": 80.0}]},
+            "scheduled_stops": [],
+            "source_trains": [],
+            "trains": [{"id": "T04", "start_pos": 1000.0, "drive_mode": "ATO"}],
+        }
+    )
+    sim = main_gui.Simulation(scenario)
+    train = sim.trains[0]
+    train.speed = main_gui.kmh_to_ms(48.0)
+    train.vital_speed = train.speed
+    train.filtered_speed = train.speed
+    train.psr_kmh = 80.0
+    train.limit_ahead_dist = float("inf")
+    train.limit_ahead_speed_kmh = 80.0
+    train.reported_pos = train.pos
+    train.safe_front_end_pos = train.reported_pos + train.effective_position_uncertainty_m()
+    train.distance_to_eoa = main_gui.STOP_TARGET_MIN_ACTIVATION_M + 40.0
+    train.commanded_stop = False
+
+    train.last_dispatched_eoa_reason = "LEADER_PROTECTION"
+    leader_atp = train.atp_engine.compute(train)
+    if leader_atp.stop_target_active:
+        raise AssertionError("non-stop leader authority should not force early stop-target supervision")
+
+    train.last_dispatched_eoa_reason = "SAFETY_RESTRICTION"
+    safety_atp = train.atp_engine.compute(train)
+    if not safety_atp.stop_target_active:
+        raise AssertionError("safety-restriction EOA should be supervised before the late activation threshold")
+    if safety_atp.curves["P"] >= leader_atp.curves["P"]:
+        raise AssertionError("safety-restriction stop curve should reduce the permitted curve continuously from distance")
+
+
 def test_adaptive_hold_when_front_train_is_slow():
     sim = main_gui.Simulation(
         make_source_scenario(
@@ -372,6 +494,9 @@ def main() -> int:
     test_fixed_headway_dispatch_spacing()
     test_actual_headway_is_measured_between_consecutive_dispatch_pairs()
     test_timetable_releases_on_exact_planned_times()
+    test_timetable_keeps_moving_block_speed_cap_until_schedule_hold()
+    test_timetable_station_departure_uses_schedule_not_headway_hold()
+    test_safety_restriction_eoa_is_supervised_before_min_activation_distance()
     test_adaptive_hold_when_front_train_is_slow()
     test_eoa_tracks_nearest_train_ahead_without_overgrant()
     test_off_mode_uses_fixed_block_runtime_authority()

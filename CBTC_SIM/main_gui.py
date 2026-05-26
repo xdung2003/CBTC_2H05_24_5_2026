@@ -834,7 +834,17 @@ class ATPEnvelopeEngine:
             stopping_distance_with_buildup(train.speed, a_service, BRAKE_BUILDUP_S) + STOP_TARGET_BUFFER_M,
         )
         stop_activation_distance = max(stop_activation_distance, ATO_TARGET_PREP_MAX_M)
-        stop_target_active = train.commanded_stop or train.distance_to_eoa <= stop_activation_distance
+        safety_restriction_stop_active = (
+            train.last_dispatched_eoa_reason in {"SAFETY_RESTRICTION", "DCS_TIMEOUT", "EMERGENCY"}
+            or train.station_reject_reason
+            in {"STATION_FULL", "NO_FREE_PLATFORM", "ALL_LINES_OCCUPIED", "ROUTE_CONFLICT", "STATION_LINE_OCCUPIED"}
+        )
+        # Station safety holds are real stop targets; supervise them as soon as issued so curves do not step down late.
+        stop_target_active = (
+            train.commanded_stop
+            or safety_restriction_stop_active
+            or train.distance_to_eoa <= stop_activation_distance
+        )
         if stop_target_active:
             sbd_stop = brake_model.speed_for_stop(train.distance_to_eoa, atp_service_brake_decel, 0.0)
             ebd_stop = brake_model.speed_for_stop(distance_to_svl, atp_emergency_brake_decel, 0.0)
@@ -4891,10 +4901,11 @@ class Simulation:
                 if schedule_hold_s > 0.0:
                     train.dwell_remaining_s = schedule_hold_s
                     return immediate_packet_required
-                headway_hold_s = self._station_departure_headway_hold_s(station_idx)
-                if headway_hold_s > 0.0:
-                    train.dwell_remaining_s = headway_hold_s
-                    return immediate_packet_required
+                if self.headway_manager.mode != "timetable":
+                    headway_hold_s = self._station_departure_headway_hold_s(station_idx)
+                    if headway_hold_s > 0.0:
+                        train.dwell_remaining_s = headway_hold_s
+                        return immediate_packet_required
                 train.commanded_stop = False
                 self._set_train_station_state(train, station_idx, "READY_TO_DEPART", "dwell_complete")
                 if station_idx is not None:
@@ -4979,20 +4990,9 @@ class Simulation:
         if distance_m <= STOP_ACCURACY_TOL_M:
             return base_cap_kmh, ""
         remaining_s = float(record["arrival_time_s"]) - self._timetable_operational_time_s()
-        profile = str(getattr(train, "schedule_profile", "") or record.get("profile", "") or "").lower()
         if remaining_s <= 0.0:
             return base_cap_kmh, "TIMETABLE_LATE_FAST"
-        required_kmh = distance_m / max(remaining_s, 1.0) * 3.6
-        if required_kmh >= base_cap_kmh * 0.70:
-            return base_cap_kmh, "TIMETABLE_RECOVER"
-        slack_ratio = max(0.0, min(1.0, 1.0 - required_kmh / max(base_cap_kmh, 1.0)))
-        min_slack_ratio = 0.40 if profile == "eco" else 0.30
-        early_time_buffer_s = max(20.0, distance_m / max(kmh_to_ms(base_cap_kmh), 0.1) * 0.35)
-        if slack_ratio < min_slack_ratio or remaining_s < early_time_buffer_s:
-            return base_cap_kmh, "TIMETABLE_ON_TIME"
-        eco_cap = 35.0 if profile == "eco" else base_cap_kmh
-        regulated = max(20.0, min(base_cap_kmh, eco_cap, required_kmh * 1.25 + 6.0))
-        return regulated, "TIMETABLE_EARLY_COAST"
+        return base_cap_kmh, "TIMETABLE_RUN_MAX_DWELL_BALANCE"
 
     def _dispatch_safe_packets(self, with_delay: bool):
         self._update_parallel_protection_zones()
