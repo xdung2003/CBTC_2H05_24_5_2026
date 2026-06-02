@@ -16,8 +16,11 @@ from CONFIG.scenario_loader import normalize_scenario
 def make_scenario():
     return normalize_scenario(
         {
-            "track": {"segments": [{"start_m": 0, "end_m": 1200, "gradient": 0.0, "psr_kmh": 70}]},
-            "scheduled_stops": [{"name": "S500", "pos_m": 500.0, "length_m": 160.0, "capacity": 1, "dwell_s": 5.0}],
+            "track": {"segments": [{"start_m": 0, "end_m": 1800, "gradient": 0.0, "psr_kmh": 70}]},
+            "scheduled_stops": [
+                {"name": "S500", "pos_m": 500.0, "length_m": 160.0, "capacity": 1, "dwell_s": 5.0},
+                {"name": "S1400", "pos_m": 1400.0, "length_m": 160.0, "capacity": 1, "dwell_s": 5.0},
+            ],
             "trains": [{"id": "A1", "start_pos": 0.0, "drive_mode": "ATO"}],
             "source_trains": [],
         }
@@ -92,42 +95,57 @@ def test_analytics_accumulates_train_metrics():
 
 def test_report_contains_tables_and_csv(tmp_dir: Path | None = None):
     sim = main_gui.Simulation(make_scenario())
-    for _ in range(200):
+    saw_departure_record = False
+    for _ in range(3000):
         sim.step()
+        for station in sim.analytics.get("station_passenger_metrics", []):
+            for arrival in station.get("arrivals", []):
+                if arrival.get("departure_time_s") is not None:
+                    saw_departure_record = True
+                    break
+            if saw_departure_record:
+                break
+        if saw_departure_record:
+            break
+    if not saw_departure_record:
+        raise AssertionError("test scenario did not produce a station departure record")
     report = reporting.build_simulation_report(sim)
     analytics = report["analytics"]
     if "traction_work_kwh" not in analytics or "brake_work_kwh" not in analytics:
         raise AssertionError("report analytics missing energy fields")
-    if "distance_to_eoa_m" not in report["trains"][0]:
-        raise AssertionError("train report missing distance_to_eoa_m")
-    if "analytics" not in report["trains"][0]:
-        raise AssertionError("train report missing per-train analytics block")
-    if report["simulation"].get("runtime_dynamics") != "FORCE_BALANCE":
-        raise AssertionError("report should identify force-balance runtime dynamics")
+    if "target_distance_m" not in report["trains"][0]:
+        raise AssertionError("train report missing target_distance_m")
+    if "distance_m" not in report["trains"][0]:
+        raise AssertionError("train report missing per-train distance")
+    if report["scenario"].get("block_mode") != "moving_block":
+        raise AssertionError("report should keep the operating block mode")
     if "capacity_comparison" in report or "capacity_comparison" in analytics:
         raise AssertionError("report should not include moving-block versus fixed-block capacity comparison")
     if "capacity_baseline_note" in report:
         raise AssertionError("report should not include fixed-block baseline note")
-    if "station_passenger_metrics" not in analytics:
-        raise AssertionError("report analytics missing station passenger metrics")
-    train_analytics = report["trains"][0]["analytics"]
-    if "runtime_traction_force_n" not in train_analytics or "runtime_brake_force_n" not in train_analytics:
-        raise AssertionError("report analytics missing runtime force telemetry")
+    if "stations" not in report:
+        raise AssertionError("report missing station summary")
+    if not report.get("station_calls") or report["station_calls"][0].get("departure_time_s") is None:
+        raise AssertionError("report missing per-station arrival/departure timeline")
 
     reports_dir = PROJECT_DIR / "REPORT" / "_test_analytics"
     path = reporting.save_simulation_report(sim, reports_dir)
+    json_report = path.with_suffix(".json")
     trains_csv = path.with_suffix(".trains.csv")
     events_csv = path.with_suffix(".events.csv")
+    atp_trace_csv = path.with_suffix(".atp_trace.csv")
     capacity_csv = path.with_suffix(".capacity.csv")
-    if not trains_csv.exists() or not events_csv.exists():
-        raise AssertionError("CSV sidecar reports were not written")
+    if path.suffix != ".md" or not path.exists():
+        raise AssertionError("default report export should write one Markdown report")
+    if json_report.exists() or trains_csv.exists() or events_csv.exists() or atp_trace_csv.exists():
+        raise AssertionError("default report export should not write JSON/CSV sidecar files")
     if capacity_csv.exists():
         raise AssertionError("capacity comparison CSV should not be written")
-    header = trains_csv.read_text(encoding="utf-8").splitlines()[0]
-    if "traction_work_kwh" not in header:
-        raise AssertionError("train CSV missing energy columns")
-    if "runtime_traction_force_n" not in header or "runtime_brake_force_n" not in header:
-        raise AssertionError("train CSV missing runtime force columns")
+    markdown = path.read_text(encoding="utf-8")
+    if "## Trang thai tung tau" not in markdown or "## KPI van hanh" not in markdown:
+        raise AssertionError("Markdown report missing readable sections")
+    if "## Lich tau tai ga" not in markdown:
+        raise AssertionError("Markdown report missing per-station train timeline")
 
 
 def main() -> int:

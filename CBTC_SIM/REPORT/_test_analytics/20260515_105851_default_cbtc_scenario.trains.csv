@@ -1,2 +1,0 @@
-train_id,drive_mode,pos_m,speed_kmh,distance_to_eoa_m,distance_to_train_ahead_m,headway_s,atp_action,ato_profile_phase,traction_work_kwh,brake_work_kwh,coast_distance_m,distance_m,sbi_count,ebi_count
-A1,ATO,170.01007577542063,60.948761472213654,325.6292210445014,,,,LK,12.153330817038368,0.0,0.0,170.01007577542063,0,0

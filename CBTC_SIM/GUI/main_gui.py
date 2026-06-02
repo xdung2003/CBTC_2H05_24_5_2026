@@ -4292,6 +4292,13 @@ class Simulation:
             self.station_next_departure_release_s.get(station_idx, self.sim_time_s),
             self.sim_time_s,
         )
+        for record in reversed(self.analytics.get("station_arrivals", {}).get(station_idx, [])):
+            if record.get("train_id") == train.id and record.get("departure_time_s") is None:
+                record["departure_time_s"] = self.sim_time_s
+                arrival_time_s = record.get("arrival_time_s")
+                if arrival_time_s is not None:
+                    record["actual_station_wait_s"] = max(0.0, self.sim_time_s - float(arrival_time_s))
+                break
         if previous is None:
             return
         actual = max(0.0, self.sim_time_s - previous)
@@ -5531,13 +5538,13 @@ class TrainPanel(ttk.Frame):
         metrics_frame = ttk.LabelFrame(scrollable_frame, text="Speed Metrics")
         metrics_frame.pack(fill="x", padx=10, pady=5)
         self.detail_metric_vars = {
-            "actual": tk.StringVar(value="0.0"),
-            "permitted": tk.StringVar(value="0.0"),
-            "warning": tk.StringVar(value="0.0"),
-            "intervention": tk.StringVar(value="0.0"),
+            "actual": tk.StringVar(value="Actual       : 0.0 km/h"),
+            "permitted": tk.StringVar(value="Permitted    : 0.0 km/h"),
+            "warning": tk.StringVar(value="Warning      : 0.0 km/h"),
+            "intervention": tk.StringVar(value="Intervention : 0.0 km/h"),
         }
-        for key, var in self.detail_metric_vars.items():
-            ttk.Label(metrics_frame, text=f"{key.capitalize()}: {var.get()} km/h").pack(anchor="w")
+        for var in self.detail_metric_vars.values():
+            ttk.Label(metrics_frame, textvariable=var).pack(anchor="w")
         
         # Target & Planning
         target_frame = ttk.LabelFrame(scrollable_frame, text="Target & Planning")
@@ -5587,10 +5594,10 @@ class TrainPanel(ttk.Frame):
         target_speed_kmh = 0.0 if train.constraint_type == "STOP" else train.constraint_target_speed_kmh
         current_tsr_kmh = min(train.psr_kmh, train.limit_ahead_speed_kmh) if train.limit_ahead_dist <= 0.0 else train.psr_kmh
 
-        self.detail_metric_vars["actual"].set(f"{actual_kmh:.1f}")
-        self.detail_metric_vars["permitted"].set(f"{permitted_kmh:.1f}")
-        self.detail_metric_vars["warning"].set(f"{warning_kmh:.1f}")
-        self.detail_metric_vars["intervention"].set(f"{intervention_kmh:.1f}")
+        self.detail_metric_vars["actual"].set(f"Actual       : {actual_kmh:.1f} km/h")
+        self.detail_metric_vars["permitted"].set(f"Permitted    : {permitted_kmh:.1f} km/h")
+        self.detail_metric_vars["warning"].set(f"Warning      : {warning_kmh:.1f} km/h")
+        self.detail_metric_vars["intervention"].set(f"Intervention : {intervention_kmh:.1f} km/h")
 
         self.detail_target_var.set(
             "\n".join(
