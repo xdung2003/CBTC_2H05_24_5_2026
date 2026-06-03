@@ -5,13 +5,15 @@ from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
 from CONFIG.config import (
+    AW3_MASS_KG,
     BRAKE_BUILDUP_S,
     DT,
     EMERGENCY_FORCE_N,
+    MAX_JERK_MS3,
     OVERLAP_M,
     SAFETY_MARGIN_M,
 )
-from SUBSYSTEMS.physics import traction_acceleration_ms2
+from SUBSYSTEMS.physics import equivalent_mass_adjusted_accel, traction_acceleration_ms2
 
 
 G = 9.81
@@ -20,6 +22,7 @@ ATP_EMERGENCY_BRAKE_FACTOR = 1.05
 ATP_MA_EXTRAPOLATION_S = 1.5
 ATP_POS_REPORT_LATENCY_S = 0.6
 ATP_MIN_DECEL_MS2 = 0.15
+ATP_ADHESION_FACTOR = 0.82
 STOP_SVL_OFFSET_M = 1.0
 
 
@@ -81,8 +84,9 @@ def get_track_info(track_profile: List[Tuple[float, float, float, float]], pos_m
 def braking_curve_profile(decel: float, build_s: float) -> Tuple[float, float]:
     if decel <= 0.0:
         return 0.0, 0.0
-    max_jerk_ms3 = 0.75
-    ramp_s = decel / max_jerk_ms3
+    if MAX_JERK_MS3 <= 0.0:
+        return max(0.0, build_s), 0.0
+    ramp_s = decel / MAX_JERK_MS3
     residual_delay_s = max(0.0, build_s - ramp_s)
     return residual_delay_s, ramp_s
 
@@ -144,11 +148,10 @@ def worst_gradient_in_range(
 
 
 def conservative_brake_decel_ms2(force_n: float, mass_kg: float, brake_factor: float) -> float:
-    aw3_mass_kg = 331960.0
-    worst_mass_kg = max(mass_kg, aw3_mass_kg)
+    worst_mass_kg = max(mass_kg, AW3_MASS_KG)
     if worst_mass_kg <= 0.0:
         return ATP_MIN_DECEL_MS2
-    base_decel = (force_n / worst_mass_kg) * brake_factor * 0.82
+    base_decel = equivalent_mass_adjusted_accel(force_n / worst_mass_kg) * brake_factor * ATP_ADHESION_FACTOR
     return max(ATP_MIN_DECEL_MS2, base_decel)
 
 

@@ -1,7 +1,7 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
-from GUI.main_gui import ATPEnvelopeEngine, ATPEnvelopeResult, ATOPilotingEngine, ATOPilotingResult
+from .control_common import *
+from .atp import ATPEnvelopeEngine, ATPEnvelopeResult
+from .ato import ATOPilotingEngine, ATOPilotingResult
 
-__all__ = ["ATPEnvelopeEngine", "ATPEnvelopeResult", "ATOPilotingEngine", "ATOPilotingResult"]
-
-
+__all__ = [name for name in globals() if not name.startswith("_")]
