@@ -2,14 +2,15 @@ from __future__ import annotations
 
 from typing import Dict, List, Tuple
 
-from SUBSYSTEMS.atp_ato import STOP_ACCURACY_TOL_M, next_lower_limit
-from SUBSYSTEMS.core_engine import (
+from SUBSYSTEMS.signalling import (
     AuthorityManager,
     MovementAuthorityLimit,
     SafeMovementPacket,
     STOP_SVL_OFFSET_M,
     get_track_info,
+    next_lower_limit,
 )
+from SUBSYSTEMS.control_common import STOP_ACCURACY_TOL_M
 
 
 class ZoneController:
@@ -188,4 +189,3 @@ class ZoneController:
                 },
             )
         return packets
-

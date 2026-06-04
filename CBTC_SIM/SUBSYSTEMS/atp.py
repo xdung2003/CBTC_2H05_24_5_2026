@@ -1,9 +1,59 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Dict
 
-from .control_common import *
+from CONFIG.config import BRAKE_BUILDUP_S, BRAKE_FORCE_N, EMERGENCY_FORCE_N
+from SUBSYSTEMS.control_common import (
+    ATP_EBI_REACTION_S,
+    ATP_INDICATION_DELAY_S,
+    ATP_P_REACTION_S,
+    ATP_SBI_REACTION_S,
+    ATP_SERVICE_BRAKE_FACTOR,
+    ATP_W_REACTION_S,
+    ATO_CONTROL_RES_KMH,
+    ATO_TARGET_PREP_MAX_M,
+    CREEP_RELEASE_CAP_KMH,
+    CURVE_EPS_KMH,
+    EBD_SPEED_TOL_KMH,
+    EBI_SPEED_MARGIN_KMH,
+    HIGH_SPEED_SPEED_TOL_GAIN_KMH,
+    HIGH_SPEED_TIME_MARGIN_GAIN,
+    JOG_MAX_DIST_M,
+    PRECISE_STOP_EBI_GAP_KMH,
+    PRECISE_STOP_SERVICE_BAND_M,
+    RELEASE_ENTRY_MARGIN_KMH,
+    RELEASE_SPEED_KMH,
+    RELEASE_ZONE_M,
+    SBI_SPEED_TOL_KMH,
+    SPEED_ESTIMATION_RES_KMH,
+    STANDSTILL_SPEED_EPS,
+    STOP_ACCURACY_TOL_M,
+    STOP_TARGET_BUFFER_M,
+    STOP_TARGET_MIN_ACTIVATION_M,
+    VITAL_SPEED_MARGIN_KMH,
+    W_SPEED_TOL_KMH,
+    high_speed_curve_scale,
+    indication_speed_delta_ms,
+    lerp,
+    precise_stop_gap_ms,
+    precise_stop_profile_active,
+    precise_stop_sbi_limit_ms,
+    quantize_speed_ms,
+    release_entry_speed_limit,
+    release_speed_profile,
+    release_transition_ratio,
+)
+from SUBSYSTEMS.physics import equivalent_mass_adjusted_accel, kmh_to_ms, ms_to_kmh, traction_acceleration_ms2
+from SUBSYSTEMS.signalling import (
+    ATP_BRAKE_BUILDUP_S,
+    ATP_EMERGENCY_BRAKE_FACTOR,
+    VitalBrakeModel,
+    conservative_brake_decel_ms2,
+    stopping_distance_with_buildup,
+    vital_delay_margin_m,
+)
 
 
 @dataclass

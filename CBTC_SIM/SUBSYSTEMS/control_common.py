@@ -11,7 +11,7 @@ from CONFIG.config import (
     EMERGENCY_FORCE_N,
     MAX_JERK_MS3,
 )
-from SUBSYSTEMS.core_engine import (
+from SUBSYSTEMS.signalling import (
     ATP_BRAKE_BUILDUP_S,
     ATP_EMERGENCY_BRAKE_FACTOR,
     ATP_MIN_DECEL_MS2,
@@ -426,67 +426,9 @@ def target_curve_reserve_m(current_speed_ms: float, target_speed_ms: float) -> f
     return TARGET_CURVE_RESERVE_LOW_M + (TARGET_CURVE_RESERVE_HIGH_M - TARGET_CURVE_RESERVE_LOW_M) * blend
 
 
-def next_lower_limit(
-    track_profile: List[Tuple[float, float, float, float]],
-    pos_m: float,
-    current_psr: float,
-    tsr_zones,
-) -> Tuple[float, float]:
-    best_dist = float("inf")
-    best_speed = current_psr
-
-    # PSR segments ahead
-    for start, _end, _grad, psr in track_profile:
-        if start <= pos_m:
-            continue
-        if psr < current_psr:
-            dist = start - pos_m
-            if dist < best_dist or (dist == best_dist and psr < best_speed):
-                best_dist = dist
-                best_speed = psr
-
-    # TSR zones ahead
-    for zone in tsr_zones:
-        z_start = zone["start"]
-        z_speed = zone["speed"]
-        if z_start <= pos_m:
-            continue
-        if z_speed < current_psr:
-            dist = z_start - pos_m
-            if dist < best_dist or (dist == best_dist and z_speed < best_speed):
-                best_dist = dist
-                best_speed = z_speed
-
-    if best_dist == float("inf"):
-        return current_psr, float("inf")
-    return best_speed, best_dist
-
-
-def elevation_at(track_profile: List[Tuple[float, float, float, float]], pos_m: float) -> float:
-    if pos_m <= track_profile[0][0]:
-        start, _, gradient, _ = track_profile[0]
-        return (pos_m - start) * gradient
-
-    elev = 0.0
-    for start, end, gradient, _ in track_profile:
-        if pos_m >= end:
-            elev += (end - start) * gradient
-        else:
-            elev += (pos_m - start) * gradient
-            break
-    return elev
-
-
 def indication_speed_delta_ms(service_decel_ms2: float, delay_s: float) -> float:
     if service_decel_ms2 <= 0.0 or delay_s <= 0.0:
         return kmh_to_ms(CURVE_EPS_KMH)
     return max(kmh_to_ms(CURVE_EPS_KMH), service_decel_ms2 * delay_s)
-
-
-def train_color(train_cfg: Dict[str, float | str | None], index: int, palette: List[str]) -> str:
-    color = train_cfg.get("color")
-    if isinstance(color, str) and color:
-        return color
-    return palette[index % len(palette)]
 
 __all__ = [name for name in globals() if not name.startswith("_")]

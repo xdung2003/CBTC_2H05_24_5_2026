@@ -6,12 +6,23 @@ from copy import deepcopy
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Tuple
 
-from CONFIG.config import DT
+from CONFIG.config import BRAKE_FORCE_N, DT
 from OPERATION.headway_manager import HeadwayManager
-from SUBSYSTEMS.atp_ato import *
-from SUBSYSTEMS.core_engine import SafeMovementPacket, STOP_SVL_OFFSET_M
-from SUBSYSTEMS.physics import kmh_to_ms, ms_to_kmh
-from SUBSYSTEMS.train import Train
+from SUBSYSTEMS.control_common import (
+    ATO_TARGET_PREP_MAX_M,
+    BRAKE_BUILDUP_S,
+    DCS_DELAY_MAX_S,
+    DCS_DELAY_MIN_S,
+    P_TIME_S,
+    STOP_ACCURACY_TOL_M,
+    STOP_TARGET_BUFFER_M,
+    STOP_TARGET_OFFSET_M,
+    STOP_TARGET_MIN_ACTIVATION_M,
+    STANDSTILL_SPEED_EPS,
+)
+from SUBSYSTEMS.signalling import SafeMovementPacket, STOP_SVL_OFFSET_M, get_track_info, stopping_distance_with_buildup
+from SUBSYSTEMS.physics import equivalent_mass_adjusted_accel, kmh_to_ms, ms_to_kmh
+from SUBSYSTEMS.train import Train, train_color
 from SUBSYSTEMS.zc import ZoneController
 
 

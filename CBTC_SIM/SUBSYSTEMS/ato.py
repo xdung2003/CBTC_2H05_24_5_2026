@@ -2,7 +2,33 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .control_common import *
+from CONFIG.config import BRAKE_BUILDUP_S, DT
+from SUBSYSTEMS.control_common import (
+    ATO_TARGET_DROP_RATE_KMH_S,
+    CREEP_MAX_SPEED_KMH,
+    DOCKING_SPEED_KMH,
+    DOCKING_ZONE_M,
+    DOWNHILL_P_BUFFER_KMH_PER_GRAD,
+    FINAL_CREEP_MIN_SPEED_KMH,
+    FINAL_CREEP_ZONE_M,
+    JOG_MAX_DIST_M,
+    JOG_SPEED_KMH,
+    JOG_STATE_ACTIVE,
+    JOG_STATE_COMPLETED,
+    JOG_STATE_FAILED_LOCKED,
+    JOG_STATE_REQUESTED,
+    RELEASE_HANDOVER_START_M,
+    RELEASE_SCAN_FAST_KMH,
+    RELEASE_SPEED_KMH,
+    STANDSTILL_SPEED_EPS,
+    STOP_ACCURACY_TOL_M,
+    ato_ebi_guard_ms,
+    ato_tracking_margin_ms,
+    lerp,
+    release_speed_profile,
+)
+from SUBSYSTEMS.physics import kmh_to_ms, traction_acceleration_ms2
+from SUBSYSTEMS.signalling import max_speed_with_buildup
 
 
 @dataclass

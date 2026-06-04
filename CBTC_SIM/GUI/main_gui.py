@@ -40,11 +40,10 @@ from CONFIG.scenario_loader import DEFAULT_SCENARIO_PATH, load_scenario, normali
 from REPORT.reporting import save_simulation_report
 from OPERATION.headway_manager import HeadwayManager
 from MONTECARLO.monte_carlo import MonteCarloConfig, run_batch
-from SUBSYSTEMS.core_engine import (
+from SUBSYSTEMS.dcs import DCSWatchdog, OnboardControlCenter
+from SUBSYSTEMS.signalling import (
     AuthorityManager,
-    DCSWatchdog,
     MovementAuthorityLimit,
-    OnboardControlCenter,
     SafeMovementPacket,
     VitalBrakeModel,
     braking_curve_profile,
@@ -290,11 +289,9 @@ ATO_PID_BLEND_TO_KMH = 65.0
 ATO_PID_INT_LIMIT_MS = kmh_to_ms(8.0)
 
 
-from SUBSYSTEMS.atp_ato import (
-    ATPEnvelopeEngine,
-    ATPEnvelopeResult,
-    ATOPilotingEngine,
-    ATOPilotingResult,
+from SUBSYSTEMS.atp import ATPEnvelopeEngine, ATPEnvelopeResult
+from SUBSYSTEMS.ato import ATOPilotingEngine, ATOPilotingResult
+from SUBSYSTEMS.control_common import (
     ato_ebi_guard_ms,
     ato_pid_gains,
     ato_tracking_margin_ms,

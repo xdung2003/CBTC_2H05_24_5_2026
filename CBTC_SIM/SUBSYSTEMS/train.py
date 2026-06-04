@@ -2,14 +2,73 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import replace
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from CONFIG.config import DT, MAX_JERK_MS3
-from SUBSYSTEMS.atp_ato import *
-from SUBSYSTEMS.core_engine import (
-    OnboardControlCenter,
+from SUBSYSTEMS.ato import ATOPilotingEngine
+from SUBSYSTEMS.atp import ATPEnvelopeEngine
+from SUBSYSTEMS.control_common import (
+    ATO_PID_INT_LIMIT_MS,
+    ATO_TARGET_DROP_RATE_KMH_S,
+    AUTO_DOCKING_JOG_WINDOW_M,
+    BALISE_ERROR_MAX_M,
+    BALISE_POS_UNCERT_M,
+    BALISE_SPACING_M,
+    BEACON_LOCK_RELEASE_MARGIN_M,
+    BRAKE_BUILDUP_S,
+    COAST_BASE_DECEL,
+    COAST_SPEED_GAIN,
+    CREEP_MAX_SPEED_KMH,
+    CURVE_DISPLAY_DROP_RATE_KMH_S,
+    CURVE_DISPLAY_RISE_RATE_KMH_S,
+    CURVE_EPS_KMH,
+    DCS_STARTUP_GRACE_S,
+    DCS_TIMEOUT_S,
+    DOWNHILL_P_BUFFER_KMH_PER_GRAD,
+    FINAL_APPROACH_MIN_SPEED_KMH,
+    G,
+    JOG_MAX_DIST_M,
+    JOG_PROFILE_ACCEL_MS2,
+    JOG_SPEED_KMH,
+    JOG_STATE_ACTIVE,
+    JOG_STATE_COMPLETED,
+    JOG_STATE_FAILED_LOCKED,
+    JOG_STATE_IDLE,
+    JOG_STATE_REQUESTED,
+    JOG_WINDOW_EPS_M,
+    LOW_SPEED_ATP_GUARD_KMH,
+    MANUAL_JOG_WINDOW_M,
+    ODOMETER_ERROR_RATE,
+    POS_UNCERT_M,
+    PRECISE_STOP_POS_UNCERT_M,
+    PRECISE_STOP_SERVICE_BAND_M,
+    RELEASE_HANDOVER_START_M,
+    RELEASE_SPEED_KMH,
+    RELEASE_ZONE_M,
+    ROLLBACK_PROTECT_M,
+    SBI_RELEASE_HYST_KMH,
+    SBI_VIOLATION_EPS_KMH,
+    SPEED_FILTER_TAU_S,
+    STANDSTILL_DRIFT_M,
+    STANDSTILL_SPEED_EPS,
+    STATION_BALISE_ERROR_MAX_M,
+    STATION_BALISE_SPACING_M,
+    STATION_BALISE_ZONE_M,
+    STATION_POS_UNCERT_M,
+    STOP_ACCURACY_TOL_M,
+    STOP_BEACON_OFFSET_M,
+    STOP_EBI_SUPERVISION_FLOOR_KMH,
+    STOP_TARGET_OFFSET_M,
+    ato_pid_gains,
+    ato_tracking_margin_ms,
+    low_pass_step,
+)
+from SUBSYSTEMS.dcs import OnboardControlCenter
+from SUBSYSTEMS.signalling import (
+    ATP_MIN_DECEL_MS2,
     SafeMovementPacket,
     STOP_SVL_OFFSET_M,
+    stopping_distance_with_buildup,
 )
 from SUBSYSTEMS.physics import (
     kmh_to_ms,
@@ -17,6 +76,13 @@ from SUBSYSTEMS.physics import (
     ms_to_kmh,
     running_resistance_accel_ms2,
 )
+
+
+def train_color(train_cfg: Dict[str, float | str | None], index: int, palette: List[str]) -> str:
+    color = train_cfg.get("color")
+    if isinstance(color, str) and color:
+        return color
+    return palette[index % len(palette)]
 
 
 class Train:
