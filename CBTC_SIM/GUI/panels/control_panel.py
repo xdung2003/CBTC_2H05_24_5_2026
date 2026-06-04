@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from GUI.gui_context import *
+from GUI.main_gui import *
 
 class ControlPanel(ttk.Frame):
     def __init__(self, master: tk.Widget, on_apply_psr, on_add_tsr, on_clear_tsr, scale_factor: float):

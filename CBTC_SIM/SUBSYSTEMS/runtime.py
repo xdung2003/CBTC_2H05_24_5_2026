@@ -6,7 +6,25 @@ from copy import deepcopy
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Tuple
 
-from CONFIG.config import BRAKE_FORCE_N, DT
+from CONFIG.config import (
+    BRAKE_FORCE_N,
+    DT,
+    DEPARTURE_RELEASE_MIN_AUTHORITY_M,
+    LINE_CENTER_SPACING_M,
+    MIN_PASSENGER_DWELL_S,
+    MIN_TIMETABLE_RECOVERY_DWELL_S,
+    PARALLEL_RELEASE_MARGIN_M,
+    PARALLEL_ROMAN_LABELS,
+    SOURCE_RELEASE_LOCK_S,
+    SOURCE_TRAIN_EXIT_M,
+    SOURCE_TRAIN_LENGTH_M,
+    SOURCE_TRAIN_SPACING_M,
+    SOURCE_TRAIN_STAGING_CLEARANCE_M,
+    SOURCE_TRAIN_START_M,
+    SOURCE_VISIBLE_ACTIVE_TRAINS,
+    STATION_ROUTE_APPROACH_M,
+    TURNOUT_LOCK_S,
+)
 from OPERATION.headway_manager import HeadwayManager
 from SUBSYSTEMS.control_common import (
     ATO_TARGET_PREP_MAX_M,
@@ -24,25 +42,6 @@ from SUBSYSTEMS.signalling import SafeMovementPacket, STOP_SVL_OFFSET_M, get_tra
 from SUBSYSTEMS.physics import equivalent_mass_adjusted_accel, kmh_to_ms, ms_to_kmh
 from SUBSYSTEMS.train import Train, train_color
 from SUBSYSTEMS.zc import ZoneController
-
-
-TSR_COLOR = "#c94a36"
-SOURCE_TRAIN_SPACING_M = 120.0
-SOURCE_TRAIN_LENGTH_M = 200.0
-SOURCE_TRAIN_START_M = -SOURCE_TRAIN_LENGTH_M
-SOURCE_TRAIN_EXIT_M = 0.0
-SOURCE_TRAIN_STAGING_CLEARANCE_M = 35.0
-SOURCE_VISIBLE_ACTIVE_TRAINS = 2
-MIN_PASSENGER_DWELL_S = 25.0
-MIN_TIMETABLE_RECOVERY_DWELL_S = 20.0
-PARALLEL_ROMAN_LABELS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"]
-PARALLEL_RELEASE_MARGIN_M = 5.0
-DEPARTURE_RELEASE_MIN_AUTHORITY_M = 30.0
-STATION_ROUTE_APPROACH_M = 800.0
-TURNOUT_LOCK_S = 5.0
-SOURCE_RELEASE_LOCK_S = 5.0
-LINE_CENTER_SPACING_M = 4.0
-
 
 class Simulation:
     def __init__(self, scenario: Dict[str, object]):

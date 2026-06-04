@@ -1,6 +1,133 @@
 from __future__ import annotations
 
-from GUI.gui_context import *
+import tkinter as tk
+from tkinter import filedialog, ttk
+import random
+import time
+import math
+import re
+import sys
+import threading
+import queue
+import yaml
+from dataclasses import dataclass, replace
+from datetime import datetime, timezone, timedelta
+from typing import Any, Dict, List, Tuple
+from collections import deque
+import ctypes
+from copy import deepcopy
+
+from CONFIG.config import (
+    AW3_MASS_KG,
+    DT,
+    OVERLAP_M,
+    SAFETY_MARGIN_M,
+    BRAKE_FORCE_N,
+    EMERGENCY_FORCE_N,
+    BRAKE_BUILDUP_S,
+    MAX_JERK_MS3,
+    DEPARTURE_RELEASE_MIN_AUTHORITY_M,
+    LINE_CENTER_SPACING_M,
+    MIN_PASSENGER_DWELL_S,
+    MIN_TIMETABLE_RECOVERY_DWELL_S,
+    PARALLEL_RELEASE_MARGIN_M,
+    PARALLEL_ROMAN_LABELS,
+    SOURCE_RELEASE_LOCK_S,
+    SOURCE_TRAIN_EXIT_M,
+    SOURCE_TRAIN_LENGTH_M,
+    SOURCE_TRAIN_SPACING_M,
+    SOURCE_TRAIN_STAGING_CLEARANCE_M,
+    SOURCE_TRAIN_START_M,
+    SOURCE_VISIBLE_ACTIVE_TRAINS,
+    STATION_ROUTE_APPROACH_M,
+    TURNOUT_LOCK_S,
+)
+from SUBSYSTEMS.physics import (
+    kmh_to_ms,
+    ms_to_kmh,
+    braking_distance_m,
+    traction_acceleration_ms2,
+    running_resistance_accel_ms2,
+    equivalent_mass_adjusted_accel,
+    limit_jerk,
+)
+from CONFIG.scenario_loader import DEFAULT_SCENARIO_PATH, load_scenario, normalize_scenario, save_scenario_file, scenario_to_yaml_data
+from REPORT.reporting import save_simulation_report
+from OPERATION.headway_manager import HeadwayManager
+from MONTECARLO.monte_carlo import MonteCarloConfig, run_batch
+from SUBSYSTEMS import control_common as _control_common
+from SUBSYSTEMS.dcs import DCSWatchdog, OnboardControlCenter
+from SUBSYSTEMS.signalling import (
+    AuthorityManager,
+    MovementAuthorityLimit,
+    SafeMovementPacket,
+    VitalBrakeModel,
+    braking_curve_profile,
+    conservative_brake_decel_ms2,
+    get_track_info,
+    gradient_adjusted_decel_ms2,
+    max_entry_speed_with_buildup,
+    max_speed_with_buildup,
+    stopping_distance_with_buildup,
+    vital_delay_margin_m,
+    worst_gradient_in_range,
+)
+from SUBSYSTEMS.atp import ATPEnvelopeEngine, ATPEnvelopeResult
+from SUBSYSTEMS.ato import ATOPilotingEngine, ATOPilotingResult
+from SUBSYSTEMS.train import Train, train_color
+from SUBSYSTEMS.zc import ZoneController
+from SUBSYSTEMS.runtime import Simulation
+
+for _name in _control_common.__all__:
+    globals()[_name] = getattr(_control_common, _name)
+del _name
+
+TSR_COLOR = "#c94a36"
+
+APP_THEME = {
+    "bg": "#f5ebe9",
+    "workspace": "#fff4ef",
+    "panel": "#ffe2c2",
+    "panel_alt": "#f4ba72",
+    "card": "#fff8ed",
+    "card_alt": "#ffe7c7",
+    "canvas": "#fbf3ef",
+    "canvas_grid": "#dec8bf",
+    "border": "#6b2e35",
+    "text": "#5a2630",
+    "muted": "#8a5b52",
+    "button": "#f4a63c",
+    "button_hover": "#ffc15c",
+    "button_pressed": "#d8782d",
+    "button_active": "#ffd06f",
+    "accent": "#b85c2d",
+    "accent_pressed": "#8f3f24",
+    "run_active": "#f0a132",
+    "pause_active": "#ffd166",
+    "button_inactive": "#d9a876",
+    "danger": "#d84b3c",
+    "danger_pressed": "#9b2c2b",
+    "ok": "#74b65d",
+    "warning": "#f0a132",
+    "log_bg": "#fffaf2",
+}
+
+CURVE_COLORS = {
+    "actual": "#5a2630",
+    "P": "#2f7f8f",
+    "I": "#8a4f9f",
+    "W": "#b86f00",
+    "SBD": "#4f8f3a",
+    "EBD": "#c94a36",
+}
+
+ACTION_COLORS = {
+    "WARN": CURVE_COLORS["W"],
+    "OFF": "#b86f00",
+    "SBI": CURVE_COLORS["SBD"],
+    "EBI": CURVE_COLORS["EBD"],
+}
+
 from GUI.panels.train_panel import TrainPanel
 from GUI.panels.ats_overview_panel import ATSOverviewPanel
 from GUI.panels.infrastructure_panel import InfrastructurePanel

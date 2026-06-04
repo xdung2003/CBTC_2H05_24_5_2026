@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from GUI.gui_context import *
+from GUI.main_gui import *
 
 
 class StationEditorDialog(tk.Toplevel):

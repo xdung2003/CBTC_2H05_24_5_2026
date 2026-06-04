@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from GUI.gui_context import *
+from GUI.main_gui import *
 
 class TrainPanel(ttk.Frame):
     def __init__(self, master: tk.Widget, train_id: str, on_toggle, on_resume, on_instant_stop, on_precise_jog, color: str, scale_factor: float):

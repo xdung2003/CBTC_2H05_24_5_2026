@@ -5,24 +5,22 @@ from typing import Dict, List, Tuple
 
 from CONFIG.config import (
     AW3_MASS_KG,
+    ATP_ADHESION_FACTOR,
+    ATP_BRAKE_BUILDUP_S,
+    ATP_EMERGENCY_BRAKE_FACTOR,
+    ATP_MA_EXTRAPOLATION_S,
+    ATP_MIN_DECEL_MS2,
+    ATP_POS_REPORT_LATENCY_S,
     BRAKE_BUILDUP_S,
     DT,
     EMERGENCY_FORCE_N,
+    G,
     MAX_JERK_MS3,
     OVERLAP_M,
     SAFETY_MARGIN_M,
+    STOP_SVL_OFFSET_M,
 )
 from SUBSYSTEMS.physics import equivalent_mass_adjusted_accel, traction_acceleration_ms2
-
-
-G = 9.81
-ATP_BRAKE_BUILDUP_S = max(1.2, BRAKE_BUILDUP_S - 0.2)
-ATP_EMERGENCY_BRAKE_FACTOR = 1.05
-ATP_MA_EXTRAPOLATION_S = 1.5
-ATP_POS_REPORT_LATENCY_S = 0.6
-ATP_MIN_DECEL_MS2 = 0.15
-ATP_ADHESION_FACTOR = 0.82
-STOP_SVL_OFFSET_M = 1.0
 
 
 @dataclass
