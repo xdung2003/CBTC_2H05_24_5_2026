@@ -237,6 +237,9 @@ class Train:
         self.beacon_position_locked = False
         self.safe_packet_age_s = 0.0
         self.safe_packet_valid = True
+        self.ma_freshness = "FRESH"
+        self.vital_packet_result = "ACCEPTED"
+        self.vital_packet_reason = ""
         self.dcs_fault_active = False
         self.ato_fault_active = False
         self.atp_fault_active = False
@@ -265,6 +268,9 @@ class Train:
     def receive_safe_packet(self, packet: SafeMovementPacket, arrival_time_s: float):
         self.cc.receive_safe_packet(packet, arrival_time_s)
 
+    def receive_vital_packet(self, packet: object, arrival_time_s: float):
+        self.cc.receive_vital_packet(packet, arrival_time_s)
+
     def set_fault(self, subsystem: str, active: bool, now_s: float = 0.0):
         subsystem = subsystem.upper()
         if subsystem == "DCS":
@@ -282,10 +288,12 @@ class Train:
         elif subsystem == "ATO":
             self.ato_fault_active = bool(active)
             if active:
-                self.drive_mode = "LMD"
-                self.mode_transition_reason = "ATO fault: degraded to limited manual"
+                self.drive_mode = "ATO_FAULT"
+                self.mode_transition_reason = "ATO fault: automatic piloting inhibited"
                 self.ato_state = "ATO_FAULT"
                 self.ato_target_speed = 0.0
+                self.ato_pid_integral = 0.0
+                self.ato_pid_prev_error = 0.0
             elif self.requested_drive_mode == "ATO" and self.safe_packet_valid:
                 self.drive_mode = "ATO"
                 self.mode_transition_reason = ""
@@ -301,6 +309,9 @@ class Train:
                 self.log_event("ATP_FAULT_FAIL_SAFE_TRIP", "fault_injected")
             else:
                 self.atp_fault_active = False
+                if self.trip_mode and self.trip_reason == "ATP FAULT":
+                    self.atp_alert = "FAULT CLEARED - CONFIRM SAFE"
+                self.log_event("ATP_FAULT_CLEARED", "awaiting_safe_recovery")
 
     def compute_ato_pid_accel(self, error: float, control_speed: float, a_service: float, a_traction: float) -> float:
         if abs(error) < kmh_to_ms(0.2):
@@ -1008,10 +1019,10 @@ class Train:
         self.atp_action = ""
         self.traction_cutoff = False
         if self.ato_fault_active:
-            self.drive_mode = "LMD"
+            self.drive_mode = "ATO_FAULT"
             self.ato_state = "ATO_FAULT"
             self.ato_target_speed = 0.0
-            self.mode_transition_reason = "ATO fault: degraded to limited manual"
+            self.mode_transition_reason = "ATO fault: automatic piloting inhibited"
         if self.atp_fault_active:
             self.enter_trip_mode("ATP FAULT", self.reported_pos)
             self.atp_state = "ATP_TRIP"
@@ -1146,6 +1157,10 @@ class Train:
         elif self.drive_mode == "CMD25":
             degraded_limit = min(kmh_to_ms(25.0), atp_supervision.curves["P"] - ato_tracking_margin_ms(atp_supervision.control_speed))
             self.ato_target_speed = max(0.0, degraded_limit)
+        if self.ato_fault_active:
+            self.drive_mode = "ATO_FAULT"
+            self.ato_target_speed = 0.0
+            self.jog_active = False
         if self.emergency_recovery_hold:
             self.ato_target_speed = 0.0
             self.jog_active = False
@@ -1768,7 +1783,7 @@ class Train:
             self.hidden_curves["EBI"] = max(self.hidden_curves["EBI"], kmh_to_ms(STOP_EBI_SUPERVISION_FLOOR_KMH))
             self.curves["EBD"] = max(self.curves["EBD"], self.hidden_curves["EBI"])
         if self.ato_fault_active:
-            self.drive_mode = "LMD"
+            self.drive_mode = "ATO_FAULT"
             self.ato_state = "ATO_FAULT"
             self.ato_target_speed = 0.0
         if self.atp_fault_active:

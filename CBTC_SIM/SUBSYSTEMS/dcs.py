@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from collections import deque
+from typing import Any
 
+from SUBSYSTEMS.communication.messages import MovementAuthorityMessage
+from SUBSYSTEMS.communication.rasta import VitalSafePacket, VitalSession
 from SUBSYSTEMS.signalling import SafeMovementPacket
 
 
@@ -40,14 +43,63 @@ class OnboardControlCenter:
             },
         )
         self.pending_packets: deque[tuple[float, SafeMovementPacket]] = deque()
+        self.pending_vital_packets: deque[tuple[float, VitalSafePacket]] = deque()
         self.watchdog = DCSWatchdog(timeout_s, startup_grace_s)
         self.latest_packet_issued_time_s = -1.0
+        self.vital_session = VitalSession(
+            local_id=train_id,
+            remote_id="ZC_01",
+            session_id=f"ZC_01:{train_id}",
+        )
+        self.last_validation_result = "ACCEPTED"
+        self.last_reject_reason = ""
+        self.data_freshness = "FRESH"
+        self.event_sink: Any = None
 
     def receive_safe_packet(self, packet: SafeMovementPacket, arrival_time_s: float):
         self.pending_packets.append((arrival_time_s, packet))
         self.pending_packets = deque(sorted(self.pending_packets, key=lambda item: item[0]))
 
+    def receive_vital_packet(self, packet: VitalSafePacket, arrival_time_s: float):
+        self.pending_vital_packets.append((arrival_time_s, packet))
+        self.pending_vital_packets = deque(sorted(self.pending_vital_packets, key=lambda item: item[0]))
+
+    def _packet_from_payload(self, payload: dict) -> SafeMovementPacket:
+        return SafeMovementPacket(
+            eoa_m=float(payload["eoa_m"]),
+            tsr_kmh=float(payload["psr_kmh"]),
+            variants={
+                "gradient": float(payload.get("gradient", 0.0)),
+                "next_speed_limit_kmh": float(payload.get("next_speed_limit_kmh", 0.0)),
+                "next_speed_limit_dist_m": float(payload.get("next_speed_limit_dist_m", float("inf"))),
+            },
+            issued_time_s=float(payload.get("issued_time_s", 0.0)),
+        )
+
+    def _accept_vital_packet(self, packet: VitalSafePacket, now_s: float):
+        result = self.vital_session.validate(packet, int(now_s * 1000))
+        self.last_validation_result = result.result
+        self.last_reject_reason = result.reason
+        if self.event_sink is not None:
+            self.event_sink.log_validation(now_s, packet, result.result, result.action, result.reason)
+        if not result.accepted:
+            return
+        if packet.header.message_type != "MA_UPDATE":
+            return
+        safe_packet = self._packet_from_payload(packet.decoded_payload(self.vital_session.secret))
+        if safe_packet.issued_time_s < self.latest_packet_issued_time_s:
+            self.last_validation_result = "OUT_OF_ORDER"
+            self.last_reject_reason = "internal issued_time older than latest accepted packet"
+            return
+        self.latest_packet = safe_packet
+        self.latest_packet_issued_time_s = safe_packet.issued_time_s
+        self.watchdog.mark_received(now_s)
+        self.data_freshness = "FRESH"
+
     def apply_to_train(self, train: object, now_s: float):
+        while self.pending_vital_packets and self.pending_vital_packets[0][0] <= now_s:
+            _, packet = self.pending_vital_packets.popleft()
+            self._accept_vital_packet(packet, now_s)
         while self.pending_packets and self.pending_packets[0][0] <= now_s:
             _, packet = self.pending_packets.popleft()
             if packet.issued_time_s < self.latest_packet_issued_time_s:
@@ -69,6 +121,15 @@ class OnboardControlCenter:
         )
         train.safe_packet_age_s = self.watchdog.age_s(now_s)
         train.safe_packet_valid = self.watchdog.packet_is_valid(now_s, packet_valid)
+        if not train.safe_packet_valid:
+            self.data_freshness = "LOST" if train.safe_packet_age_s > self.watchdog.timeout_s else "EXPIRED"
+        elif train.safe_packet_age_s > max(0.0, self.watchdog.timeout_s * 0.5):
+            self.data_freshness = "STALE"
+        else:
+            self.data_freshness = "FRESH"
+        train.vital_packet_result = self.last_validation_result
+        train.vital_packet_reason = self.last_reject_reason
+        train.ma_freshness = self.data_freshness
 
 
-__all__ = ["DCSWatchdog", "OnboardControlCenter", "SafeMovementPacket"]
+__all__ = ["DCSWatchdog", "OnboardControlCenter", "SafeMovementPacket", "MovementAuthorityMessage"]

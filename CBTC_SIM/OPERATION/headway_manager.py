@@ -57,14 +57,11 @@ class HeadwayManager:
 
     def __init__(
         self,
-        mode: str = "off",
+        mode: str = "fixed",
         target_headway_s: float = 0.0,
-        timetable_s: List[float] | None = None,
     ):
-        requested_mode = str(mode or "off").lower()
-        self.mode = requested_mode if requested_mode in {"off", "fixed", "timetable"} else "fixed"
+        self.mode = "fixed"
         self.target_headway_s = max(0.0, float(target_headway_s))
-        self.timetable_s = sorted(float(item) for item in (timetable_s or []))
         self.released_train_ids: set[str] = set()
         self.stats = HeadwayStats(target_headway_s=self.nominal_target_headway_s())
 
@@ -74,31 +71,17 @@ class HeadwayManager:
         if not isinstance(cfg, dict):
             cfg = {}
         return cls(
-            mode=str(cfg.get("mode", "off")),
+            mode="fixed",
             target_headway_s=float(cfg.get("target_headway_s", cfg.get("fixed_headway_s", 0.0))),
-            timetable_s=list(cfg.get("timetable_s", cfg.get("timetable", [])) or []),
         )
 
     def nominal_target_headway_s(self) -> float:
-        if self.mode == "timetable" and len(self.timetable_s) >= 2:
-            gaps = [right - left for left, right in zip(self.timetable_s, self.timetable_s[1:]) if right > left]
-            if gaps:
-                return sum(gaps) / len(gaps)
         return self.target_headway_s
 
     def enabled(self) -> bool:
-        return self.mode in {"fixed", "timetable"} and (
-            self.nominal_target_headway_s() > 0.0 or bool(self.timetable_s)
-        )
+        return self.nominal_target_headway_s() > 0.0
 
     def _planned_time_for_sequence(self, sequence_index: int) -> float | None:
-        if self.mode == "timetable":
-            if 0 <= sequence_index < len(self.timetable_s):
-                return self.timetable_s[sequence_index]
-            if self.timetable_s and self.nominal_target_headway_s() > 0.0:
-                extra = sequence_index - len(self.timetable_s) + 1
-                return self.timetable_s[-1] + extra * self.nominal_target_headway_s()
-            return None
         target = self.nominal_target_headway_s()
         return sequence_index * target if target > 0.0 else None
 
@@ -117,10 +100,6 @@ class HeadwayManager:
 
         sequence_index = len(self.released_train_ids)
         planned_time = None
-        if self.mode == "timetable":
-            train_planned_time = getattr(train, "schedule_planned_dispatch_s", None)
-            if train_planned_time is not None:
-                planned_time = float(train_planned_time)
         if planned_time is None:
             planned_time = self._planned_time_for_sequence(sequence_index)
         target = self._effective_target_headway_s(tsr_active)
@@ -130,14 +109,14 @@ class HeadwayManager:
             return HeadwayDecision(
                 train.id,
                 "HOLD",
-                "TIMETABLE_NOT_DUE" if self.mode == "timetable" else "HEADWAY_NOT_DUE",
+                "HEADWAY_NOT_DUE",
                 target,
                 planned_time,
                 0.0,
             )
 
         last_release = max(self.stats.release_times_s.values(), default=None)
-        if self.mode != "timetable" and last_release is not None and target > 0.0 and now_s - last_release + 1e-9 < target:
+        if last_release is not None and target > 0.0 and now_s - last_release + 1e-9 < target:
             return HeadwayDecision(
                 train.id,
                 "HOLD",

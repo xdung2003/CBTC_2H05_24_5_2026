@@ -111,17 +111,9 @@ class ATSOverviewPanel(ttk.Frame):
 
     def update_data(self, sim: Simulation):
         self._last_sim = sim
-        occupancy = sim.zc.fixed_block_occupancy() if getattr(sim, "block_mode", "") == "fixed_block" else {}
-        occupied_blocks = sum(1 for train_ids in occupancy.values() if train_ids)
         esa_active = sum(1 for t in sim.trains if t.atp_action == "EBI")
-        block_mode = getattr(sim, "block_mode", "fixed")
-        block_text = (
-            f"occupied fixed blocks={occupied_blocks}/{len(getattr(sim, 'fixed_blocks', []))}"
-            if block_mode == "fixed_block"
-            else "moving-block authority (PSR segments visible)"
-        )
         self.summary_var.set(
-            f"OCC view  |  trains={len(sim.trains)}  {block_text}  ESA active={esa_active}"
+            f"OCC view  |  trains={len(sim.trains)}  moving-block authority  ESA active={esa_active}"
         )
         self._draw(sim)
 
@@ -334,24 +326,6 @@ class ATSOverviewPanel(ttk.Frame):
             segment_boundary_labels[int(round(start))] = tag
             segment_boundary_labels[int(round(end))] = tag
 
-        show_fixed_blocks = getattr(sim, "block_mode", "fixed_block") == "fixed_block"
-        if show_fixed_blocks:
-            fixed_occupancy = sim.zc.fixed_block_occupancy()
-            c.create_text(28, block_y1 - 9, anchor="w", text="FIXED BLOCKS", fill=APP_THEME["text"], font=("Consolas", 7, "bold"))
-            for idx, block in enumerate(getattr(sim, "fixed_blocks", [])):
-                block_id = str(block.get("id", f"FB{idx + 1}"))
-                x1 = x_from_pos(float(block["start_m"]))
-                x2 = x_from_pos(float(block["end_m"]))
-                occupants = fixed_occupancy.get(block_id, [])
-                fill = "#ffe0d1" if occupants else "#e5f0c8"
-                outline = APP_THEME["danger"] if occupants else APP_THEME["ok"]
-                c.create_rectangle(x1, block_y1, x2, block_y2, fill=fill, outline=outline, width=2)
-                if x2 - x1 >= 34:
-                    label = f"{block_id}" if not occupants else f"{block_id} OCC"
-                    c.create_text((x1 + x2) / 2, (block_y1 + block_y2) / 2, text=label, fill=APP_THEME["text"], font=("Consolas", 7, "bold"))
-                c.create_line(x1, block_y1 - 3, x1, block_y2 + 3, fill=outline, width=1)
-                c.create_line(x2, block_y1 - 3, x2, block_y2 + 3, fill=outline, width=1)
-
         for idx, zone in enumerate(sim.tsr_zones):
             tag = self._element_tag("tsr", idx)
             x1 = x_from_pos(float(zone["start"]))
@@ -453,9 +427,18 @@ class ATSOverviewPanel(ttk.Frame):
 
         sorted_trains = sorted(sim.trains, key=lambda t: t.pos)
         for idx, train in enumerate(sorted_trains):
-            tail = max(sim.track_min_m, train.pos - train.length)
+            ats_state = dict(getattr(sim, "ats_received_train_state", {}).get(train.id, {}) or {})
+            ats_freshness = str(getattr(sim, "ats_train_freshness", {}).get(train.id, "LOST"))
+            using_received_state = bool(ats_state)
+            display_pos = float(ats_state.get("position_m", train.pos))
+            display_speed = float(ats_state.get("speed_mps", getattr(train, "speed", 0.0)))
+            display_mode = str(ats_state.get("mode", getattr(train, "drive_mode", "")))
+            display_atp = str(ats_state.get("atp_state", getattr(train, "atp_state", "")))
+            display_ato = str(ats_state.get("ato_state", getattr(train, "ato_state", "")))
+            display_fault_flags = dict(ats_state.get("fault_flags", {}) or {})
+            tail = max(sim.track_min_m, display_pos - train.length)
             x1 = x_from_pos(tail)
-            x2 = x_from_pos(train.pos)
+            x2 = x_from_pos(display_pos)
             x1, x2 = visible_train_span(x2, x1)
             if train.protection_zone_id == "SOURCE":
                 slot = source_lane_slots.get(int(train.protection_lane))
@@ -479,19 +462,25 @@ class ATSOverviewPanel(ttk.Frame):
                     y = rail_y
             else:
                 y = rail_y
-            dcs_fault = bool(
-                getattr(train, "dcs_fault_active", False)
-                or getattr(train, "dcs_muted", False)
-                or not getattr(train, "safe_packet_valid", True)
-            )
-            atp_fault = bool(getattr(train, "atp_fault_active", False))
-            ato_fault = bool(getattr(train, "ato_fault_active", False))
-            emergency_fault = bool(
-                getattr(train, "trip_mode", False)
-                or getattr(train, "emergency_stop", False)
-                or getattr(train, "emg_latch", False)
-                or getattr(train, "emergency_recovery_hold", False)
-            )
+            if using_received_state:
+                dcs_fault = bool(display_fault_flags.get("DCS", False)) or ats_freshness in ("STALE", "LOST")
+                atp_fault = bool(display_fault_flags.get("ATP", False))
+                ato_fault = bool(display_fault_flags.get("ATO", False))
+                emergency_fault = bool(display_fault_flags.get("EMERGENCY", False) or display_atp == "ATP_TRIP")
+            else:
+                dcs_fault = bool(
+                    getattr(train, "dcs_fault_active", False)
+                    or getattr(train, "dcs_muted", False)
+                    or not getattr(train, "safe_packet_valid", True)
+                )
+                atp_fault = bool(getattr(train, "atp_fault_active", False))
+                ato_fault = bool(getattr(train, "ato_fault_active", False))
+                emergency_fault = bool(
+                    getattr(train, "trip_mode", False)
+                    or getattr(train, "emergency_stop", False)
+                    or getattr(train, "emg_latch", False)
+                    or getattr(train, "emergency_recovery_hold", False)
+                )
             fault_active = atp_fault or ato_fault or dcs_fault or emergency_fault
             train_fill = "#6b7d90" if fault_active else train.color
             train_alert_outline = (
@@ -533,7 +522,14 @@ class ATSOverviewPanel(ttk.Frame):
                     outline=train_alert_outline,
                     width=2,
                 )
-            c.create_text((x1 + x2) / 2, y - 22, text=f"{train.id} {train.pos:.0f}m", fill=APP_THEME["text"], font=("Consolas", 8, "bold"))
+            source_label = "ATS" if using_received_state else "DEBUG / internal simulation state"
+            c.create_text(
+                (x1 + x2) / 2,
+                y - 22,
+                text=f"{train.id} {source_label} {display_pos:.0f}m {display_speed:.1f}m/s {ats_freshness}",
+                fill=APP_THEME["text"],
+                font=("Consolas", 8, "bold"),
+            )
             fault_labels = []
             if atp_fault:
                 fault_labels.append("ATP")
@@ -543,11 +539,11 @@ class ATSOverviewPanel(ttk.Frame):
                 fault_labels.append("DCS")
             if emergency_fault and not atp_fault:
                 fault_labels.append("EMG")
-            label_text = f"{train.id} {'/'.join(fault_labels)}" if fault_labels else train.id
+            label_text = f"{display_mode} {'/'.join(fault_labels)}" if fault_labels else display_mode or train.id
             c.create_text((x1 + x2) / 2, y - 11, text=label_text, fill=train_fill, font=("Consolas", 8, "bold"))
             if train.departure_hold:
                 c.create_text((x1 + x2) / 2, y + 14, text="HOLD", fill=APP_THEME["danger"], font=("Consolas", 7, "bold"))
-            rep_x = x_from_pos(train.reported_pos)
+            rep_x = x_from_pos(display_pos)
             c.create_oval(rep_x - 3, rail_y + 18, rep_x + 3, rail_y + 24, outline=train_fill, width=2)
             eoa_x = x_from_pos(train.eoa)
             c.create_line(eoa_x, rail_y - 30, eoa_x, rail_y + 32, fill=train_fill, dash=(3, 3))

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from GUI.main_gui import *
+import json
 
 class TimeDistancePanel(ttk.Frame):
     def __init__(self, master: tk.Widget):
@@ -82,6 +83,8 @@ class EngineeringPanel(ttk.Frame):
             highlightbackground=APP_THEME["border"],
         )
         self.text.grid(row=0, column=0, sticky="nsew")
+        self.packet_events = []
+        self.text.bind("<Button-1>", self._on_packet_row_click)
 
         vscroll = ttk.Scrollbar(text_frame, orient="vertical", command=self.text.yview)
         vscroll.grid(row=0, column=1, sticky="ns")
@@ -89,6 +92,60 @@ class EngineeringPanel(ttk.Frame):
         hscroll.grid(row=1, column=0, sticky="ew")
 
         self.text.configure(yscrollcommand=vscroll.set, xscrollcommand=hscroll.set)
+
+    def _on_packet_row_click(self, event):
+        index = self.text.index(f"@{event.x},{event.y}")
+        tags = self.text.tag_names(index)
+        for tag in tags:
+            if tag.startswith("packet_event_"):
+                try:
+                    event_index = int(tag.rsplit("_", 1)[1])
+                except ValueError:
+                    return None
+                if 0 <= event_index < len(self.packet_events):
+                    self._open_packet_inspector(self.packet_events[event_index])
+                    return "break"
+        return None
+
+    def _open_packet_inspector(self, event):
+        window = tk.Toplevel(self)
+        window.title(f"Packet Inspector - {event.protocol} {event.msg_type} #{event.sequence_number}")
+        window.geometry(f"{int(860 * self.scale_factor)}x{int(720 * self.scale_factor)}")
+        window.columnconfigure(0, weight=1)
+        window.rowconfigure(0, weight=1)
+        text = tk.Text(
+            window,
+            wrap="word",
+            font=("Consolas", int(9 * self.scale_factor)),
+            background=APP_THEME["log_bg"],
+            foreground=APP_THEME["text"],
+        )
+        text.grid(row=0, column=0, sticky="nsew")
+        scroll = ttk.Scrollbar(window, orient="vertical", command=text.yview)
+        scroll.grid(row=0, column=1, sticky="ns")
+        text.configure(yscrollcommand=scroll.set)
+        details = event.details or {}
+        sections = {
+            "A. Route": details.get("route", {}),
+            "B. Message layer": details.get("message", {}),
+            "C. Frame / packet layer": details.get("frame", {}),
+            "D. Protection layer": {
+                "result": event.result,
+                "action": event.action,
+                "reason": event.reason,
+                **details.get("protection", {}),
+            },
+            "E. Radio / modulation layer": details.get("radio", {}),
+            "Transformation chain": details.get("chain", []),
+        }
+        lines = []
+        for title, payload in sections.items():
+            lines.append(title)
+            lines.append("-" * len(title))
+            lines.append(json.dumps(payload, indent=2, sort_keys=True, default=str))
+            lines.append("")
+        text.insert("1.0", "\n".join(lines))
+        text.configure(state="disabled")
 
     def update_data(self, sim: Simulation):
         lines = [
@@ -141,7 +198,7 @@ class DataFlowPanel(ttk.Frame):
         self.scale_factor = scale_factor
         self.columnconfigure(0, weight=1)
         self.rowconfigure(2, weight=1)
-        self.rowconfigure(3, weight=1)
+        self.rowconfigure(4, weight=1)
         ttk.Label(self, text="Dataflow Monitor", style="SectionTitle.TLabel").grid(row=0, column=0, sticky="w")
         self.summary_var = tk.StringVar(value="")
         ttk.Label(self, textvariable=self.summary_var, style="Muted.TLabel").grid(
@@ -159,8 +216,23 @@ class DataFlowPanel(ttk.Frame):
         )
         self.canvas.grid(row=2, column=0, sticky="nsew")
 
+        filter_frame = ttk.Frame(self, style="Panel.TFrame")
+        filter_frame.grid(row=3, column=0, sticky="ew", pady=(int(6 * scale_factor), 0))
+        filter_frame.columnconfigure(5, weight=1)
+        self.packet_filter_var = tk.StringVar(value="All")
+        self.packet_search_var = tk.StringVar(value="")
+        filter_values = ("All", "Vital only", "OPC UA only", "Rejected only")
+        ttk.Label(filter_frame, text="Filter", style="Muted.TLabel").grid(row=0, column=0, sticky="w", padx=(0, 4))
+        filter_combo = ttk.Combobox(filter_frame, textvariable=self.packet_filter_var, values=filter_values, width=14, state="readonly")
+        filter_combo.grid(row=0, column=1, sticky="w", padx=(0, 8))
+        filter_combo.bind("<<ComboboxSelected>>", lambda _event: self.event_generate("<<DataflowFilterChanged>>"))
+        ttk.Label(filter_frame, text="Train / Protocol / Result", style="Muted.TLabel").grid(row=0, column=2, sticky="w", padx=(0, 4))
+        search_entry = ttk.Entry(filter_frame, textvariable=self.packet_search_var, width=24)
+        search_entry.grid(row=0, column=3, sticky="w")
+        search_entry.bind("<KeyRelease>", lambda _event: self.event_generate("<<DataflowFilterChanged>>"))
+
         text_frame = ttk.Frame(self, style="Panel.TFrame")
-        text_frame.grid(row=3, column=0, sticky="nsew", pady=(int(6 * scale_factor), 0))
+        text_frame.grid(row=4, column=0, sticky="nsew", pady=(int(6 * scale_factor), 0))
         text_frame.columnconfigure(0, weight=1)
         text_frame.rowconfigure(0, weight=1)
         self.text = tk.Text(
@@ -176,11 +248,124 @@ class DataFlowPanel(ttk.Frame):
             highlightbackground=APP_THEME["border"],
         )
         self.text.grid(row=0, column=0, sticky="nsew")
+        self.packet_events = []
+        self.text.bind("<Button-1>", self._on_packet_row_click)
         vscroll = ttk.Scrollbar(text_frame, orient="vertical", command=self.text.yview)
         vscroll.grid(row=0, column=1, sticky="ns")
         hscroll = ttk.Scrollbar(text_frame, orient="horizontal", command=self.text.xview)
         hscroll.grid(row=1, column=0, sticky="ew")
         self.text.configure(yscrollcommand=vscroll.set, xscrollcommand=hscroll.set)
+
+    def _on_packet_row_click(self, event):
+        index = self.text.index(f"@{event.x},{event.y}")
+        tags = self.text.tag_names(index)
+        for tag in tags:
+            if tag.startswith("packet_event_"):
+                try:
+                    event_index = int(tag.rsplit("_", 1)[1])
+                except ValueError:
+                    return None
+                if 0 <= event_index < len(self.packet_events):
+                    self._open_packet_inspector(self.packet_events[event_index])
+                    return "break"
+        return None
+
+    def _open_packet_inspector(self, event):
+        window = tk.Toplevel(self)
+        window.title(f"Packet Inspector - {event.protocol} {event.msg_type} #{event.sequence_number}")
+        window.geometry(f"{int(900 * self.scale_factor)}x{int(760 * self.scale_factor)}")
+        window.columnconfigure(0, weight=1)
+        window.rowconfigure(0, weight=1)
+        text = tk.Text(
+            window,
+            wrap="word",
+            font=("Consolas", int(9 * self.scale_factor)),
+            background=APP_THEME["log_bg"],
+            foreground=APP_THEME["text"],
+        )
+        text.grid(row=0, column=0, sticky="nsew")
+        scroll = ttk.Scrollbar(window, orient="vertical", command=text.yview)
+        scroll.grid(row=0, column=1, sticky="ns")
+        text.configure(yscrollcommand=scroll.set)
+        details = event.details or {}
+        frame = details.get("frame", {})
+        sections = {
+            "Route": details.get("route", {}),
+            "Message": details.get("message", {}),
+            "Frame/Header": {
+                "header": frame.get("received_header") or frame.get("header") or frame.get("sent_header") or frame,
+                "session_id": (frame.get("received_header") or frame.get("header") or {}).get("session_id", ""),
+                "sequence_number": event.sequence_number,
+                "timestamp": (frame.get("received_header") or frame.get("header") or {}).get("timestamp_ms", frame.get("timestamp_ms", "")),
+                "ttl": (frame.get("received_header") or frame.get("header") or {}).get("ttl_ms", frame.get("timeout_ms", "")),
+                "packet_uuid": frame.get("safety", {}).get("packet_uuid", ""),
+                "payload_length": (frame.get("received_header") or frame.get("header") or {}).get("payload_length", ""),
+            },
+            "Encryption": {
+                "encryption_enabled": frame.get("encryption_enabled", False),
+                "encryption_algorithm": frame.get("encryption_algorithm", ""),
+                "key_id": frame.get("key_id", frame.get("safety", {}).get("key_id", "")),
+                "encrypted_payload": frame.get("encrypted_payload", ""),
+                "payload_format": frame.get("payload_format", ""),
+            },
+            "Protection": {
+                "crc32": frame.get("safety", {}).get("crc32", ""),
+                "hmac_sha256": frame.get("safety", {}).get("hmac_sha256", ""),
+                "validation_result": event.result,
+                "reject_reason": event.reason if event.result not in ("ACCEPTED", "DELIVERED", "FAILOVER") else "",
+                **details.get("protection", {}),
+            },
+            "Radio/RAP": details.get("radio", {}),
+            "Validation result": {
+                "result": event.result,
+                "action": event.action,
+                "reason": event.reason,
+            },
+            "State update result": {
+                "updated": event.result in ("ACCEPTED", "DELIVERED") and event.action not in ("ignored", "rejected"),
+                "action": event.action,
+                "reason": event.reason,
+            },
+            "Transformation chain": details.get("chain", []),
+        }
+        lines = []
+        for title, payload in sections.items():
+            lines.append(title)
+            lines.append("-" * len(title))
+            lines.append(json.dumps(payload, indent=2, sort_keys=True, default=str))
+            lines.append("")
+        text.insert("1.0", "\n".join(lines))
+        text.configure(state="disabled")
+
+    def _filtered_packet_events(self, events):
+        mode = self.packet_filter_var.get() if hasattr(self, "packet_filter_var") else "All"
+        query = self.packet_search_var.get().strip().lower() if hasattr(self, "packet_search_var") else ""
+        rejected_results = {"REJECTED", "TIMEOUT", "REPLAY", "CRC_ERROR", "HMAC_ERROR", "OUT_OF_ORDER", "DECRYPT_ERROR"}
+        filtered = []
+        for event in events:
+            if mode == "Vital only" and event.protocol != "RASTA_VITAL":
+                continue
+            if mode == "OPC UA only" and event.protocol != "OPCUA_SUPERVISION":
+                continue
+            if mode == "Rejected only" and event.result not in rejected_results and event.action not in ("ignored", "rejected"):
+                continue
+            if query:
+                haystack = " ".join(
+                    str(item).lower()
+                    for item in (
+                        event.source_id,
+                        event.destination_id,
+                        event.protocol,
+                        event.path,
+                        event.msg_type,
+                        event.result,
+                        event.reason,
+                    )
+                )
+                if query not in haystack:
+                    continue
+            filtered.append(event)
+        return filtered
 
     def _node(self, x: float, y: float, w: float, h: float, title: str, body: str, fill: str, outline: str | None = None):
         c = self.canvas
@@ -238,87 +423,206 @@ class DataFlowPanel(ttk.Frame):
         c.delete("all")
         width = max(760, int(c.winfo_width() or 760))
         height = max(400, int(c.winfo_height() or 400))
-        node_w = max(118, int(128 * self.scale_factor))
-        node_h = max(58, int(62 * self.scale_factor))
-        zc_x = width * 0.50 - node_w / 2
-        top_y = 18
-        train_y = 210
-        ats_pos = (width * 0.18 - node_w / 2, top_y)
-        zc_pos = (zc_x, top_y)
-        dcs_pos = (width * 0.82 - node_w / 2, top_y)
+        phase_base = (sim.sim_time_s * 0.55) % 1.0
+        transport = getattr(sim, "dcs_transport", None)
+        red = transport.paths.get("RED") if transport is not None else None
+        blue = transport.paths.get("BLUE") if transport is not None else None
+        active_path = getattr(transport, "active_path", "RED") if transport is not None else "RED"
+        rap_text = ", ".join(
+            f"{train_id}:{rap_id}" for train_id, rap_id in sorted(getattr(transport, "last_rap_by_train", {}).items())
+        ) or "none"
+        last_fault = getattr(transport, "last_fault", "") if transport is not None else ""
+        rejected_count = sum(
+            1
+            for event in list(getattr(transport, "events", []))[-80:]
+            if event.result in {"REJECTED", "TIMEOUT", "REPLAY", "CRC_ERROR", "HMAC_ERROR", "OUT_OF_ORDER", "DECRYPT_ERROR"}
+            or event.action in {"ignored", "rejected"}
+        ) if transport is not None else 0
+
+        margin = 18
+        gap = max(10, int(12 * self.scale_factor))
+
+        def status_color(value: str) -> str:
+            value = str(value).upper()
+            if value in ("OK", "FRESH", "ACCEPTED", "DELIVERED"):
+                return APP_THEME["ok"]
+            if value in ("DEGRADED", "STALE", "EXPIRED", "FAILOVER"):
+                return APP_THEME["warning"]
+            if value in ("LOST", "TIMEOUT", "REJECTED", "REPLAY", "CRC_ERROR", "HMAC_ERROR", "OUT_OF_ORDER", "DECRYPT_ERROR"):
+                return APP_THEME["danger"]
+            return APP_THEME["muted"]
+
+        c.create_text(
+            margin,
+            8,
+            anchor="nw",
+            text="CBTC subsystem dataflow: ATS / ZC / Train CC through DCS dual-redundant RED-BLUE radio network",
+            fill=APP_THEME["text"],
+            font=("Consolas", int(9 * self.scale_factor), "bold"),
+        )
 
         headway_mode = getattr(sim.headway_manager, "mode", "off")
-        self._node(ats_pos[0], ats_pos[1], node_w, node_h, "ATS", f"mode={headway_mode}\nroutes/stops", APP_THEME["card"])
-        self._node(zc_pos[0], zc_pos[1], node_w, node_h, "ZC", f"{sim.block_mode}\nMA packets", "#ffe7b8")
-        self._node(dcs_pos[0], dcs_pos[1], node_w, node_h, "DCS", f"OK {dcs_ok}/{len(trains)}\nradio link", APP_THEME["card_alt"])
-        phase_base = (sim.sim_time_s * 0.55) % 1.0
-        self._packet_arrow(ats_pos[0] + node_w, ats_pos[1] + node_h / 2, zc_pos[0], zc_pos[1] + node_h / 2, "route/headway", APP_THEME["accent"], phase_base)
-        self._packet_arrow(zc_pos[0], zc_pos[1] + node_h / 2 + 12, ats_pos[0] + node_w, ats_pos[1] + node_h / 2 + 12, "line status", "#2f7f8f", (phase_base + 0.45) % 1.0)
-        self._packet_arrow(zc_pos[0] + node_w, zc_pos[1] + node_h / 2, dcs_pos[0], dcs_pos[1] + node_h / 2, "safe pkt", "#4f8f3a", (phase_base + 0.2) % 1.0)
+        red_state = red.state.value if red is not None else "N/A"
+        blue_state = blue.state.value if blue is not None else "N/A"
+        base_y = 34
+        panel_h = max(300, min(height - 52, int(342 * self.scale_factor)))
+        ats_w = max(126, width * 0.15)
+        zc_w = max(138, width * 0.17)
+        dcs_w = max(250, width * 0.29)
+        cc_w = max(190, width - margin * 2 - ats_w - zc_w - dcs_w - gap * 3)
+        ats_x = margin
+        zc_x = ats_x + ats_w + gap
+        dcs_x = zc_x + zc_w + gap
+        cc_x = dcs_x + dcs_w + gap
 
-        if trains:
-            left_margin = 18
-            usable_w = max(1, width - left_margin * 2 - node_w)
-            count = max(1, len(trains))
-            for idx, train in enumerate(trains):
-                x = left_margin + (usable_w * idx / max(1, count - 1) if count > 1 else usable_w / 2)
-                y = train_y
-                link_ok = train.safe_packet_valid and not train.dcs_muted
-                outline = APP_THEME["ok"] if link_ok else APP_THEME["danger"]
-                body = (
-                    f"ATP {train.atp_state.replace('ATP_', '')}\n"
-                    f"ATO {train.ato_state.replace('ATO_', '')}"
-                )
-                self._node(x, y, node_w, node_h, train.id, body, APP_THEME["card"], outline=outline)
-                src_x = dcs_pos[0] + node_w / 2
-                src_y = dcs_pos[1] + node_h
-                dst_x = x + node_w / 2
-                dst_y = y
-                color = APP_THEME["ok"] if link_ok else APP_THEME["danger"]
-                self._packet_arrow(src_x, src_y, dst_x, dst_y, "ZC->CC", color, (phase_base + idx * 0.17) % 1.0, dashed=not link_ok)
-                self._packet_arrow(dst_x, dst_y - 10, zc_pos[0] + node_w / 2, zc_pos[1] + node_h, "pos", "#2f7f8f", (phase_base + 0.55 + idx * 0.13) % 1.0)
-                self._packet_arrow(x + 16, y + node_h + 10, x + node_w - 16, y + node_h + 10, "ATP<>ATO", "#8a4f9f", (phase_base + idx * 0.21) % 1.0)
+        def subsystem_box(x: float, y: float, w: float, h: float, title: str, subtitle: str, fill: str, outline: str | None = None):
+            c.create_rectangle(x, y, x + w, y + h, fill=fill, outline=outline or APP_THEME["border"], width=2)
+            c.create_text(x + 8, y + 8, anchor="nw", text=title, fill=APP_THEME["text"], font=("Consolas", int(10 * self.scale_factor), "bold"))
+            c.create_text(x + 8, y + 29, anchor="nw", text=subtitle, fill=APP_THEME["muted"], font=("Consolas", int(8 * self.scale_factor)))
 
-        asset_y = max(train_y + node_h + 48, height - max(58, int(56 * self.scale_factor)))
-        source_count = len(getattr(sim, "source_trains", []))
-        station_count = len(sim.scheduled_stops)
-        asset_count = max(1, source_count + station_count)
-        asset_w = max(96, int(108 * self.scale_factor))
-        for idx, source in enumerate(getattr(sim, "source_trains", [])):
-            x = 18 + idx * min(asset_w + 14, max(90, (width - 36) / asset_count))
-            body = f"{int(source.get('generated', 0))}/{int(source.get('total_trains', 0))} trains"
-            self._node(x, asset_y, asset_w, 46, str(source.get("name", "DEPOT")), body, "#fff1cc", outline="#000000")
-            self._packet_arrow(x + asset_w / 2, asset_y, ats_pos[0] + node_w / 2, ats_pos[1] + node_h, "depot", APP_THEME["muted"], (phase_base + 0.35) % 1.0)
-        for idx, stop in enumerate(sim.scheduled_stops):
-            x_index = source_count + idx
-            x = 18 + x_index * min(asset_w + 14, max(90, (width - 36) / asset_count))
-            state = sim.station_route_states[idx] if idx < len(getattr(sim, "station_route_states", [])) else {}
-            occupied = sum(1 for line in state.get("lines", []) if line.get("occupied_by_train_id"))
-            capacity = max(1, int(stop.get("capacity", 1)))
-            self._node(x, asset_y, asset_w, 46, str(stop.get("name", f"STA{idx + 1}")), f"occ {occupied}/{capacity}", "#fff1cc")
-            self._packet_arrow(x + asset_w / 2, asset_y, ats_pos[0] + node_w / 2, ats_pos[1] + node_h, "station", APP_THEME["muted"], (phase_base + idx * 0.11) % 1.0)
+        def inner_box(x: float, y: float, w: float, h: float, title: str, body: str, fill: str, outline: str | None = None):
+            c.create_rectangle(x, y, x + w, y + h, fill=fill, outline=outline or APP_THEME["border"], width=1)
+            c.create_text(x + 6, y + 5, anchor="nw", text=title, fill=APP_THEME["text"], font=("Consolas", int(8 * self.scale_factor), "bold"))
+            c.create_text(x + 6, y + 22, anchor="nw", text=body, fill=APP_THEME["muted"], font=("Consolas", int(7 * self.scale_factor)))
 
-        lines = [
-            "Time     From        To          Packet / State",
-            "-" * 92,
+        subsystem_box(ats_x, base_y, ats_w, panel_h, "ATS", f"OPC UA-like\nmode={headway_mode}", APP_THEME["card"])
+        subsystem_box(zc_x, base_y, zc_w, panel_h, "ZC", f"MA/EOA authority\n{sim.block_mode}", "#ffe7b8")
+        subsystem_box(dcs_x, base_y, dcs_w, panel_h, "DCS", f"dual network + radio\nactive={active_path}", APP_THEME["card_alt"], outline=status_color("OK" if red_state != "LOST" or blue_state != "LOST" else "LOST"))
+        subsystem_box(cc_x, base_y, cc_w, panel_h, "Train CC", f"{len(trains)} onboard controllers\nATP/ATO/TX-RX", APP_THEME["card"])
+
+        inner_margin = 10
+        ats_inner_w = ats_w - inner_margin * 2
+        inner_box(ats_x + inner_margin, base_y + 64, ats_inner_w, 56, "Supervision", "hold / dwell\ntrain status", "#e8f2ff")
+        inner_box(ats_x + inner_margin, base_y + 132, ats_inner_w, 56, "ATS Display", "received state\nFRESH/STALE/LOST", "#e8f2ff")
+        inner_box(ats_x + inner_margin, base_y + 200, ats_inner_w, 58, "Diagnostics", "network health\nevent log", "#fff4e8")
+
+        zc_inner_w = zc_w - inner_margin * 2
+        inner_box(zc_x + inner_margin, base_y + 64, zc_inner_w, 58, "MA Builder", "MA_UPDATE\nEOA / PSR / TSR", "#fff1cc")
+        inner_box(zc_x + inner_margin, base_y + 136, zc_inner_w, 58, "Position Store", "last valid report\nfresh/stale/lost", "#f7fff0")
+        inner_box(zc_x + inner_margin, base_y + 210, zc_inner_w, 58, "Vital Session", "seq watchdog\nanti-replay", "#e4f7df")
+
+        dcs_inner_w = dcs_w - inner_margin * 2
+        red_y = base_y + 62
+        blue_y = red_y + 54
+        rap_y = blue_y + 62
+        inner_box(dcs_x + inner_margin, red_y, dcs_inner_w, 42, "RED Network Path", f"state={red_state}\nlat={red.base_latency_ms:.0f}ms" if red is not None else "state=N/A", "#fff7f7", outline=status_color(red_state))
+        inner_box(dcs_x + inner_margin, blue_y, dcs_inner_w, 42, "BLUE Network Path", f"state={blue_state}\nlat={blue.base_latency_ms:.0f}ms" if blue is not None else "state=N/A", "#f4f8ff", outline=status_color(blue_state))
+        inner_box(dcs_x + inner_margin, rap_y, dcs_inner_w, 58, "RAP / Radio Layer", f"{rap_text[:30]}\nOFDM-QAM-like BER", "#f7fff0")
+        inner_box(dcs_x + inner_margin, rap_y + 72, dcs_inner_w, 62, "DCS-NMS / Router", f"failover RED<->BLUE\nlast={last_fault or 'none'}", "#fff4e8")
+
+        cc_inner_w = cc_w - inner_margin * 2
+        cc_col_gap = 8
+        cc_col_w = max(68, (cc_inner_w - cc_col_gap) / 2)
+        inner_box(cc_x + inner_margin, base_y + 64, cc_col_w, 62, "TX/RX", "encrypt/decrypt\nCRC/HMAC check", "#e4f7df", outline=status_color("OK" if dcs_ok == len(trains) else "DEGRADED"))
+        inner_box(cc_x + inner_margin + cc_col_w + cc_col_gap, base_y + 64, cc_col_w, 62, "ATP", f"MA accepted only\nOK {dcs_ok}/{len(trains)}", "#e4f7df", outline=status_color("OK" if dcs_ok == len(trains) else "LOST"))
+        inner_box(cc_x + inner_margin, base_y + 142, cc_col_w, 62, "ATO", "uses ATP limit\nnon-vital commands", "#f5ecff")
+        inner_box(cc_x + inner_margin + cc_col_w + cc_col_gap, base_y + 142, cc_col_w, 62, "Status Agent", "TrainStatus\nfault/mode/door", "#e8f2ff")
+        inner_box(cc_x + inner_margin, base_y + 220, cc_inner_w, 58, "Packet Validation Gate", f"ACCEPTED updates state\nrejected={rejected_count}", "#fff4e8", outline=status_color("OK" if rejected_count == 0 else "REJECTED"))
+
+        ats_mid = ats_x + ats_w
+        zc_left = zc_x
+        zc_right = zc_x + zc_w
+        dcs_left = dcs_x
+        dcs_right = dcs_x + dcs_w
+        cc_left = cc_x
+        cc_right = cc_x + cc_w
+        vital_color = "#4f8f3a"
+        report_color = "#2f7f8f"
+        opc_color = "#4078a0"
+        fault_dashed = red_state == "LOST" and blue_state == "LOST"
+        opc_dashed = bool(getattr(transport, "faults", {}).get("opcua_loss", False)) if transport is not None else False
+
+        self._packet_arrow(zc_right, base_y + 95, dcs_left, red_y + 20, "RASTA MA_UPDATE", vital_color, phase_base, dashed=fault_dashed)
+        self._packet_arrow(dcs_right, red_y + 20, cc_left, base_y + 95, "RED vital", vital_color, (phase_base + 0.15) % 1.0, dashed=red_state == "LOST")
+        self._packet_arrow(dcs_right, blue_y + 20, cc_left, base_y + 114, "BLUE standby/failover", vital_color, (phase_base + 0.28) % 1.0, dashed=blue_state == "LOST")
+        self._packet_arrow(cc_left, base_y + 250, dcs_right, rap_y + 22, "POSITION_REPORT", report_color, (phase_base + 0.42) % 1.0, dashed=fault_dashed)
+        self._packet_arrow(dcs_left, rap_y + 22, zc_right, base_y + 164, "valid position", report_color, (phase_base + 0.55) % 1.0, dashed=fault_dashed)
+
+        self._packet_arrow(ats_mid, base_y + 92, zc_left, base_y + 92, "route/headway", opc_color, (phase_base + 0.08) % 1.0, dashed=opc_dashed)
+        self._packet_arrow(cc_left, base_y + 174, dcs_right, blue_y + 20, "TRAIN_STATUS", opc_color, (phase_base + 0.22) % 1.0, dashed=opc_dashed)
+        self._packet_arrow(dcs_left, blue_y + 20, ats_mid, base_y + 160, "OPC UA-like status", opc_color, (phase_base + 0.36) % 1.0, dashed=opc_dashed)
+        self._packet_arrow(ats_mid, base_y + 116, dcs_left, blue_y + 20, "hold/dwell cmd", opc_color, (phase_base + 0.5) % 1.0, dashed=opc_dashed)
+        self._packet_arrow(dcs_right, blue_y + 20, cc_left, base_y + 174, "ATO command", opc_color, (phase_base + 0.64) % 1.0, dashed=opc_dashed)
+
+        legend_y = base_y + panel_h + 12
+        if legend_y < height - 22:
+            c.create_text(
+                margin,
+                legend_y,
+                anchor="nw",
+                text="Green=RASTA-like vital safety, Blue=OPC UA-like supervision, RED/BLUE boxes show DCS redundant paths, RAP box shows radio access coverage.",
+                fill=APP_THEME["muted"],
+                font=("Consolas", int(8 * self.scale_factor)),
+            )
+
+        header_lines = [
+            "time    | from        | to          | protocol          | path       | msg_type        | seq   | latency | ttl | result       | action        | reason",
+            "-" * 156,
         ]
+        transport = getattr(sim, "dcs_transport", None)
+        raw_events = list(getattr(transport, "events", []))[-120:]
+        events = self._filtered_packet_events(raw_events)[-80:]
+        event_lines = []
+        if events:
+            for event in events:
+                event_lines.append(
+                    f"{event.time_s:7.3f} | "
+                    f"{event.source_id[:11]:<11} | "
+                    f"{event.destination_id[:11]:<11} | "
+                    f"{event.protocol[:17]:<17} | "
+                    f"{event.path[:10]:<10} | "
+                    f"{event.msg_type[:15]:<15} | "
+                    f"{event.sequence_number:<5} | "
+                    f"{event.latency_ms:>6.0f}ms | "
+                    f"{event.ttl_state:<3} | "
+                    f"{event.result[:12]:<12} | "
+                    f"{event.action[:13]:<13} | "
+                    f"{event.reason}"
+                )
+        else:
+            event_lines.append("(no packet events yet)")
+        footer_lines = ["", "Network Health / DCS-NMS", "-" * 72]
+        if transport is not None:
+            red = transport.paths.get("RED")
+            blue = transport.paths.get("BLUE")
+            total_timeout = sum(path.timeout_count for path in transport.paths.values())
+            total_lost = sum(path.lost_count for path in transport.paths.values())
+            total_sent = sum(path.sent_count for path in transport.paths.values())
+            total_loss_pct = (total_lost / total_sent * 100.0) if total_sent else 0.0
+            active_path = getattr(transport, "active_path", "")
+            rap_text = ", ".join(f"{train_id}={rap_id}" for train_id, rap_id in sorted(getattr(transport, "last_rap_by_train", {}).items())) or "none"
+            active = transport.paths.get(active_path)
+            latency = f"{active.base_latency_ms:.0f}ms" if active is not None else "n/a"
+            jitter = f"{active.jitter_ms:.0f}ms" if active is not None else "n/a"
+            footer_lines.extend(
+                [
+                    f"RED={red.state.value if red else 'N/A':<8} BLUE={blue.state.value if blue else 'N/A':<8} active={active_path:<4} RAP={rap_text}",
+                    f"latency={latency:<6} jitter={jitter:<6} packet_loss={total_loss_pct:>5.1f}%  timeout_count={total_timeout:<4} handover_count={getattr(transport, 'handover_count', 0):<4}",
+                    f"last_fault={getattr(transport, 'last_fault', '') or 'none'}",
+                ]
+            )
+        else:
+            footer_lines.append("DCS transport unavailable")
+        footer_lines.extend(["", "Train vital data freshness", "-" * 72])
         for train in trains:
             link = "MUTE" if train.dcs_muted else "OK" if train.safe_packet_valid else "TIMEOUT"
-            lines.append(
-                f"{sim.sim_time_s:7.1f}s ZC          {train.id:<10} MA eoa={train.eoa:>7.1f}m psr={train.psr_kmh:>5.1f} "
-                f"age={train.safe_packet_age_s:>4.1f}s link={link}"
-            )
-            lines.append(
-                f"{sim.sim_time_s:7.1f}s {train.id:<11} ZC          POS report={train.reported_pos:>7.1f}m "
-                f"speed={ms_to_kmh(train.speed):>5.1f}km/h"
-            )
-            lines.append(
-                f"{sim.sim_time_s:7.1f}s {train.id + '/ATP':<11} {train.id + '/ATO':<10} "
-                f"ATP={train.atp_state:<14} ATO={train.ato_state:<12} action={train.atp_action or 'NONE'}"
+            footer_lines.append(
+                f"{train.id:<10} MA={getattr(train, 'ma_freshness', 'FRESH'):<7} "
+                f"link={link:<8} result={getattr(train, 'vital_packet_result', ''):<12} "
+                f"reason={getattr(train, 'vital_packet_reason', '')}"
             )
         self.text.configure(state="normal")
         self.text.delete("1.0", "end")
-        self.text.insert("1.0", "\n".join(lines))
+        self.text.insert("end", "\n".join(header_lines) + "\n")
+        self.packet_events = events
+        for idx, line in enumerate(event_lines):
+            tag = f"packet_event_{idx}"
+            if events:
+                self.text.insert("end", line + "\n", (tag,))
+            else:
+                self.text.insert("end", line + "\n")
+            self.text.tag_configure(tag, foreground=APP_THEME["text"], underline=False)
+        self.text.insert("end", "\n".join(footer_lines))
         self.text.configure(state="disabled")
 
 

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
@@ -174,7 +174,6 @@ def _normalize_scheduled_stops(raw_stops: List[Dict[str, Any]]) -> List[Dict[str
 
 
 def normalize_scenario(data: Dict[str, Any], source_path: str | None = None) -> Dict[str, Any]:
-    has_headway_config = "headway" in data
     merged = _deep_merge(DEFAULT_SCENARIO, data)
     display = merged.get("display", {})
     track_profile = _normalize_track_segments(merged["track"]["segments"])
@@ -193,6 +192,15 @@ def normalize_scenario(data: Dict[str, Any], source_path: str | None = None) -> 
     }
     trains = _normalize_trains(merged["trains"], train_defaults)
     scheduled_stops = _normalize_scheduled_stops(merged.get("scheduled_stops", []))
+    raw_headway = merged.get("headway", {}) if isinstance(merged.get("headway", {}), dict) else {}
+    headway = {
+        "mode": "fixed",
+        "target_headway_s": float(raw_headway.get("target_headway_s", raw_headway.get("fixed_headway_s", 180.0))),
+    }
+    raw_communication = merged.get("communication", {}) if isinstance(merged.get("communication", {}), dict) else {}
+    communication = {
+        "use_vital_position_report_for_zc": bool(raw_communication.get("use_vital_position_report_for_zc", False)),
+    }
     return {
         "name": str(merged.get("name", "Line Configuration")),
         "source_path": source_path,
@@ -200,17 +208,19 @@ def normalize_scenario(data: Dict[str, Any], source_path: str | None = None) -> 
         "track_min_m": track_min_m,
         "track_max_m": track_max_m,
         "track_labels": [int(label) for label in track_labels],
-        "block_mode": str(display.get("block_mode", merged.get("block_mode", ""))),
+        "block_mode": "moving_block",
         "track_profile": track_profile,
         "track_end_m": track_end_m,
         "train_defaults": train_defaults,
         "scheduled_stops": scheduled_stops,
         "trains": trains,
         "source_trains": deepcopy(merged.get("source_trains", [])),
-        "headway": deepcopy(merged.get("headway", {})),
-        "headway_config_present": has_headway_config,
-        "capacity_baseline": deepcopy(merged.get("capacity_baseline", {})),
+        "headway": headway,
+        "communication": communication,
+        "headway_config_present": True,
         "line_conditions": deepcopy(merged.get("line_conditions", [])),
+        "radio_access_points": deepcopy(merged.get("radio_access_points", [])),
+        "radio_physical": deepcopy(merged.get("radio_physical", {})),
         "color_palette": deepcopy(DEFAULT_COLOR_PALETTE),
     }
 
@@ -225,106 +235,4 @@ def load_scenario(path: str | Path | None = None) -> Dict[str, Any]:
         raise ValueError("Scenario YAML root must be a mapping.")
     return normalize_scenario(loaded, str(scenario_path))
 
-
-def scenario_to_yaml_data(sim: Any, scenario: Dict[str, Any]) -> Dict[str, Any]:
-    """Build a YAML-ready scenario from the current editable simulation state."""
-    window_title = str(scenario.get("window_title", DEFAULT_SCENARIO["display"]["window_title"]))
-    track_min_m = float(getattr(sim, "track_min_m", scenario.get("track_min_m", 0.0)))
-    track_max_m = float(getattr(sim, "track_max_m", scenario.get("track_max_m", 0.0)))
-    track_labels = list(getattr(sim, "track_labels", scenario.get("track_labels", [])))
-
-    train_defaults = dict(scenario.get("train_defaults", DEFAULT_SCENARIO["train_defaults"]))
-    trains = []
-    for train in scenario.get("trains", []):
-        saved_train = {
-            "id": train.get("id"),
-            "start_pos": train.get("start_pos"),
-        }
-        for key in ("length_m", "mass_kg", "drive_mode", "max_manual_speed_kmh", "dcs_mute_windows", "color"):
-            if key in train and train.get(key) is not None:
-                saved_train[key] = train.get(key)
-        trains.append(saved_train)
-
-    source_trains = []
-    for source in getattr(sim, "source_trains", []):
-        capacity = int(source.get("capacity", 2))
-        source_trains.append(
-            {
-                "name": source.get("name", "DEPOT"),
-                "start_m": source.get("start_m", -200.0),
-                "length_m": source.get("length_m", 200.0),
-                "capacity": capacity,
-                "total_trains": capacity,
-            }
-        )
-
-    return {
-        "name": str(scenario.get("name", "Line Configuration")),
-        "display": {
-            "window_title": window_title,
-            "track_min_m": track_min_m,
-            "track_max_m": track_max_m,
-            "track_labels": [int(label) for label in track_labels],
-            "block_mode": str(getattr(sim, "block_mode", scenario.get("block_mode", "fixed"))),
-        },
-        "train_defaults": {
-            "length_m": float(train_defaults.get("length_m", DEFAULT_SCENARIO["train_defaults"]["length_m"])),
-            "mass_kg": float(train_defaults.get("mass_kg", DEFAULT_SCENARIO["train_defaults"]["mass_kg"])),
-            **(
-                {"drive_mode": train_defaults["drive_mode"]}
-                if "drive_mode" in train_defaults
-                else {}
-            ),
-            **(
-                {"max_manual_speed_kmh": float(train_defaults["max_manual_speed_kmh"])}
-                if "max_manual_speed_kmh" in train_defaults
-                else {}
-            ),
-        },
-        "track": {
-            "segments": [
-                {
-                    "start_m": float(start),
-                    "end_m": float(end),
-                    "gradient": float(gradient),
-                    "psr_kmh": float(psr),
-                }
-                for start, end, gradient, psr in getattr(sim, "track_profile", [])
-            ]
-        },
-        "scheduled_stops": [
-            {
-                "name": stop.get("name", f"STOP_{idx + 1}"),
-                "pos_m": float(stop.get("pos_m", 0.0)),
-                "length_m": float(stop.get("length_m", 160.0)),
-                "capacity": int(stop.get("capacity", 3)),
-                "dwell_s": float(stop.get("dwell_s", 30.0)),
-            }
-            for idx, stop in enumerate(getattr(sim, "scheduled_stops", []))
-        ],
-        "trains": trains,
-        "source_trains": source_trains,
-        "headway": deepcopy(getattr(sim, "scenario", scenario).get("headway", scenario.get("headway", {}))),
-        "capacity_baseline": deepcopy(
-            getattr(sim, "scenario", scenario).get("capacity_baseline", scenario.get("capacity_baseline", {}))
-        ),
-        "line_conditions": [
-            {
-                "start_m": float(condition.get("start", condition.get("start_m", 0.0))),
-                "end_m": float(condition.get("end", condition.get("end_m", 0.0))),
-                "condition": str(condition.get("condition", "dry")),
-            }
-            for condition in getattr(sim, "line_conditions", [])
-        ],
-    }
-
-
-def save_scenario_file(sim: Any, scenario: Dict[str, Any], path: str | Path | None = None) -> Path:
-    if path is None:
-        path = scenario.get("source_path") or DEFAULT_SCENARIO_PATH
-    save_path = Path(path)
-    data = scenario_to_yaml_data(sim, scenario)
-    with save_path.open("w", encoding="utf-8") as fh:
-        yaml.safe_dump(data, fh, sort_keys=False, allow_unicode=True)
-    return save_path
 

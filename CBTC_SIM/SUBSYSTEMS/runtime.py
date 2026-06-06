@@ -12,7 +12,6 @@ from CONFIG.config import (
     DEPARTURE_RELEASE_MIN_AUTHORITY_M,
     LINE_CENTER_SPACING_M,
     MIN_PASSENGER_DWELL_S,
-    MIN_TIMETABLE_RECOVERY_DWELL_S,
     PARALLEL_RELEASE_MARGIN_M,
     PARALLEL_ROMAN_LABELS,
     SOURCE_RELEASE_LOCK_S,
@@ -42,6 +41,41 @@ from SUBSYSTEMS.signalling import SafeMovementPacket, STOP_SVL_OFFSET_M, get_tra
 from SUBSYSTEMS.physics import equivalent_mass_adjusted_accel, kmh_to_ms, ms_to_kmh
 from SUBSYSTEMS.train import Train, train_color
 from SUBSYSTEMS.zc import ZoneController
+from SUBSYSTEMS.communication.messages import MovementAuthorityMessage, PositionReportMessage, TrainStatusMessage
+from SUBSYSTEMS.communication.opcua import OpcUaSupervisionFrame
+from SUBSYSTEMS.communication.rasta import VitalSafePacket, VitalSession
+from SUBSYSTEMS.communication.transport import DcsTransport
+
+
+class _VitalPositionTrainView:
+    def __init__(self, train: Train, report: Dict[str, Any] | None, freshness: str):
+        self._train = train
+        self._report = report or {}
+        self.id = train.id
+        self.reported_pos = float(self._report.get("safe_front_m", train.reported_pos))
+        self.speed = float(self._report.get("speed_mps", train.speed))
+        self.vital_speed = self.speed
+        self.mass = train.mass
+        self.length = train.length
+        self.trip_mode = train.trip_mode
+        self.trip_protect_rear_pos = train.trip_protect_rear_pos
+        self.protection_zone_id = train.protection_zone_id
+        self.protection_lane = train.protection_lane
+        self.active_scheduled_stop = train.active_scheduled_stop
+        self.position_report_freshness = freshness
+
+    def __getattr__(self, name: str):
+        return getattr(self._train, name)
+
+    def effective_position_uncertainty_m(self) -> float:
+        base = float(self._report.get("localization_uncertainty_m", self._train.effective_position_uncertainty_m()))
+        return max(base, 999.0) if self.position_report_freshness != "FRESH" else base
+
+    def safe_rear_end_pos(self) -> float:
+        if "safe_rear_m" in self._report:
+            return float(self._report["safe_rear_m"])
+        return self._train.safe_rear_end_pos()
+
 
 class Simulation:
     def __init__(self, scenario: Dict[str, object]):
@@ -58,33 +92,11 @@ class Simulation:
         self.track_max_m = float(scenario["track_max_m"])
         self.track_min_m = min(self.track_min_m, SOURCE_TRAIN_START_M)
         self.track_labels = list(scenario["track_labels"])
-        raw_headway_cfg = scenario.get("headway")
-        headway_cfg = raw_headway_cfg if isinstance(raw_headway_cfg, dict) else {}
-        requested_block_mode = str(scenario.get("block_mode", "")).lower()
-        if requested_block_mode in {"fixed", "fixed_block"}:
-            self.block_mode = "fixed_block"
-        elif requested_block_mode in {"moving", "moving_block"}:
-            self.block_mode = "moving_block"
-        else:
-            explicit_off_mode = (
-                bool(scenario.get("headway_config_present", isinstance(raw_headway_cfg, dict) and bool(raw_headway_cfg)))
-                and str(headway_cfg.get("mode", "off")).lower() == "off"
-            )
-            self.block_mode = "fixed_block" if explicit_off_mode else "moving_block"
+        self.block_mode = "moving_block"
+        communication_cfg = scenario.get("communication", {}) if isinstance(scenario.get("communication", {}), dict) else {}
+        self.use_vital_position_report_for_zc = bool(communication_cfg.get("use_vital_position_report_for_zc", False))
         self.headway_manager = HeadwayManager.from_scenario(scenario)
         self.scheduled_stops = [dict(stop) for stop in scenario.get("scheduled_stops", [])]
-        self.timetable_services = self._build_timetable_services(scenario)
-        headway_runtime = scenario.get("headway", {}) if isinstance(scenario.get("headway", {}), dict) else {}
-        self.timetable_wall_clock = bool(headway_runtime.get("timetable_wall_clock", False))
-        self.timetable_loaded_clock_s = (
-            float(headway_runtime.get("timetable_loaded_clock_s"))
-            if headway_runtime.get("timetable_loaded_clock_s") is not None
-            else None
-        )
-        self.timetable_clock_scale = max(1.0, float(headway_runtime.get("timetable_clock_scale", 1.0) or 1.0))
-        self._timetable_clock_anchor_real_s = time.monotonic()
-        self._timetable_clock_anchor_operational_s = 0.0
-        self.fixed_blocks = self._build_fixed_blocks(scenario)
         self.station_route_states: List[Dict[str, Any]] = []
         self.parallel_release_locks: Dict[Tuple[str, int], float] = {}
         self.source_trains = []
@@ -130,12 +142,29 @@ class Simulation:
             train = Train(cfg)
             train.source_lane = cfg.get("source_lane")
             self.trains.append(train)
+        self.dcs_transport = DcsTransport(scenario.get("radio_access_points", []), scenario.get("radio_physical", {}))
+        self._vital_sequence_numbers: Dict[Tuple[str, str], int] = {}
+        self.zc_vital_sessions: Dict[str, VitalSession] = {}
+        self.pending_zc_position_packets: List[Tuple[float, VitalSafePacket]] = []
+        self.pending_ats_status_frames: List[Tuple[float, OpcUaSupervisionFrame]] = []
+        self.last_valid_position_report: Dict[str, Dict[str, Any]] = {}
+        self.position_report_freshness: Dict[str, str] = {}
+        self.position_report_received_time_s: Dict[str, float] = {}
+        self.ats_received_train_state: Dict[str, Dict[str, Any]] = {}
+        self.ats_train_freshness: Dict[str, str] = {}
+        self.ats_train_received_time_s: Dict[str, float] = {}
+        self._opcua_sequence_number = 0
+        for train in self.trains:
+            self._attach_train_communication(train)
         self._stage_initial_source_trains()
+        for train in self.trains:
+            self._attach_train_communication(train)
         self._sync_station_route_states()
-        self.zc = ZoneController(self.trains, self.track_end_m, self.block_mode, self.fixed_blocks)
+        self.zc = ZoneController(self.trains, self.track_end_m)
+        self.zc.last_valid_position_report = self.last_valid_position_report
+        self.zc.position_report_freshness = self.position_report_freshness
         self.tsr_zones = []
         self.sim_time_s = 0.0
-        self._reset_timetable_clock_anchor()
         self.analytics = {
             "min_headway_s": None,
             "target_headway_s": self.headway_manager.nominal_target_headway_s(),
@@ -162,44 +191,18 @@ class Simulation:
         }
         self._dispatch_safe_packets(with_delay=False)
 
-    def _build_fixed_blocks(self, scenario: Dict[str, object]) -> List[Dict[str, float]]:
-        cfg = scenario.get("capacity_baseline", {}) if isinstance(scenario.get("capacity_baseline", {}), dict) else {}
-        blocks_per_section = max(1, int(cfg.get("blocks_per_section", cfg.get("fixed_blocks_per_section", 4))))
-        track_start_m = float(self.track_profile[0][0]) if self.track_profile else 0.0
-        sections: List[Tuple[float, float]] = []
-        section_start = track_start_m
-        for stop in self.scheduled_stops:
-            stop_pos = float(stop.get("pos_m", track_start_m))
-            stop_len = max(0.0, float(stop.get("length_m", 160.0)))
-            station_start = max(track_start_m, stop_pos - stop_len / 2.0)
-            station_end = min(self.track_end_m, stop_pos + stop_len / 2.0)
-            if station_start > section_start + STOP_ACCURACY_TOL_M:
-                sections.append((section_start, station_start))
-            section_start = max(section_start, station_end)
-        if self.track_end_m > section_start + STOP_ACCURACY_TOL_M:
-            sections.append((section_start, self.track_end_m))
-        if not sections:
-            sections.append((track_start_m, self.track_end_m))
-        blocks: List[Dict[str, float]] = []
-        block_idx = 1
-        for section_idx, (start, end) in enumerate(sections, start=1):
-            length = max(0.0, end - start)
-            if length <= 0.0:
-                continue
-            block_len = length / blocks_per_section
-            for local_idx in range(blocks_per_section):
-                block_start = start + block_len * local_idx
-                block_end = end if local_idx == blocks_per_section - 1 else start + block_len * (local_idx + 1)
-                blocks.append(
-                    {
-                        "id": f"FB{section_idx}.{local_idx + 1}",
-                        "start_m": block_start,
-                        "end_m": block_end,
-                        "index": block_idx,
-                    }
-                )
-                block_idx += 1
-        return blocks
+    def _attach_train_communication(self, train: Train):
+        if hasattr(self, "dcs_transport"):
+            train.cc.event_sink = self.dcs_transport
+        if hasattr(self, "zc_vital_sessions"):
+            self.zc_vital_sessions.setdefault(
+                train.id,
+                VitalSession(
+                    local_id="ZC_01",
+                    remote_id=train.id,
+                    session_id=f"{train.id}:ZC_01",
+                ),
+            )
 
     def _sync_station_route_states(self):
         while len(self.station_route_states) < len(self.scheduled_stops):
@@ -221,10 +224,6 @@ class Simulation:
             self.detect_station_lines(station_idx)
 
     def _make_source_train_config(self, source: Dict[str, Any], train_id: str, start_pos: float, lane: int = 0) -> Dict[str, Any]:
-        sequence = int(source.get("_pending_sequence", 0) or 0)
-        service = self._timetable_service_for_sequence(sequence)
-        if service:
-            train_id = str(service.get("train_id", train_id))
         cfg = {
             "id": train_id,
             "start_pos": start_pos,
@@ -240,89 +239,7 @@ class Simulation:
             "source_name": str(source.get("name", "DEPOT")),
             "source_lane": lane,
         }
-        if service:
-            cfg["schedule_service_id"] = service.get("train_id")
-            cfg["schedule_profile"] = service.get("profile", "")
-            cfg["schedule_records"] = service.get("records", [])
-            cfg["schedule_planned_dispatch_s"] = service.get("planned_dispatch_time_s")
         return cfg
-
-    def _build_timetable_services(self, scenario: Dict[str, Any]) -> List[Dict[str, Any]]:
-        headway = scenario.get("headway", {}) if isinstance(scenario.get("headway", {}), dict) else {}
-        records = [dict(record) for record in headway.get("timetable_records", []) or []]
-        services: Dict[str, Dict[str, Any]] = {}
-        for record in records:
-            train_id = str(record.get("train_id", "")).strip()
-            if not train_id:
-                continue
-            service = services.setdefault(train_id, {"train_id": train_id, "records": []})
-            service["records"].append(record)
-            if service.get("planned_dispatch_time_s") is None and record.get("departure_time_s") is not None:
-                service["planned_dispatch_time_s"] = float(record.get("departure_time_s"))
-            if not service.get("profile") and record.get("profile") not in {None, "", "--"}:
-                service["profile"] = str(record.get("profile"))
-        result = list(services.values())
-        result.sort(
-            key=lambda service: min(
-                (
-                    float(record.get("departure_time_s"))
-                    for record in service.get("records", [])
-                    if record.get("departure_time_s") is not None
-                ),
-                default=float("inf"),
-            )
-        )
-        return result
-
-    def _timetable_service_for_sequence(self, sequence: int) -> Dict[str, Any] | None:
-        if self.headway_manager.mode != "timetable" or sequence <= 0:
-            return None
-        idx = sequence - 1
-        if 0 <= idx < len(self.timetable_services):
-            return self.timetable_services[idx]
-        return None
-
-    def _vietnam_clock_seconds(self) -> float:
-        vietnam_tz = timezone(timedelta(hours=7))
-        now = datetime.now(vietnam_tz)
-        return float(now.hour * 3600 + now.minute * 60 + now.second + now.microsecond / 1_000_000.0)
-
-    def _clock_delay_from_reference_s(self, clock_s: float, reference_clock_s: float) -> float:
-        day_s = 24.0 * 3600.0
-        return (float(clock_s) - float(reference_clock_s)) % day_s
-
-    def _reset_timetable_clock_anchor(self) -> None:
-        self._timetable_clock_anchor_real_s = time.monotonic()
-        if self.timetable_wall_clock and self.timetable_loaded_clock_s is not None:
-            self._timetable_clock_anchor_operational_s = self._clock_delay_from_reference_s(
-                self._vietnam_clock_seconds(),
-                self.timetable_loaded_clock_s,
-            )
-        else:
-            self._timetable_clock_anchor_operational_s = self.sim_time_s
-
-    def set_timetable_clock_scale(self, scale: float) -> None:
-        current_operational_s = self._timetable_operational_time_s()
-        self.timetable_clock_scale = max(1.0, float(scale))
-        self._timetable_clock_anchor_operational_s = current_operational_s
-        self._timetable_clock_anchor_real_s = time.monotonic()
-
-    def _timetable_operational_time_s(self) -> float:
-        if (
-            self.headway_manager.mode == "timetable"
-            and self.timetable_wall_clock
-            and self.timetable_loaded_clock_s is not None
-        ):
-            elapsed_real_s = max(0.0, time.monotonic() - getattr(self, "_timetable_clock_anchor_real_s", time.monotonic()))
-            return float(getattr(self, "_timetable_clock_anchor_operational_s", 0.0)) + elapsed_real_s * float(
-                getattr(self, "timetable_clock_scale", 1.0)
-            )
-        return self.sim_time_s
-
-    def timetable_display_clock_s(self) -> float | None:
-        if not (self.headway_manager.mode == "timetable" and self.timetable_wall_clock and self.timetable_loaded_clock_s is not None):
-            return None
-        return (self.timetable_loaded_clock_s + self._timetable_operational_time_s()) % (24.0 * 3600.0)
 
     def _source_staging_head_pos(self) -> float:
         train_length = float(self.scenario["train_defaults"]["length_m"])
@@ -331,12 +248,12 @@ class Simulation:
         return min(max_head, max(min_head, SOURCE_TRAIN_START_M + train_length))
 
     def _next_source_train_id(self, source: Dict[str, Any], sequence: int) -> str:
-        train_id = f"{source.get('name', 'DEPOT')}_{sequence}"
         existing_ids = {train.id for train in self.trains}
-        while train_id in existing_ids:
+        while True:
             self.generated_train_counter += 1
-            train_id = f"DEPOT_{self.generated_train_counter}"
-        return train_id
+            train_id = f"train_{self.generated_train_counter}"
+            if train_id not in existing_ids:
+                return train_id
 
     def _source_train_matches(self, train: Train, source_name: str) -> bool:
         if getattr(train, "source_name", None) == source_name:
@@ -344,6 +261,11 @@ class Simulation:
         return train.id.startswith(f"{source_name}_")
 
     def _source_train_sequence(self, train: Train, source_name: str) -> int:
+        if train.id.startswith("train_"):
+            try:
+                return int(train.id[len("train_"):])
+            except ValueError:
+                return 0
         prefix = f"{source_name}_"
         if not train.id.startswith(prefix):
             return 0
@@ -357,7 +279,9 @@ class Simulation:
         return sorted(owned, key=lambda item: self._source_train_sequence(item, source_name))
 
     def _rebuild_after_train_set_change(self):
-        self.zc = ZoneController(self.trains, self.track_end_m, self.block_mode, self.fixed_blocks)
+        self.zc = ZoneController(self.trains, self.track_end_m)
+        self.zc.last_valid_position_report = self.last_valid_position_report
+        self.zc.position_report_freshness = self.position_report_freshness
         self._dispatch_safe_packets(with_delay=False)
         self.train_generation_changed = True
 
@@ -408,6 +332,7 @@ class Simulation:
                 train = Train(self._make_source_train_config(source, train_id, start_pos, lane))
                 source.pop("_pending_sequence", None)
                 train.source_lane = lane
+                self._attach_train_communication(train)
                 self.trains.append(train)
             source["generated"] = generated + to_stage
 
@@ -616,7 +541,6 @@ class Simulation:
             start_pos = self._source_staging_head_pos()
             if not self._source_exit_clear(source, start_pos, train_length):
                 continue
-            self.generated_train_counter += 1
             train_id = self._next_source_train_id(source, generated + 1)
             source["_pending_sequence"] = generated + 1
             train = Train(self._make_source_train_config(source, train_id, start_pos, 0))
@@ -632,7 +556,7 @@ class Simulation:
             tsr_active = bool(self.tsr_zones)
             decision = self.headway_manager.decide(
                 train,
-                self._timetable_operational_time_s(),
+                self.sim_time_s,
                 dispatched_front_pos_m=dispatched_front_gap_m,
                 tsr_active=tsr_active,
             )
@@ -646,12 +570,15 @@ class Simulation:
             train.headway_dispatch_released = True
             train.headway_hold_reason = decision.reason
             train.source_lane = 0
+            self._attach_train_communication(train)
             self.trains.append(train)
             source["generated"] = generated + 1
             source["last_hold_reason"] = ""
             changed = True
         if changed:
-            self.zc = ZoneController(self.trains, self.track_end_m, self.block_mode, self.fixed_blocks)
+            self.zc = ZoneController(self.trains, self.track_end_m)
+            self.zc.last_valid_position_report = self.last_valid_position_report
+            self.zc.position_report_freshness = self.position_report_freshness
             self._dispatch_safe_packets(with_delay=False)
         return changed
 
@@ -687,7 +614,7 @@ class Simulation:
             dispatched_front_gap_m = max(released_front_gaps, default=None)
             decision = self.headway_manager.decide(
                 train,
-                self._timetable_operational_time_s(),
+                self.sim_time_s,
                 dispatched_front_pos_m=dispatched_front_gap_m,
                 tsr_active=bool(self.tsr_zones),
             )
@@ -1207,40 +1134,9 @@ class Simulation:
     def _is_final_scheduled_station(self, station_idx: int | None) -> bool:
         return station_idx is not None and station_idx == len(self.scheduled_stops) - 1
 
-    def _schedule_record_for_train_station(self, train: Train | None, stop: Dict[str, Any], station_idx: int | None = None) -> Dict[str, Any] | None:
-        if train is None or self.headway_manager.mode != "timetable":
-            return None
-        station_name = str(stop.get("name", "")).strip().lower()
-        station_aliases = {station_name}
-        if station_idx is not None:
-            station_aliases.add(f"s{station_idx + 2}".lower())
-        for record in getattr(train, "schedule_records", []) or []:
-            if str(record.get("station", "")).strip().lower() in station_aliases:
-                return dict(record)
-        return None
-
     def _station_dwell_time_s(self, station_idx: int | None, stop: Dict[str, Any], train: Train | None = None) -> float:
         if self._is_terminal_station(station_idx) or self._is_final_scheduled_station(station_idx):
             return float("inf")
-        schedule_record = self._schedule_record_for_train_station(train, stop, station_idx)
-        if schedule_record is not None:
-            planned_departure_s = schedule_record.get("departure_time_s")
-            planned_arrival_s = schedule_record.get("arrival_time_s")
-            operational_time_s = self._timetable_operational_time_s()
-            late_for_schedule = planned_arrival_s is not None and operational_time_s > float(planned_arrival_s)
-            if late_for_schedule:
-                late_s = operational_time_s - float(planned_arrival_s)
-                scheduled_dwell_s = schedule_record.get("dwell_s")
-                if scheduled_dwell_s is None and planned_departure_s is not None:
-                    scheduled_dwell_s = max(0.0, float(planned_departure_s) - float(planned_arrival_s))
-                if scheduled_dwell_s is not None:
-                    return max(MIN_TIMETABLE_RECOVERY_DWELL_S, float(scheduled_dwell_s) - late_s)
-                return max(MIN_TIMETABLE_RECOVERY_DWELL_S, MIN_PASSENGER_DWELL_S - late_s)
-            if planned_departure_s is not None:
-                return max(MIN_PASSENGER_DWELL_S, float(planned_departure_s) - operational_time_s)
-            scheduled_dwell_s = schedule_record.get("dwell_s")
-            if scheduled_dwell_s is not None:
-                return max(MIN_PASSENGER_DWELL_S, float(scheduled_dwell_s))
         minimum_departure_s = self.sim_time_s + MIN_PASSENGER_DWELL_S
         if station_idx is None:
             return MIN_PASSENGER_DWELL_S
@@ -1297,18 +1193,7 @@ class Simulation:
         return max(0.0, previous + target_headway_s - self.sim_time_s)
 
     def _station_schedule_departure_hold_s(self, station_idx: int | None, train: Train) -> float:
-        if station_idx is None or self.headway_manager.mode != "timetable":
-            return 0.0
-        if not (0 <= station_idx < len(self.scheduled_stops)):
-            return 0.0
-        record = self._schedule_record_for_train_station(train, self.scheduled_stops[station_idx], station_idx)
-        if record is None or record.get("departure_time_s") is None:
-            return 0.0
-        operational_time_s = self._timetable_operational_time_s()
-        planned_arrival_s = record.get("arrival_time_s")
-        if planned_arrival_s is not None and operational_time_s > float(planned_arrival_s):
-            return 0.0
-        return max(0.0, float(record["departure_time_s"]) - operational_time_s)
+        return 0.0
 
     def _record_station_arrival(self, station_idx: int, train: Train, dwell_s: float) -> None:
         previous = self.station_last_arrival_s.get(station_idx)
@@ -1317,22 +1202,11 @@ class Simulation:
         if previous is not None:
             arrival_headway_s = max(0.0, self.sim_time_s - previous)
             self.station_arrival_headway_actual_s.setdefault(station_idx, []).append(arrival_headway_s)
-        schedule_record = (
-            self._schedule_record_for_train_station(train, self.scheduled_stops[station_idx], station_idx)
-            if 0 <= station_idx < len(self.scheduled_stops)
-            else None
-        )
-        schedule_variance_s = None
-        if schedule_record is not None and schedule_record.get("arrival_time_s") is not None:
-            schedule_variance_s = self._timetable_operational_time_s() - float(schedule_record["arrival_time_s"])
         self.analytics.setdefault("station_arrivals", {}).setdefault(station_idx, []).append(
             {
                 "train_id": train.id,
                 "arrival_time_s": self.sim_time_s,
                 "arrival_headway_s": arrival_headway_s,
-                "scheduled_arrival_time_s": None if schedule_record is None else schedule_record.get("arrival_time_s"),
-                "schedule_station": None if schedule_record is None else schedule_record.get("station"),
-                "schedule_variance_s": schedule_variance_s,
                 "planned_dwell_s": dwell_s,
                 "passenger_dwell_s": dwell_s,
                 "station_wait_s": dwell_s,
@@ -1890,11 +1764,10 @@ class Simulation:
                 if schedule_hold_s > 0.0:
                     train.dwell_remaining_s = schedule_hold_s
                     return immediate_packet_required
-                if self.headway_manager.mode != "timetable":
-                    headway_hold_s = self._station_departure_headway_hold_s(station_idx)
-                    if headway_hold_s > 0.0:
-                        train.dwell_remaining_s = headway_hold_s
-                        return immediate_packet_required
+                headway_hold_s = self._station_departure_headway_hold_s(station_idx)
+                if headway_hold_s > 0.0:
+                    train.dwell_remaining_s = headway_hold_s
+                    return immediate_packet_required
                 train.commanded_stop = False
                 self._set_train_station_state(train, station_idx, "READY_TO_DEPART", "dwell_complete")
                 if station_idx is not None:
@@ -1974,22 +1847,205 @@ class Simulation:
     def stop(self):
         self.running = False
 
-    def _timetable_regulated_speed_cap_kmh(self, train: Train, base_cap_kmh: float) -> Tuple[float, str]:
-        if self.headway_manager.mode != "timetable" or train.active_scheduled_stop is None:
-            return base_cap_kmh, ""
-        station_idx = self._station_index_for_stop(train.active_scheduled_stop)
-        if station_idx is None:
-            return base_cap_kmh, ""
-        record = self._schedule_record_for_train_station(train, train.active_scheduled_stop, station_idx)
-        if record is None or record.get("arrival_time_s") is None:
-            return base_cap_kmh, ""
-        distance_m = max(0.0, float(train.active_scheduled_stop["pos_m"]) - train.pos)
-        if distance_m <= STOP_ACCURACY_TOL_M:
-            return base_cap_kmh, ""
-        remaining_s = float(record["arrival_time_s"]) - self._timetable_operational_time_s()
-        if remaining_s <= 0.0:
-            return base_cap_kmh, "TIMETABLE_LATE_FAST"
-        return base_cap_kmh, "TIMETABLE_RUN_MAX_DWELL_BALANCE"
+    def _next_vital_sequence(self, source_id: str, destination_id: str) -> int:
+        key = (source_id, destination_id)
+        value = self._vital_sequence_numbers.get(key, 0) + 1
+        self._vital_sequence_numbers[key] = value
+        return value
+
+    def _movement_authority_message(self, train: Train, packet: SafeMovementPacket, reason: str) -> MovementAuthorityMessage:
+        return MovementAuthorityMessage(
+            train_id=train.id,
+            eoa_m=float(packet.eoa_m),
+            psr_kmh=float(packet.tsr_kmh),
+            gradient=float(packet.variants.get("gradient", 0.0)),
+            next_speed_limit_kmh=float(packet.variants.get("next_speed_limit_kmh", 0.0)),
+            next_speed_limit_dist_m=float(packet.variants.get("next_speed_limit_dist_m", float("inf"))),
+            issued_time_s=float(packet.issued_time_s),
+            reason=reason,
+        )
+
+    def _vital_ma_packet(self, train: Train, packet: SafeMovementPacket, reason: str) -> VitalSafePacket:
+        source_id = "ZC_01"
+        destination_id = train.id
+        return VitalSafePacket.create(
+            source_id=source_id,
+            destination_id=destination_id,
+            session_id=f"{source_id}:{destination_id}",
+            message_type="MA_UPDATE",
+            sequence_number=self._next_vital_sequence(source_id, destination_id),
+            timestamp_ms=int(self.sim_time_s * 1000),
+            ttl_ms=1000,
+            payload=self._movement_authority_message(train, packet, reason).to_payload(),
+            key_id="SIM_KEY_01",
+            secret=train.cc.vital_session.secret,
+        )
+
+    def _position_report_message(self, train: Train) -> PositionReportMessage:
+        return PositionReportMessage(
+            train_id=train.id,
+            safe_front_m=float(train.safe_front_end_pos),
+            safe_rear_m=float(train.safe_rear_end_pos()),
+            speed_mps=float(train.speed),
+            direction="FORWARD" if train.speed >= -0.01 else "REVERSE",
+            localization_uncertainty_m=float(train.effective_position_uncertainty_m()),
+            train_integrity_ok=bool(train.safe_packet_valid and not train.trip_mode),
+            timestamp_ms=int(self.sim_time_s * 1000),
+        )
+
+    def _vital_position_packet(self, train: Train) -> VitalSafePacket:
+        source_id = train.id
+        destination_id = "ZC_01"
+        return VitalSafePacket.create(
+            source_id=source_id,
+            destination_id=destination_id,
+            session_id=f"{source_id}:{destination_id}",
+            message_type="POSITION_REPORT",
+            sequence_number=self._next_vital_sequence(source_id, destination_id),
+            timestamp_ms=int(self.sim_time_s * 1000),
+            ttl_ms=1000,
+            payload=self._position_report_message(train).to_payload(),
+            key_id="SIM_KEY_01",
+            secret=self.zc_vital_sessions[train.id].secret,
+        )
+
+    def _train_status_message(self, train: Train) -> TrainStatusMessage:
+        return TrainStatusMessage(
+            train_id=train.id,
+            position_m=float(train.reported_pos),
+            speed_mps=float(train.speed),
+            mode=str(train.drive_mode),
+            atp_state=str(train.atp_state),
+            ato_state=str(train.ato_state),
+            door_state="AUTHORIZED" if train.door_authorized else "LOCKED",
+            brake_state=str(train.atp_brake),
+            fault_flags={
+                "DCS": bool(train.dcs_fault_active),
+                "ATO": bool(train.ato_fault_active),
+                "ATP": bool(train.atp_fault_active),
+            },
+            timestamp_ms=int(self.sim_time_s * 1000),
+        )
+
+    def _train_status_frame(self, train: Train) -> OpcUaSupervisionFrame:
+        self._opcua_sequence_number += 1
+        return OpcUaSupervisionFrame(
+            request_id=f"STATUS_{self._opcua_sequence_number}",
+            response_id="",
+            source_id=train.id,
+            destination_id="ATS",
+            method_name="TRAIN_STATUS",
+            timestamp_ms=int(self.sim_time_s * 1000),
+            timeout_ms=1500,
+            retry_count=0,
+            encrypted_flag=True,
+            certificate_id="SIM_CERT_01",
+            payload=self._train_status_message(train).to_payload(),
+        )
+
+    def _dispatch_train_uplink_messages(self):
+        for train in self.trains:
+            position_packet = self._vital_position_packet(train)
+            delivered, arrival_time_s, _event = self.dcs_transport.transport_vital(
+                position_packet,
+                self.sim_time_s,
+                train.id,
+                train.reported_pos,
+            )
+            if delivered is not None:
+                self.pending_zc_position_packets.append((arrival_time_s, delivered))
+            status_frame = self._train_status_frame(train)
+            delivered_status, status_arrival_s, _status_event = self.dcs_transport.transport_supervision(status_frame, self.sim_time_s)
+            if delivered_status is not None:
+                self.pending_ats_status_frames.append((status_arrival_s, delivered_status))
+        self.pending_zc_position_packets.sort(key=lambda item: item[0])
+        self.pending_ats_status_frames.sort(key=lambda item: item[0])
+
+    def _process_zc_position_reports(self):
+        remaining: List[Tuple[float, VitalSafePacket]] = []
+        for arrival_time_s, packet in self.pending_zc_position_packets:
+            if arrival_time_s > self.sim_time_s:
+                remaining.append((arrival_time_s, packet))
+                continue
+            train_id = packet.header.source_id
+            session = self.zc_vital_sessions.get(train_id)
+            if session is None:
+                continue
+            result = session.validate(packet, int(self.sim_time_s * 1000))
+            self.dcs_transport.log_validation(self.sim_time_s, packet, result.result, result.action, result.reason, path="ZC")
+            if result.accepted and packet.header.message_type == "POSITION_REPORT":
+                decoded_payload = packet.decoded_payload(session.secret)
+                self.last_valid_position_report[train_id] = dict(decoded_payload)
+                self.position_report_freshness[train_id] = "FRESH"
+                self.position_report_received_time_s[train_id] = self.sim_time_s
+                self.zc.store_position_report(train_id, decoded_payload, "FRESH")
+            elif train_id not in self.position_report_freshness:
+                self.position_report_freshness[train_id] = "LOST"
+                self.zc.mark_position_report_freshness(train_id, "LOST")
+        self.pending_zc_position_packets = remaining
+
+    def _process_ats_status_frames(self):
+        remaining: List[Tuple[float, OpcUaSupervisionFrame]] = []
+        for arrival_time_s, frame in self.pending_ats_status_frames:
+            if arrival_time_s > self.sim_time_s:
+                remaining.append((arrival_time_s, frame))
+                continue
+            if frame.method_name == "TRAIN_STATUS":
+                try:
+                    payload = frame.decoded_payload()
+                except Exception as exc:
+                    self.dcs_transport._event(
+                        self.sim_time_s,
+                        frame.source_id,
+                        frame.destination_id,
+                        "OPCUA_SUPERVISION",
+                        "ATS",
+                        frame.method_name,
+                        frame.retry_count,
+                        0.0,
+                        "OK",
+                        "DECRYPT_ERROR",
+                        "rejected",
+                        str(exc),
+                    )
+                    continue
+                train_id = str(payload.get("train_id", frame.source_id))
+                self.ats_received_train_state[train_id] = dict(payload)
+                self.ats_train_freshness[train_id] = "FRESH"
+                self.ats_train_received_time_s[train_id] = self.sim_time_s
+        self.pending_ats_status_frames = remaining
+
+    def _update_communication_freshness(self):
+        for train in self.trains:
+            age = self.sim_time_s - self.position_report_received_time_s.get(train.id, -999.0)
+            if age > 2.0:
+                freshness = "LOST"
+            elif age > 1.0:
+                freshness = "EXPIRED"
+            elif age > 0.5:
+                freshness = "STALE"
+            else:
+                freshness = "FRESH"
+            self.position_report_freshness[train.id] = freshness
+            self.zc.mark_position_report_freshness(train.id, freshness)
+
+            ats_age = self.sim_time_s - self.ats_train_received_time_s.get(train.id, -999.0)
+            if ats_age > 3.0:
+                self.ats_train_freshness[train.id] = "LOST"
+            elif ats_age > 1.5:
+                self.ats_train_freshness[train.id] = "STALE"
+            else:
+                self.ats_train_freshness[train.id] = "FRESH"
+
+    def _authority_trains_from_position_reports(self) -> List[object]:
+        return [
+            _VitalPositionTrainView(
+                train,
+                self.last_valid_position_report.get(train.id),
+                self.position_report_freshness.get(train.id, "LOST"),
+            )
+            for train in self.trains
+        ]
 
     def _dispatch_safe_packets(self, with_delay: bool):
         self._update_parallel_protection_zones()
@@ -2025,6 +2081,9 @@ class Simulation:
             self.tsr_zones,
             self.track_end_m,
             stop_eoa_map,
+            trains_for_authority=self._authority_trains_from_position_reports()
+            if self.use_vital_position_report_for_zc
+            else None,
         )
         departure_holds = self._parallel_departure_holds()
         for train in self.trains:
@@ -2036,17 +2095,6 @@ class Simulation:
                 continue
             delay_s = random.uniform(DCS_DELAY_MIN_S, DCS_DELAY_MAX_S) if with_delay else 0.0
             packet = safe_packets[train.id]
-            regulated_cap_kmh, regulation_reason = self._timetable_regulated_speed_cap_kmh(train, packet.tsr_kmh)
-            if regulation_reason and regulated_cap_kmh < packet.tsr_kmh - 1e-6:
-                variants = dict(packet.variants)
-                variants["schedule_regulation"] = regulation_reason
-                variants["schedule_speed_cap_kmh"] = regulated_cap_kmh
-                packet = SafeMovementPacket(
-                    eoa_m=packet.eoa_m,
-                    tsr_kmh=regulated_cap_kmh,
-                    variants=variants,
-                    issued_time_s=packet.issued_time_s,
-                )
             if train.departure_hold or train.id in departure_holds or self._needs_station_departure_authority_hold(train, packet):
                 hold_eoa = departure_holds.get(train.id)
                 terminal_station_hold = (
@@ -2057,22 +2105,9 @@ class Simulation:
                     and self._station_bounds(self.scheduled_stops[train.last_station_idx])[1] >= self.track_end_m - STOP_ACCURACY_TOL_M
                 )
                 if hold_eoa is None:
-                    fixed_block_station_hold = (
-                        self.block_mode == "fixed_block"
-                        and train.station_lane is not None
-                        and train.last_station_idx is not None
-                        and 0 <= train.last_station_idx < len(self.scheduled_stops)
-                        and train.station_state in {"READY_TO_DEPART", "DEPARTING"}
-                    )
-                    if fixed_block_station_hold:
-                        _station_start, station_end = self._station_bounds(self.scheduled_stops[train.last_station_idx])
-                        hold_eoa = station_end - STOP_SVL_OFFSET_M
-                    else:
-                        hold_margin = max(train.effective_position_uncertainty_m(), abs(train.pos_error_m))
-                        hold_eoa = train.reported_pos + hold_margin + STOP_SVL_OFFSET_M + PARALLEL_RELEASE_MARGIN_M
+                    hold_margin = max(train.effective_position_uncertainty_m(), abs(train.pos_error_m))
+                    hold_eoa = train.reported_pos + hold_margin + STOP_SVL_OFFSET_M + PARALLEL_RELEASE_MARGIN_M
                     if (
-                        not fixed_block_station_hold
-                        and
                         train.station_lane is not None
                         and train.last_station_idx is not None
                         and 0 <= train.last_station_idx < len(self.scheduled_stops)
@@ -2105,11 +2140,9 @@ class Simulation:
                 and (station_stop_eoa is None or packet.eoa_m >= station_stop_eoa - 1e-6)
             ):
                 reason = "SAFETY_RESTRICTION"
-            elif self.block_mode == "fixed_block" and station_stop_eoa is None:
-                reason = "FIXED_BLOCK"
             elif station_stop_eoa is not None:
                 if packet.eoa_m < station_stop_eoa - 1e-6:
-                    reason = "FIXED_BLOCK" if self.block_mode == "fixed_block" else "LEADER_PROTECTION"
+                    reason = "LEADER_PROTECTION"
                 elif train.station_state in {"ROUTE_ASSIGNED", "APPROACHING_STATION"}:
                     reason = "ROUTE_ASSIGNED"
                 else:
@@ -2122,7 +2155,17 @@ class Simulation:
                 reason = "DEPARTURE_RELEASE"
             self._log_eoa_update(train, train.last_dispatched_eoa, packet.eoa_m, reason, station_idx)
             packet.issued_time_s = self.sim_time_s
-            train.receive_safe_packet(packet, self.sim_time_s + delay_s)
+            vital_packet = self._vital_ma_packet(train, packet, reason)
+            delivered, arrival_time_s, _event = self.dcs_transport.transport_vital(
+                vital_packet,
+                self.sim_time_s,
+                train.id,
+                train.reported_pos,
+            )
+            if delivered is not None:
+                if with_delay and delay_s > 0.0:
+                    arrival_time_s = max(arrival_time_s, self.sim_time_s + delay_s)
+                train.receive_vital_packet(delivered, arrival_time_s)
 
     def _update_analytics(self, include_station_metrics: bool = False):
         headway_snapshot = self.headway_manager.snapshot()
@@ -2226,6 +2269,9 @@ class Simulation:
     def step(self):
         self._tick_parallel_release_locks()
         self.train_generation_changed = self._spawn_source_trains()
+        self._process_zc_position_reports()
+        self._process_ats_status_frames()
+        self._update_communication_freshness()
         immediate_packet_required = False
         for t in self.trains:
             t.update_reported_position()
@@ -2265,6 +2311,7 @@ class Simulation:
                 t.headway_actual_dispatched = True
             if t.active_scheduled_stop is None and t.station_lane is not None and t.speed > STANDSTILL_SPEED_EPS:
                 self._set_train_station_state(t, self._station_index_for_stop(self._station_overlapped_by_train(t)[1]) if self._station_overlapped_by_train(t) is not None else t.last_station_idx, "DEPARTING", "departing_from_station")
+        self._dispatch_train_uplink_messages()
         self._enforce_station_cd_routes()
         self._update_analytics()
         self.sim_time_s += DT
