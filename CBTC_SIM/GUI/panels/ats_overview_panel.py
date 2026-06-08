@@ -111,9 +111,15 @@ class ATSOverviewPanel(ttk.Frame):
 
     def update_data(self, sim: Simulation):
         self._last_sim = sim
-        esa_active = sum(1 for t in sim.trains if t.atp_action == "EBI")
+        ats_states = getattr(sim, "ats_received_train_state", {})
+        esa_active = sum(
+            1
+            for state in ats_states.values()
+            if bool((state.get("fault_flags", {}) or {}).get("EMERGENCY", False))
+            or str(state.get("atp_state", "")) == "ATP_TRIP"
+        )
         self.summary_var.set(
-            f"OCC view  |  trains={len(sim.trains)}  moving-block authority  ESA active={esa_active}"
+            f"OCC view  |  trains={len(ats_states)}  moving-block authority  ESA active={esa_active}"
         )
         self._draw(sim)
 
@@ -155,6 +161,70 @@ class ATSOverviewPanel(ttk.Frame):
         c.create_line(28, rail_y, main_x1, rail_y, fill=earth_rail_dark, width=2, dash=(8, 5))
         c.create_line(main_x2, rail_y, w - 28, rail_y, fill=earth_rail_dark, width=2, dash=(8, 5))
         c.create_line(main_x1, rail_y, main_x2, rail_y, fill=earth_rail, width=5)
+
+        transport = getattr(sim, "dcs_transport", None)
+        rap_items = list(getattr(transport, "radio_access_points", []) or [])
+        rap_display_end_m = sim.track_max_m
+        rap_y1 = rail_y - 48
+        rap_y2 = rail_y - 28
+        rap_palette = ("#d9ecff", "#e5f7df", "#fff0cf", "#f0e3ff")
+        active_rap_by_train = set(getattr(transport, "last_rap_by_train", {}).values()) if transport is not None else set()
+        for idx, rap in enumerate(rap_items):
+            rap_start_m = float(getattr(rap, "start_m", 0.0))
+            rap_end_m = min(float(getattr(rap, "end_m", 0.0)), rap_display_end_m)
+            if rap_end_m <= rap_start_m:
+                continue
+            x1 = x_from_pos(rap_start_m)
+            x2 = x_from_pos(rap_end_m)
+            if x2 < 28 or x1 > w - 28:
+                continue
+            fill = rap_palette[idx % len(rap_palette)]
+            outline = APP_THEME["accent"] if getattr(rap, "id", "") in active_rap_by_train else APP_THEME["canvas_grid"]
+            c.create_rectangle(
+                max(28, x1),
+                rap_y1,
+                min(w - 28, x2),
+                rap_y2,
+                fill=fill,
+                outline=outline,
+                width=2 if getattr(rap, "id", "") in active_rap_by_train else 1,
+            )
+            c.create_text(
+                (max(28, x1) + min(w - 28, x2)) / 2,
+                rap_y1 - 8,
+                text=str(getattr(rap, "id", f"RAP_{idx + 1:02d}")),
+                fill=APP_THEME["muted"],
+                font=("Consolas", 7, "bold"),
+            )
+        sorted_raps = sorted(
+            rap_items,
+            key=lambda item: (float(getattr(item, "start_m", 0.0)), float(getattr(item, "end_m", 0.0))),
+        )
+        for left, right in zip(sorted_raps, sorted_raps[1:]):
+            overlap_start = max(float(getattr(left, "start_m", 0.0)), float(getattr(right, "start_m", 0.0)))
+            overlap_end = min(float(getattr(left, "end_m", 0.0)), float(getattr(right, "end_m", 0.0)), rap_display_end_m)
+            if overlap_end <= overlap_start:
+                continue
+            x1 = max(28, x_from_pos(overlap_start))
+            x2 = min(w - 28, x_from_pos(overlap_end))
+            if x2 <= 28 or x1 >= w - 28 or x2 <= x1:
+                continue
+            c.create_rectangle(
+                x1,
+                rap_y1 - 4,
+                x2,
+                rap_y2 + 4,
+                fill="#ffe8a3",
+                outline="#b88700",
+                stipple="gray25",
+            )
+            c.create_text(
+                (x1 + x2) / 2,
+                rap_y2 + 10,
+                text="handover overlap",
+                fill="#8a6400",
+                font=("Consolas", 6, "bold"),
+            )
 
         def main_visual_lane(lane_count: int) -> int:
             return 1 if lane_count > 1 else 0
@@ -343,6 +413,11 @@ class ATSOverviewPanel(ttk.Frame):
             c.create_rectangle(psr_x - 28, psr_y - 8, psr_x + 28, psr_y + 8, fill=APP_THEME["card"], outline="", tags=(tag,))
             c.create_text(psr_x, psr_y, text=psr_text, fill=APP_THEME["muted"], font=("Consolas", 8), tags=(tag,))
 
+        for balise in getattr(sim, "balises", []):
+            x = x_from_pos(float(balise["pos_m"]))
+            if 28 <= x <= w - 28:
+                c.create_rectangle(x - 2, rail_y + 8, x + 2, rail_y + 18, fill="#234f7a", outline="")
+
         for idx, stop in enumerate(sim.scheduled_stops):
             tag = self._element_tag("station", idx)
             pos_m = float(stop["pos_m"])
@@ -425,64 +500,64 @@ class ATSOverviewPanel(ttk.Frame):
             )
             source_lane_slots.update(lane_slots)
 
-        sorted_trains = sorted(sim.trains, key=lambda t: t.pos)
-        for idx, train in enumerate(sorted_trains):
-            ats_state = dict(getattr(sim, "ats_received_train_state", {}).get(train.id, {}) or {})
-            ats_freshness = str(getattr(sim, "ats_train_freshness", {}).get(train.id, "LOST"))
-            using_received_state = bool(ats_state)
-            display_pos = float(ats_state.get("position_m", train.pos))
-            display_speed = float(ats_state.get("speed_mps", getattr(train, "speed", 0.0)))
-            display_mode = str(ats_state.get("mode", getattr(train, "drive_mode", "")))
-            display_atp = str(ats_state.get("atp_state", getattr(train, "atp_state", "")))
-            display_ato = str(ats_state.get("ato_state", getattr(train, "ato_state", "")))
+        display_trains = [
+            (train_id, dict(state))
+            for train_id, state in getattr(sim, "ats_received_train_state", {}).items()
+            if state
+        ]
+        display_trains.sort(key=lambda item: float(item[1].get("position_m", sim.track_min_m)))
+        for idx, (train_id, ats_state) in enumerate(display_trains):
+            ats_freshness = str(getattr(sim, "ats_train_freshness", {}).get(train_id, "LOST"))
+            display_pos = float(ats_state["position_m"])
+            display_speed = float(ats_state.get("speed_mps", 0.0))
+            display_mode = str(ats_state.get("mode", ""))
+            display_atp = str(ats_state.get("atp_state", ""))
+            display_ato = str(ats_state.get("ato_state", ""))
             display_fault_flags = dict(ats_state.get("fault_flags", {}) or {})
-            tail = max(sim.track_min_m, display_pos - train.length)
+            train_length = float(ats_state.get("length_m", 120.0))
+            static_color = str(ats_state.get("color", APP_THEME["accent"]))
+            protection_zone_id = ats_state.get("protection_zone_id")
+            protection_lane = int(ats_state.get("protection_lane", 0) or 0)
+            station_lane = ats_state.get("station_lane")
+            active_scheduled_stop = ats_state.get("active_scheduled_stop")
+            tail = max(sim.track_min_m, display_pos - train_length)
             x1 = x_from_pos(tail)
             x2 = x_from_pos(display_pos)
             x1, x2 = visible_train_span(x2, x1)
-            if train.protection_zone_id == "SOURCE":
-                slot = source_lane_slots.get(int(train.protection_lane))
-                y = slot[2] if slot is not None and train.pos <= SOURCE_TRAIN_EXIT_M + STOP_ACCURACY_TOL_M else rail_y
-            elif isinstance(train.protection_zone_id, str) and train.protection_zone_id.startswith("STATION:"):
+            if protection_zone_id == "SOURCE":
+                slot = source_lane_slots.get(protection_lane)
+                y = slot[2] if slot is not None and display_pos <= SOURCE_TRAIN_EXIT_M + STOP_ACCURACY_TOL_M else rail_y
+            elif isinstance(protection_zone_id, str) and protection_zone_id.startswith("STATION:"):
                 try:
-                    station_idx = int(train.protection_zone_id.split(":", 1)[1])
+                    station_idx = int(protection_zone_id.split(":", 1)[1])
                     station_capacity = max(1, int(sim.scheduled_stops[station_idx].get("capacity", 3)))
                 except (IndexError, ValueError):
                     station_capacity = 1
-                if 0 <= station_idx < len(sim.scheduled_stops) and sim._train_head_in_station(train, sim.scheduled_stops[station_idx]):
-                    y = lane_y(rail_y, station_capacity, int(train.protection_lane))
+                if 0 <= station_idx < len(sim.scheduled_stops):
+                    station_start, station_end = sim._station_bounds(sim.scheduled_stops[station_idx])
+                    head_in_station = station_start <= display_pos <= station_end
+                else:
+                    head_in_station = False
+                if head_in_station:
+                    y = lane_y(rail_y, station_capacity, protection_lane)
                 else:
                     y = rail_y
-            elif train.station_lane is not None and train.active_scheduled_stop is not None:
-                station_idx = sim._station_index_for_stop(train.active_scheduled_stop)
+            elif station_lane is not None and active_scheduled_stop is not None:
+                station_idx = sim._station_index_for_stop(active_scheduled_stop)
                 if station_idx is not None:
                     station_capacity = max(1, int(sim.scheduled_stops[station_idx].get("capacity", 3)))
-                    y = lane_y(rail_y, station_capacity, int(train.station_lane)) if sim._train_head_in_station(train, sim.scheduled_stops[station_idx]) else rail_y
+                    station_start, station_end = sim._station_bounds(sim.scheduled_stops[station_idx])
+                    y = lane_y(rail_y, station_capacity, int(station_lane)) if station_start <= display_pos <= station_end else rail_y
                 else:
                     y = rail_y
             else:
                 y = rail_y
-            if using_received_state:
-                dcs_fault = bool(display_fault_flags.get("DCS", False)) or ats_freshness in ("STALE", "LOST")
-                atp_fault = bool(display_fault_flags.get("ATP", False))
-                ato_fault = bool(display_fault_flags.get("ATO", False))
-                emergency_fault = bool(display_fault_flags.get("EMERGENCY", False) or display_atp == "ATP_TRIP")
-            else:
-                dcs_fault = bool(
-                    getattr(train, "dcs_fault_active", False)
-                    or getattr(train, "dcs_muted", False)
-                    or not getattr(train, "safe_packet_valid", True)
-                )
-                atp_fault = bool(getattr(train, "atp_fault_active", False))
-                ato_fault = bool(getattr(train, "ato_fault_active", False))
-                emergency_fault = bool(
-                    getattr(train, "trip_mode", False)
-                    or getattr(train, "emergency_stop", False)
-                    or getattr(train, "emg_latch", False)
-                    or getattr(train, "emergency_recovery_hold", False)
-                )
+            dcs_fault = bool(display_fault_flags.get("DCS", False)) or ats_freshness in ("STALE", "LOST")
+            atp_fault = bool(display_fault_flags.get("ATP", False))
+            ato_fault = bool(display_fault_flags.get("ATO", False))
+            emergency_fault = bool(display_fault_flags.get("EMERGENCY", False) or display_atp == "ATP_TRIP")
             fault_active = atp_fault or ato_fault or dcs_fault or emergency_fault
-            train_fill = "#6b7d90" if fault_active else train.color
+            train_fill = "#6b7d90" if fault_active else static_color
             train_alert_outline = (
                 APP_THEME["danger"]
                 if atp_fault
@@ -494,12 +569,12 @@ class ATSOverviewPanel(ttk.Frame):
                 if dcs_fault
                 else ""
             )
-            train_half_height = 5
+            train_half_height = 3
             c.create_rectangle(
                 x1 - 2,
-                y - train_half_height - 2,
+                y - train_half_height - 1,
                 x2 + 2,
-                y + train_half_height + 2,
+                y + train_half_height + 1,
                 fill="#000000",
                 outline="#000000",
                 width=2,
@@ -516,17 +591,36 @@ class ATSOverviewPanel(ttk.Frame):
             if train_alert_outline:
                 c.create_rectangle(
                     x1 - 4,
-                    y - train_half_height - 4,
+                    y - train_half_height - 3,
                     x2 + 4,
-                    y + train_half_height + 4,
+                    y + train_half_height + 3,
                     outline=train_alert_outline,
                     width=2,
                 )
-            source_label = "ATS" if using_received_state else "DEBUG / internal simulation state"
+            eoa_m = float(ats_state.get("eoa_m", display_pos))
+            eoa_x = x_from_pos(eoa_m)
+            if 28 <= eoa_x <= w - 28:
+                c.create_line(eoa_x, rail_y - 30, eoa_x, rail_y + 32, fill=train_fill, dash=(3, 3), width=2)
+                c.create_rectangle(eoa_x - 18, rail_y - 45, eoa_x + 18, rail_y - 32, fill=APP_THEME["card"], outline=train_fill)
+                c.create_text(eoa_x, rail_y - 39, text="EOA", fill=train_fill, font=("Consolas", 7, "bold"))
+            constraint_dist = float(ats_state.get("distance_to_constraint_m", float("inf")))
+            constraint_type = str(ats_state.get("constraint_type", "NONE"))
+            if constraint_type != "NONE" and constraint_dist != float("inf"):
+                constraint_x = x_from_pos(display_pos + constraint_dist)
+                if 28 <= constraint_x <= w - 28:
+                    c.create_line(constraint_x, rail_y + 22, constraint_x, rail_y + 38, fill=APP_THEME["warning"], width=2)
+                    c.create_text(
+                        constraint_x,
+                        rail_y + 49,
+                        text=f"{constraint_type} {float(ats_state.get('constraint_target_speed_kmh', 0.0)):.0f}",
+                        fill=APP_THEME["warning"],
+                        font=("Consolas", 7, "bold"),
+                    )
+            name_text = str(train_id)
             c.create_text(
                 (x1 + x2) / 2,
-                y - 22,
-                text=f"{train.id} {source_label} {display_pos:.0f}m {display_speed:.1f}m/s {ats_freshness}",
+                y - 24,
+                text=name_text,
                 fill=APP_THEME["text"],
                 font=("Consolas", 8, "bold"),
             )
@@ -539,20 +633,17 @@ class ATSOverviewPanel(ttk.Frame):
                 fault_labels.append("DCS")
             if emergency_fault and not atp_fault:
                 fault_labels.append("EMG")
-            label_text = f"{display_mode} {'/'.join(fault_labels)}" if fault_labels else display_mode or train.id
-            c.create_text((x1 + x2) / 2, y - 11, text=label_text, fill=train_fill, font=("Consolas", 8, "bold"))
-            if train.departure_hold:
-                c.create_text((x1 + x2) / 2, y + 14, text="HOLD", fill=APP_THEME["danger"], font=("Consolas", 7, "bold"))
+            if bool(ats_state.get("departure_hold", False)):
+                c.create_text((x1 + x2) / 2, y + 12, text="HOLD", fill=APP_THEME["danger"], font=("Consolas", 7, "bold"))
             rep_x = x_from_pos(display_pos)
             c.create_oval(rep_x - 3, rail_y + 18, rep_x + 3, rail_y + 24, outline=train_fill, width=2)
-            eoa_x = x_from_pos(train.eoa)
-            c.create_line(eoa_x, rail_y - 30, eoa_x, rail_y + 32, fill=train_fill, dash=(3, 3))
 
             # Display distance to next train
-            if idx + 1 < len(sorted_trains):
-                next_train = sorted_trains[idx + 1]
-                next_tail = max(sim.track_min_m, next_train.pos - next_train.length)
-                distance_m = next_tail - train.pos
+            if idx + 1 < len(display_trains):
+                _next_train_id, next_state = display_trains[idx + 1]
+                next_length = float(next_state.get("length_m", 120.0))
+                next_tail = max(sim.track_min_m, float(next_state.get("position_m", sim.track_min_m)) - next_length)
+                distance_m = next_tail - display_pos
                 
                 # Position for distance label (between current train head and next train tail)
                 mid_x = (x2 + x_from_pos(next_tail)) / 2

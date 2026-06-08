@@ -108,6 +108,23 @@ def _normalize_track_segments(raw_segments: List[Dict[str, Any]]) -> List[tuple[
     return segments
 
 
+def _normalize_balises(raw_balises: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    balises: List[Dict[str, Any]] = []
+    seen_ids = set()
+    for idx, balise in enumerate(raw_balises):
+        try:
+            pos_m = float(balise["pos_m"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"Invalid balise definition at index {idx}.") from exc
+        balise_id = str(balise.get("id", f"BL_{idx + 1:03d}"))
+        if balise_id in seen_ids:
+            raise ValueError(f"Duplicate balise id '{balise_id}' in scenario.")
+        seen_ids.add(balise_id)
+        balises.append({"id": balise_id, "pos_m": pos_m})
+    balises.sort(key=lambda item: item["pos_m"])
+    return balises
+
+
 def _normalize_trains(raw_trains: List[Dict[str, Any]], defaults: Dict[str, Any]) -> List[Dict[str, Any]]:
     trains: List[Dict[str, Any]] = []
     seen_ids = set()
@@ -142,6 +159,7 @@ def _normalize_trains(raw_trains: List[Dict[str, Any]], defaults: Dict[str, Any]
                 "mass_kg": float(train.get("mass_kg", defaults["mass_kg"])),
                 "drive_mode": drive_mode,
                 "requested_drive_mode": raw_drive_mode,
+                "max_ato_speed_kmh": float(train.get("max_ato_speed_kmh", defaults.get("max_ato_speed_kmh", 70.0))),
                 "max_manual_speed_kmh": float(train.get("max_manual_speed_kmh", defaults.get("max_manual_speed_kmh", 45.0))),
                 "dcs_mute_windows": dcs_mute_windows,
                 "color": train.get("color"),
@@ -188,6 +206,7 @@ def normalize_scenario(data: Dict[str, Any], source_path: str | None = None) -> 
         "length_m": float(merged["train_defaults"]["length_m"]),
         "mass_kg": float(merged["train_defaults"]["mass_kg"]),
         "drive_mode": str(merged["train_defaults"].get("drive_mode", "ATO")),
+        "max_ato_speed_kmh": float(merged["train_defaults"].get("max_ato_speed_kmh", 70.0)),
         "max_manual_speed_kmh": float(merged["train_defaults"].get("max_manual_speed_kmh", 45.0)),
     }
     trains = _normalize_trains(merged["trains"], train_defaults)
@@ -199,8 +218,10 @@ def normalize_scenario(data: Dict[str, Any], source_path: str | None = None) -> 
     }
     raw_communication = merged.get("communication", {}) if isinstance(merged.get("communication", {}), dict) else {}
     communication = {
-        "use_vital_position_report_for_zc": bool(raw_communication.get("use_vital_position_report_for_zc", False)),
+        "use_vital_position_report_for_zc": bool(raw_communication.get("use_vital_position_report_for_zc", True)),
     }
+    raw_localization = merged.get("localization", {}) if isinstance(merged.get("localization", {}), dict) else {}
+    balises = _normalize_balises(raw_localization.get("balises", []))
     return {
         "name": str(merged.get("name", "Line Configuration")),
         "source_path": source_path,
@@ -217,6 +238,7 @@ def normalize_scenario(data: Dict[str, Any], source_path: str | None = None) -> 
         "source_trains": deepcopy(merged.get("source_trains", [])),
         "headway": headway,
         "communication": communication,
+        "balises": balises,
         "headway_config_present": True,
         "line_conditions": deepcopy(merged.get("line_conditions", [])),
         "radio_access_points": deepcopy(merged.get("radio_access_points", [])),

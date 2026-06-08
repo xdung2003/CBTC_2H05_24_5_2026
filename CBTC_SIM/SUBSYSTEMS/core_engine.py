@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from SUBSYSTEMS.dcs import DCSWatchdog, OnboardControlCenter
+from SUBSYSTEMS.dcs import DCSWatchdog, OnboardControlCenter, RedundantOnboardControlCenter
 from SUBSYSTEMS.communication import (
     AtsOperationCommandMessage,
     DcsHealthMessage,
@@ -62,6 +62,7 @@ __all__ = [
     "MovementAuthorityMessage",
     "OpcUaSupervisionFrame",
     "OnboardControlCenter",
+    "RedundantOnboardControlCenter",
     "PositionReportMessage",
     "RadioAccessPoint",
     "RastaSessionState",

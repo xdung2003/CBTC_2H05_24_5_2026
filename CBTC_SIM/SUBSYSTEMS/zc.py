@@ -6,10 +6,9 @@ from SUBSYSTEMS.signalling import AuthorityManager, MovementAuthorityLimit, Safe
 
 
 class ZoneController:
-    """Wayside/ZC logic that prepares safe packets for onboard CCs."""
+    """Wayside/ZC logic that prepares safe packets from DCS-delivered reports."""
 
-    def __init__(self, trains: List[Train], track_end_m: float):
-        self.trains = trains
+    def __init__(self, track_end_m: float):
         self.block_mode = "moving_block"
         self.authority_manager = AuthorityManager(track_end_m)
         self.last_valid_position_report: Dict[str, Dict[str, Any]] = {}
@@ -22,11 +21,11 @@ class ZoneController:
     def mark_position_report_freshness(self, train_id: str, freshness: str):
         self.position_report_freshness[train_id] = freshness
 
-    def compute_mal(self, trains: List[object] | None = None) -> Dict[str, MovementAuthorityLimit]:
-        return self.authority_manager.compute_mal(trains or self.trains)
+    def compute_mal(self, trains: List[object]) -> Dict[str, MovementAuthorityLimit]:
+        return self.authority_manager.compute_mal(trains)
 
-    def compute_eoa(self) -> Dict[str, float]:
-        return {train_id: mal.mal_m for train_id, mal in self.compute_mal().items()}
+    def compute_eoa(self, trains: List[object]) -> Dict[str, float]:
+        return {train_id: mal.mal_m for train_id, mal in self.compute_mal(trains).items()}
 
     def build_safe_packets(
         self,
@@ -34,9 +33,11 @@ class ZoneController:
         tsr_zones: List[Dict[str, float]],
         track_end_m: float,
         stop_eoa_map: Dict[str, float],
-        trains_for_authority: List[object] | None = None,
+        trains_for_authority: List[object],
     ) -> Dict[str, SafeMovementPacket]:
-        authority_trains = self.trains if trains_for_authority is None else trains_for_authority
+        authority_trains = [train for train in trains_for_authority if getattr(train, "position_report_freshness", "LOST") == "FRESH"]
+        if len(authority_trains) != len(trains_for_authority):
+            return {}
         mal_map = self.compute_mal(authority_trains)
         packets: Dict[str, SafeMovementPacket] = {}
         packet_order = sorted(authority_trains, key=lambda item: item.reported_pos, reverse=True)

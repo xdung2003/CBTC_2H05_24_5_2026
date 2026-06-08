@@ -14,7 +14,56 @@ train_defaults:
   length_m: 60.0
   mass_kg: 291600.0
   drive_mode: ATO
-  max_manual_speed_kmh: 45.0
+  max_ato_speed_kmh: 70.0
+radio_access_points:
+- id: RAP_01
+  start_m: -300.0
+  end_m: 900.0
+- id: RAP_02
+  start_m: 800.0
+  end_m: 1700.0
+- id: RAP_03
+  start_m: 1600.0
+  end_m: 2600.0
+- id: RAP_04
+  start_m: 2500.0
+  end_m: 4200.0
+localization:
+  balises:
+  - id: BL_-200
+    pos_m: -200.0
+  - id: BL_0000
+    pos_m: 0.0
+  - id: BL_0200
+    pos_m: 200.0
+  - id: BL_0400
+    pos_m: 400.0
+  - id: BL_0600
+    pos_m: 600.0
+  - id: BL_0800
+    pos_m: 800.0
+  - id: BL_1000
+    pos_m: 1000.0
+  - id: BL_1200
+    pos_m: 1200.0
+  - id: BL_1400
+    pos_m: 1400.0
+  - id: BL_1600
+    pos_m: 1600.0
+  - id: BL_1800
+    pos_m: 1800.0
+  - id: BL_2000
+    pos_m: 2000.0
+  - id: BL_2200
+    pos_m: 2200.0
+  - id: BL_2400
+    pos_m: 2400.0
+  - id: BL_2600
+    pos_m: 2600.0
+  - id: BL_2800
+    pos_m: 2800.0
+  - id: BL_3000
+    pos_m: 3000.0
 track:
   segments:
   - start_m: 0.0

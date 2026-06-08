@@ -50,7 +50,7 @@ from SUBSYSTEMS.physics import (
 from CONFIG.scenario_loader import DEFAULT_SCENARIO_PATH, load_scenario
 from OPERATION.headway_manager import HeadwayManager
 from SUBSYSTEMS import control_common as _control_common
-from SUBSYSTEMS.dcs import DCSWatchdog, OnboardControlCenter
+from SUBSYSTEMS.dcs import DCSWatchdog, OnboardControlCenter, RedundantOnboardControlCenter
 from SUBSYSTEMS.signalling import (
     AuthorityManager,
     MovementAuthorityLimit,
@@ -126,8 +126,7 @@ ACTION_COLORS = {
 from GUI.panels.train_panel import TrainPanel
 from GUI.panels.ats_overview_panel import ATSOverviewPanel
 from GUI.panels.infrastructure_panel import InfrastructurePanel
-from GUI.panels.engineering_panel import DataFlowPanel, EngineeringPanel, TimeDistancePanel
-from GUI.panels.diagnostics_panel import DiagnosticsPanel
+from GUI.panels.engineering_panel import DataFlowPanel, TimeDistancePanel
 from GUI.panels.analytics_panel import AnalyticsPanel
 from GUI.panels.control_panel import ControlPanel, SpeedLimitsPanel
 
@@ -367,12 +366,10 @@ class App(tk.Tk):
         workspace.add(dock_tabs, weight=2)
         trains_tab = ttk.Frame(dock_tabs, style="Shell.TFrame")
         infra_tab = ttk.Frame(dock_tabs, style="Shell.TFrame")
-        engineering_tab = ttk.Frame(dock_tabs, style="Shell.TFrame")
-        diagnostics_tab = ttk.Frame(dock_tabs, style="Shell.TFrame")
         self.dataflow_window = None
         self.dataflow_panel = None
         analytics_tab = ttk.Frame(dock_tabs, style="Shell.TFrame")
-        for tab in (trains_tab, infra_tab, engineering_tab, diagnostics_tab, analytics_tab):
+        for tab in (trains_tab, infra_tab, analytics_tab):
             tab.columnconfigure(0, weight=1)
             tab.rowconfigure(0, weight=1)
         trains_tab.rowconfigure(1, weight=0)
@@ -392,17 +389,11 @@ class App(tk.Tk):
         self.trains_scrollbar.grid(row=1, column=0, sticky="ew")
         self.infrastructure_panel = InfrastructurePanel(infra_tab, self.scale_factor)
         self.infrastructure_panel.grid(row=0, column=0, sticky="nsew", padx=int(6 * self.scale_factor), pady=(int(6 * self.scale_factor), int(3 * self.scale_factor)))
-        self.engineering_panel = EngineeringPanel(engineering_tab, self.scale_factor)
-        self.engineering_panel.grid(row=0, column=0, sticky="nsew", padx=int(6 * self.scale_factor), pady=int(6 * self.scale_factor))
-        self.diagnostics_panel = DiagnosticsPanel(diagnostics_tab, self.scale_factor)
-        self.diagnostics_panel.grid(row=0, column=0, sticky="nsew", padx=int(6 * self.scale_factor), pady=int(6 * self.scale_factor))
         self.analytics_panel = AnalyticsPanel(analytics_tab, self.scale_factor)
         self.analytics_panel.grid(row=0, column=0, sticky="nsew", padx=int(6 * self.scale_factor), pady=int(6 * self.scale_factor))
         self.limits_panel = SpeedLimitsPanel(infra_tab, self.scale_factor)
         dock_tabs.add(trains_tab, text="Trains")
         dock_tabs.add(infra_tab, text="Infrastructure")
-        dock_tabs.add(engineering_tab, text="Engineering")
-        dock_tabs.add(diagnostics_tab, text="Diagnostics")
         dock_tabs.add(analytics_tab, text="Analytics")
 
         button_row = ttk.Frame(self.content, padding=(0, 8, 0, 0), style="Shell.TFrame")
@@ -413,8 +404,6 @@ class App(tk.Tk):
         self._create_aux_windows()
         self.ats_overview_panel.update_data(self.sim)
         self.infrastructure_panel.update_data(self.sim)
-        self.engineering_panel.update_data(self.sim)
-        self.diagnostics_panel.update_data(self.sim, self.event_log)
         self.analytics_panel.update_data(self.sim)
         self.limits_panel.update_limits(self.sim.track_profile, self.sim.tsr_zones)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -443,14 +432,51 @@ class App(tk.Tk):
             window.columnconfigure(0, weight=1)
             window.rowconfigure(0, weight=1)
             self.dataflow_window = window
-            self.dataflow_panel = DataFlowPanel(window, self.scale_factor)
-            self.dataflow_panel.grid(
-                row=0,
-                column=0,
-                sticky="nsew",
-                padx=int(6 * self.scale_factor),
-                pady=int(6 * self.scale_factor),
+            outer_canvas = tk.Canvas(window, background=APP_THEME["bg"], highlightthickness=0)
+            outer_scroll = ttk.Scrollbar(window, orient="vertical", command=outer_canvas.yview)
+            outer_canvas.configure(yscrollcommand=outer_scroll.set)
+            outer_canvas.grid(row=0, column=0, sticky="nsew")
+            outer_scroll.grid(row=0, column=1, sticky="ns")
+            outer_frame = ttk.Frame(outer_canvas, style="Shell.TFrame")
+            outer_window = outer_canvas.create_window((0, 0), window=outer_frame, anchor="nw")
+            outer_frame.bind(
+                "<Configure>",
+                lambda _event, canvas=outer_canvas: canvas.configure(scrollregion=canvas.bbox("all")),
             )
+            outer_canvas.bind(
+                "<Configure>",
+                lambda event, canvas=outer_canvas, item=outer_window: canvas.itemconfigure(item, width=event.width),
+            )
+
+            def _dataflow_mousewheel(event, canvas=outer_canvas):
+                if getattr(event, "num", None) == 4:
+                    delta = -3
+                elif getattr(event, "num", None) == 5:
+                    delta = 3
+                else:
+                    raw = getattr(event, "delta", 0)
+                    delta = -3 * int(raw / 120) if raw else 0
+                if delta:
+                    canvas.yview_scroll(delta, "units")
+                return "break"
+
+            outer_canvas.bind("<MouseWheel>", _dataflow_mousewheel)
+            outer_canvas.bind("<Button-4>", _dataflow_mousewheel)
+            outer_canvas.bind("<Button-5>", _dataflow_mousewheel)
+            outer_frame.bind("<MouseWheel>", _dataflow_mousewheel)
+            outer_frame.bind("<Button-4>", _dataflow_mousewheel)
+            outer_frame.bind("<Button-5>", _dataflow_mousewheel)
+            self.dataflow_panel = DataFlowPanel(outer_frame, self.scale_factor)
+            self.dataflow_panel.grid(row=0, column=0, sticky="ew", padx=int(6 * self.scale_factor), pady=int(6 * self.scale_factor))
+
+            def _bind_dataflow_scroll_tree(widget: tk.Widget):
+                widget.bind("<MouseWheel>", _dataflow_mousewheel, add="+")
+                widget.bind("<Button-4>", _dataflow_mousewheel, add="+")
+                widget.bind("<Button-5>", _dataflow_mousewheel, add="+")
+                for child in widget.winfo_children():
+                    _bind_dataflow_scroll_tree(child)
+
+            _bind_dataflow_scroll_tree(outer_frame)
             window.protocol("WM_DELETE_WINDOW", self._close_dataflow_window)
         if self.dataflow_panel is not None:
             self.dataflow_panel.update_data(self.sim)
@@ -1463,8 +1489,6 @@ class App(tk.Tk):
             self.limits_panel.update_limits(self.sim.track_profile, self.sim.tsr_zones)
             self.ats_overview_panel.update_data(self.sim)
             self.infrastructure_panel.update_data(self.sim)
-            self.engineering_panel.update_data(self.sim)
-            self.diagnostics_panel.update_data(self.sim, self.event_log)
             if self.dataflow_panel is not None:
                 self.dataflow_panel.update_data(self.sim)
             self.analytics_panel.update_data(self.sim)

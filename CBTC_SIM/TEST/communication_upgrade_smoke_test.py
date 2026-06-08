@@ -72,7 +72,12 @@ def run_steps(sim: Simulation, count: int):
 
 
 def main():
-    sim = Simulation(load_scenario())
+    default_scenario = load_scenario()
+    assert default_scenario["communication"]["use_vital_position_report_for_zc"], "ZC must default to DCS-delivered POSITION_REPORT"
+    sim = Simulation(default_scenario)
+    assert not hasattr(sim.zc, "trains"), "ZC must not retain direct Train objects"
+    assert len(sim.trains[0].cc.channels) == 2, "each train should have redundant dual CC channels"
+    assert sim.trains[0].cc.redundancy_state in {"DUAL_ACTIVE", "DEGRADED"}, "dual CC should expose redundancy state"
     run_steps(sim, 20)
     train = sim.trains[0]
     assert train.safe_packet_valid, "normal MA flow should keep vital packet valid"
@@ -244,6 +249,15 @@ def main():
     sim_reports.position_report_freshness[follow.id] = "FRESH"
     mal = sim_reports.zc.compute_mal(sim_reports._authority_trains_from_position_reports())
     assert mal[follow.id].protected_rear_m == 900.0, "ZC should compute MA from vital position report when enabled"
+    sim_reports.position_report_freshness[lead.id] = "LOST"
+    no_report_packets = sim_reports.zc.build_safe_packets(
+        sim_reports.track_profile,
+        sim_reports.tsr_zones,
+        sim_reports.track_end_m,
+        {},
+        trains_for_authority=sim_reports._authority_trains_from_position_reports(),
+    )
+    assert no_report_packets == {}, "ZC must not issue new MA when any POSITION_REPORT is not fresh"
 
     sim_status = Simulation(load_scenario())
     run_steps(sim_status, 5)
@@ -252,10 +266,21 @@ def main():
     assert status_event.details["frame"]["encryption_enabled"], "OPC UA-like TRAIN_STATUS should be encrypted"
     status_train = sim_status.trains[0]
     vital_before = status_train.safe_packet_valid
+    displayed_pos_before_loss = sim_status.ats_received_train_state[status_train.id]["position_m"]
     sim_status.dcs_transport.set_fault("opcua_loss", True)
+    sim_status.pending_ats_status_frames.clear()
     run_steps(sim_status, 35)
     assert sim_status.ats_train_freshness[status_train.id] in {"STALE", "LOST"}, "OPC UA loss should stale/lost ATS status"
+    assert (
+        sim_status.ats_received_train_state[status_train.id]["position_m"] == displayed_pos_before_loss
+    ), "ATS must not refresh train position by reading Train directly when OPC UA is lost"
     assert status_train.safe_packet_valid == vital_before, "OPC UA loss must not affect ATP vital safety while RaSTA is alive"
+
+    sim_lock = Simulation(load_scenario())
+    station_idx = 0
+    sim_lock.station_route_states[station_idx]["lock_remaining_s"] = 5.0
+    can_accept, reason = sim_lock.can_accept_train(station_idx, sim_lock.trains[0])
+    assert not can_accept and reason == "TURNOUT_LOCKING", "station route must wait during 5s turnout lock"
 
     print("communication-upgrade-smoke-ok")
 

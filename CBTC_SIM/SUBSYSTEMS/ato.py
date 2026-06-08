@@ -65,7 +65,8 @@ class ATOPilotingEngine:
             ato_piloting_speed,
             release_speed_profile(atp.actual_distance_to_stop, kmh_to_ms(RELEASE_SPEED_KMH)),
         )
-        desired_target = ato_piloting_speed
+        design_speed_limit = kmh_to_ms(float(getattr(train, "max_ato_speed_kmh", 70.0)))
+        desired_target = min(ato_piloting_speed, design_speed_limit)
         if atp.target_active or train.commanded_stop or atp.release_active:
             desired_target = min(desired_target, ato_stop_limit)
         if atp.target_active and not train.commanded_stop and not atp.release_active:

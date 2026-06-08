@@ -29,6 +29,11 @@ class PositionReportMessage:
     localization_uncertainty_m: float
     train_integrity_ok: bool
     timestamp_ms: int
+    trip_mode: bool = False
+    trip_protect_rear_m: float = 0.0
+    protection_zone_id: str | None = None
+    protection_lane: int = 0
+    active_scheduled_stop: Dict[str, Any] | None = None
 
     def to_payload(self) -> Dict[str, Any]:
         return asdict(self)
@@ -47,6 +52,18 @@ class TrainStatusMessage:
     fault_flags: Dict[str, bool] = field(default_factory=dict)
     timestamp_ms: int = 0
     freshness: str = "FRESH"
+    length_m: float = 0.0
+    color: str = ""
+    protection_zone_id: str | None = None
+    protection_lane: int = 0
+    active_scheduled_stop: Dict[str, Any] | None = None
+    station_lane: int | None = None
+    departure_hold: bool = False
+    eoa_m: float = 0.0
+    distance_to_eoa_m: float = 0.0
+    constraint_type: str = "NONE"
+    constraint_target_speed_kmh: float = 0.0
+    distance_to_constraint_m: float = float("inf")
 
     def to_payload(self) -> Dict[str, Any]:
         return asdict(self)

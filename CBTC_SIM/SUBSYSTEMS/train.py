@@ -63,7 +63,7 @@ from SUBSYSTEMS.control_common import (
     ato_tracking_margin_ms,
     low_pass_step,
 )
-from SUBSYSTEMS.dcs import OnboardControlCenter
+from SUBSYSTEMS.dcs import RedundantOnboardControlCenter
 from SUBSYSTEMS.signalling import (
     ATP_MIN_DECEL_MS2,
     SafeMovementPacket,
@@ -102,10 +102,12 @@ class Train:
         self.requested_drive_mode = str(train_cfg.get("requested_drive_mode", self.drive_mode)).upper()
         self.mode_transition_reason = ""
         self.dcs_degraded_requested = False
+        self.max_ato_speed_kmh = float(train_cfg.get("max_ato_speed_kmh", 70.0))
         self.max_manual_speed_kmh = float(train_cfg.get("max_manual_speed_kmh", 45.0))
         self.dcs_mute_windows = [dict(window) for window in train_cfg.get("dcs_mute_windows", [])]
         self.dcs_muted = False
         self.track_profile = train_cfg["track_profile"]
+        self.balises = self._normalize_balises(train_cfg.get("balises", []))
         self.color = str(train_cfg["color"])
         self.eoa = 0.0
         self.psr_kmh = 25.0
@@ -158,8 +160,8 @@ class Train:
         self.constraint_type = "NONE"
         self.constraint_target_speed_kmh = 0.0
         self.distance_to_constraint_m = float("inf")
-        self.last_balise_pos = start_pos
-        self.next_balise_pos = start_pos + BALISE_SPACING_M
+        self.last_balise_pos = self._previous_balise_pos(start_pos)
+        self.next_balise_pos = self._next_balise_pos(start_pos)
         self.has_balise_fix = False
         self.pos_error_m = 0.0
         self.odometer_error_sign = 1.0 if (sum(ord(ch) for ch in self.id) % 2 == 0) else -1.0
@@ -261,9 +263,32 @@ class Train:
         self._last_door_authorized = False
         self._low_speed_ebi_counter = 0
         self._low_speed_guard_active = False
-        self.cc = OnboardControlCenter(self.id, DCS_TIMEOUT_S, DCS_STARTUP_GRACE_S)
+        self.cc = RedundantOnboardControlCenter(self.id, DCS_TIMEOUT_S, DCS_STARTUP_GRACE_S)
         self.atp_engine = ATPEnvelopeEngine()
         self.ato_engine = ATOPilotingEngine()
+
+    @staticmethod
+    def _normalize_balises(raw_balises: Any) -> List[float]:
+        positions: List[float] = []
+        for item in raw_balises or []:
+            try:
+                if isinstance(item, dict):
+                    positions.append(float(item["pos_m"]))
+                else:
+                    positions.append(float(item))
+            except (KeyError, TypeError, ValueError):
+                continue
+        return sorted(set(positions))
+
+    def _previous_balise_pos(self, pos_m: float) -> float:
+        previous = [item for item in self.balises if item <= pos_m]
+        return previous[-1] if previous else pos_m
+
+    def _next_balise_pos(self, pos_m: float) -> float:
+        for item in self.balises:
+            if item > pos_m:
+                return item
+        return pos_m + self.effective_balise_spacing_m()
 
     def receive_safe_packet(self, packet: SafeMovementPacket, arrival_time_s: float):
         self.cc.receive_safe_packet(packet, arrival_time_s)
@@ -282,7 +307,7 @@ class Train:
             else:
                 self.dcs_mute_windows = []
                 self.dcs_muted = False
-                self.cc.watchdog.mark_received(now_s)
+                self.cc.mark_received(now_s)
                 self.safe_packet_valid = True
                 self.dcs_degraded_requested = False
         elif subsystem == "ATO":
@@ -954,11 +979,10 @@ class Train:
         return True
 
     def update_reported_position(self):
-        spacing_m = self.effective_balise_spacing_m()
         error_cap_m = self.effective_balise_error_max_m()
         if self.pos >= self.next_balise_pos:
             self.last_balise_pos = self.next_balise_pos
-            self.next_balise_pos += spacing_m
+            self.next_balise_pos = self._next_balise_pos(self.next_balise_pos)
             self.has_balise_fix = True
             self.pos_error_m = 0.0
             self.odometer_error_sign *= -1.0
@@ -1081,7 +1105,7 @@ class Train:
             self.sync_reported_position()
             self.has_balise_fix = True
             self.last_balise_pos = self.pos
-            self.next_balise_pos = self.pos + STATION_BALISE_SPACING_M
+            self.next_balise_pos = self._next_balise_pos(self.pos)
             self.stop_beacon_seen = True
             self.beacon_position_locked = True
             self.beacon_lock_stop_pos = self.stop_target_pos
