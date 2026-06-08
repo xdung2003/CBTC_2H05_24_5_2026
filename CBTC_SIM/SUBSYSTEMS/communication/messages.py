@@ -70,6 +70,25 @@ class TrainStatusMessage:
 
 
 @dataclass(frozen=True)
+class WaysideStatusMessage:
+    track_profile: list
+    track_min_m: float
+    track_max_m: float
+    track_end_m: float
+    track_labels: list
+    scheduled_stops: list
+    station_route_states: list
+    line_conditions: list
+    tsr_zones: list
+    source_trains: list
+    balises: list
+    timestamp_ms: int = 0
+
+    def to_payload(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class AtsOperationCommandMessage:
     command: str
     train_id: str

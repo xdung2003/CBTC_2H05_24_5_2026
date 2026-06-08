@@ -41,7 +41,7 @@ from SUBSYSTEMS.signalling import SafeMovementPacket, STOP_SVL_OFFSET_M, get_tra
 from SUBSYSTEMS.physics import equivalent_mass_adjusted_accel, kmh_to_ms, ms_to_kmh
 from SUBSYSTEMS.train import Train, train_color
 from SUBSYSTEMS.zc import ZoneController
-from SUBSYSTEMS.communication.messages import MovementAuthorityMessage, PositionReportMessage, TrainStatusMessage
+from SUBSYSTEMS.communication.messages import MovementAuthorityMessage, PositionReportMessage, TrainStatusMessage, WaysideStatusMessage
 from SUBSYSTEMS.communication.opcua import OpcUaSupervisionFrame
 from SUBSYSTEMS.communication.rasta import VitalSafePacket, VitalSession
 from SUBSYSTEMS.communication.transport import DcsTransport
@@ -151,6 +151,9 @@ class Simulation:
         self.ats_received_train_state: Dict[str, Dict[str, Any]] = {}
         self.ats_train_freshness: Dict[str, str] = {}
         self.ats_train_received_time_s: Dict[str, float] = {}
+        self.ats_received_wayside_state: Dict[str, Any] = {}
+        self.ats_wayside_freshness = "LOST"
+        self.ats_wayside_received_time_s = -999.0
         self._opcua_sequence_number = 0
         for train in self.trains:
             self._attach_train_communication(train)
@@ -1965,6 +1968,38 @@ class Simulation:
             payload=self._train_status_message(train).to_payload(),
         )
 
+    def _wayside_status_message(self) -> WaysideStatusMessage:
+        return WaysideStatusMessage(
+            track_profile=[list(segment) for segment in self.track_profile],
+            track_min_m=float(self.track_min_m),
+            track_max_m=float(self.track_max_m),
+            track_end_m=float(self.track_end_m),
+            track_labels=list(self.track_labels),
+            scheduled_stops=[dict(stop) for stop in self.scheduled_stops],
+            station_route_states=[deepcopy(state) for state in self.station_route_states],
+            line_conditions=[dict(condition) for condition in self.line_conditions],
+            tsr_zones=[dict(zone) for zone in self.tsr_zones],
+            source_trains=[dict(source) for source in self.source_trains],
+            balises=[dict(balise) for balise in self.balises],
+            timestamp_ms=int(self.sim_time_s * 1000),
+        )
+
+    def _wayside_status_frame(self) -> OpcUaSupervisionFrame:
+        self._opcua_sequence_number += 1
+        return OpcUaSupervisionFrame(
+            request_id=f"WAYSIDE_{self._opcua_sequence_number}",
+            response_id="",
+            source_id="WAYSIDE",
+            destination_id="ATS",
+            method_name="WAYSIDE_STATUS",
+            timestamp_ms=int(self.sim_time_s * 1000),
+            timeout_ms=1500,
+            retry_count=0,
+            encrypted_flag=True,
+            certificate_id="SIM_CERT_01",
+            payload=self._wayside_status_message().to_payload(),
+        )
+
     def _dispatch_train_uplink_messages(self):
         for train in self.trains:
             position_packet = self._vital_position_packet(train)
@@ -1980,6 +2015,10 @@ class Simulation:
             delivered_status, status_arrival_s, _status_event = self.dcs_transport.transport_supervision(status_frame, self.sim_time_s)
             if delivered_status is not None:
                 self.pending_ats_status_frames.append((status_arrival_s, delivered_status))
+        wayside_frame = self._wayside_status_frame()
+        delivered_wayside, wayside_arrival_s, _wayside_event = self.dcs_transport.transport_supervision(wayside_frame, self.sim_time_s)
+        if delivered_wayside is not None:
+            self.pending_ats_status_frames.append((wayside_arrival_s, delivered_wayside))
         self.pending_zc_position_packets.sort(key=lambda item: item[0])
         self.pending_ats_status_frames.sort(key=lambda item: item[0])
 
@@ -1989,6 +2028,10 @@ class Simulation:
             delivered_status, _status_arrival_s, _status_event = self.dcs_transport.transport_supervision(status_frame, self.sim_time_s)
             if delivered_status is not None:
                 self.pending_ats_status_frames.append((self.sim_time_s, delivered_status))
+        wayside_frame = self._wayside_status_frame()
+        delivered_wayside, _wayside_arrival_s, _wayside_event = self.dcs_transport.transport_supervision(wayside_frame, self.sim_time_s)
+        if delivered_wayside is not None:
+            self.pending_ats_status_frames.append((self.sim_time_s, delivered_wayside))
         self._process_ats_status_frames()
 
     def _process_zc_position_reports(self):
@@ -2020,7 +2063,7 @@ class Simulation:
             if arrival_time_s > self.sim_time_s:
                 remaining.append((arrival_time_s, frame))
                 continue
-            if frame.method_name == "TRAIN_STATUS":
+            if frame.method_name in {"TRAIN_STATUS", "WAYSIDE_STATUS"}:
                 try:
                     payload = frame.decoded_payload()
                 except Exception as exc:
@@ -2039,10 +2082,17 @@ class Simulation:
                         str(exc),
                     )
                     continue
+            else:
+                continue
+            if frame.method_name == "TRAIN_STATUS":
                 train_id = str(payload.get("train_id", frame.source_id))
                 self.ats_received_train_state[train_id] = dict(payload)
                 self.ats_train_freshness[train_id] = "FRESH"
                 self.ats_train_received_time_s[train_id] = self.sim_time_s
+            elif frame.method_name == "WAYSIDE_STATUS":
+                self.ats_received_wayside_state = dict(payload)
+                self.ats_wayside_freshness = "FRESH"
+                self.ats_wayside_received_time_s = self.sim_time_s
         self.pending_ats_status_frames = remaining
 
     def _update_communication_freshness(self):
@@ -2066,6 +2116,13 @@ class Simulation:
                 self.ats_train_freshness[train.id] = "STALE"
             else:
                 self.ats_train_freshness[train.id] = "FRESH"
+        wayside_age = self.sim_time_s - self.ats_wayside_received_time_s
+        if wayside_age > 3.0:
+            self.ats_wayside_freshness = "LOST"
+        elif wayside_age > 1.5:
+            self.ats_wayside_freshness = "STALE"
+        else:
+            self.ats_wayside_freshness = "FRESH"
 
     def _authority_trains_from_position_reports(self) -> List[object]:
         return [

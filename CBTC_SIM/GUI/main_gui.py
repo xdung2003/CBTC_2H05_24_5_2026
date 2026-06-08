@@ -438,6 +438,8 @@ class App(tk.Tk):
             outer_canvas.grid(row=0, column=0, sticky="nsew")
             outer_scroll.grid(row=0, column=1, sticky="ns")
             outer_frame = ttk.Frame(outer_canvas, style="Shell.TFrame")
+            outer_frame.columnconfigure(0, weight=1)
+            outer_frame.rowconfigure(0, weight=1)
             outer_window = outer_canvas.create_window((0, 0), window=outer_frame, anchor="nw")
             outer_frame.bind(
                 "<Configure>",
@@ -467,7 +469,7 @@ class App(tk.Tk):
             outer_frame.bind("<Button-4>", _dataflow_mousewheel)
             outer_frame.bind("<Button-5>", _dataflow_mousewheel)
             self.dataflow_panel = DataFlowPanel(outer_frame, self.scale_factor)
-            self.dataflow_panel.grid(row=0, column=0, sticky="ew", padx=int(6 * self.scale_factor), pady=int(6 * self.scale_factor))
+            self.dataflow_panel.grid(row=0, column=0, sticky="nsew", padx=int(6 * self.scale_factor), pady=int(6 * self.scale_factor))
 
             def _bind_dataflow_scroll_tree(widget: tk.Widget):
                 widget.bind("<MouseWheel>", _dataflow_mousewheel, add="+")

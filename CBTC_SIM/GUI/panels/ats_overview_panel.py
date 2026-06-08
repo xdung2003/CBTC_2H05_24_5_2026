@@ -119,7 +119,7 @@ class ATSOverviewPanel(ttk.Frame):
             or str(state.get("atp_state", "")) == "ATP_TRIP"
         )
         self.summary_var.set(
-            f"OCC view  |  trains={len(ats_states)}  moving-block authority  ESA active={esa_active}"
+            f"OCC view  |  trains={len(ats_states)}  WAYSIDE_STATUS={getattr(sim, 'ats_wayside_freshness', 'LOST')}  ESA active={esa_active}"
         )
         self._draw(sim)
 
@@ -139,9 +139,61 @@ class ATSOverviewPanel(ttk.Frame):
             for gy in range(18, h - 8, grid_spacing):
                 c.create_rectangle(gx - 1, gy - 1, gx + 1, gy + 1, fill=APP_THEME["canvas_grid"], outline="")
 
+        wayside = dict(getattr(sim, "ats_received_wayside_state", {}) or {})
+        wayside_freshness = str(getattr(sim, "ats_wayside_freshness", "LOST"))
+        if not wayside:
+            c.create_text(
+                w / 2,
+                h / 2,
+                text="ATS waiting for WAYSIDE_STATUS / OPC UA",
+                fill=APP_THEME["warning"],
+                font=("Consolas", 11, "bold"),
+            )
+            return
+        track_profile = [tuple(segment) for segment in wayside.get("track_profile", [])]
+        track_min_m = float(wayside.get("track_min_m", 0.0))
+        track_max_m = float(wayside.get("track_max_m", 1.0))
+        track_end_m = float(wayside.get("track_end_m", track_max_m))
+        track_labels = list(wayside.get("track_labels", []))
+        scheduled_stops = [dict(stop) for stop in wayside.get("scheduled_stops", [])]
+        station_route_states = [dict(state) for state in wayside.get("station_route_states", [])]
+        line_conditions = [dict(condition) for condition in wayside.get("line_conditions", [])]
+        tsr_zones = [dict(zone) for zone in wayside.get("tsr_zones", [])]
+        source_trains = [dict(source) for source in wayside.get("source_trains", [])]
+        balises = [dict(balise) for balise in wayside.get("balises", [])]
+
+        def station_bounds(stop: Dict[str, object]) -> Tuple[float, float]:
+            pos_m = float(stop.get("pos_m", 0.0))
+            length_m = float(stop.get("length_m", 160.0))
+            return pos_m - length_m / 2.0, pos_m + length_m / 2.0
+
+        def station_line_for_lane(station_idx: int, lane: int):
+            if not (0 <= station_idx < len(station_route_states)):
+                return None
+            lines = station_route_states[station_idx].get("lines", []) or []
+            for line in lines:
+                if int(line.get("lane", -1)) == int(lane):
+                    return line
+            return None
+
+        def station_index_for_stop(stop_payload):
+            if not isinstance(stop_payload, dict):
+                return None
+            stop_name = str(stop_payload.get("name", ""))
+            stop_pos = float(stop_payload.get("pos_m", float("nan")))
+            for idx, stop in enumerate(scheduled_stops):
+                if stop_name and str(stop.get("name", "")) == stop_name:
+                    return idx
+                try:
+                    if abs(float(stop.get("pos_m", 0.0)) - stop_pos) < 1e-6:
+                        return idx
+                except (TypeError, ValueError):
+                    continue
+            return None
+
         def x_from_pos(pos_m: float) -> float:
-            span = max(1.0, sim.track_max_m - sim.track_min_m)
-            base_x = 28 + (pos_m - sim.track_min_m) / span * (w - 56)
+            span = max(1.0, track_max_m - track_min_m)
+            base_x = 28 + (pos_m - track_min_m) / span * (w - 56)
             return 28 + self.view_offset_x + (base_x - 28) * self.view_zoom
 
         rail_y = 130 + self.view_offset_y
@@ -154,21 +206,20 @@ class ATSOverviewPanel(ttk.Frame):
         earth_zone = "#ffe3b5"
         earth_zone_occupied = "#ffc06b"
         earth_zone_outline = "#9b4d2b"
-        main_start_m = min((start for start, _end, _gradient, _psr in sim.track_profile), default=0.0)
-        main_end_m = sim.track_end_m
+        main_start_m = min((start for start, _end, _gradient, _psr in track_profile), default=0.0)
+        main_end_m = track_end_m
         main_x1 = x_from_pos(main_start_m)
         main_x2 = x_from_pos(main_end_m)
         c.create_line(28, rail_y, main_x1, rail_y, fill=earth_rail_dark, width=2, dash=(8, 5))
         c.create_line(main_x2, rail_y, w - 28, rail_y, fill=earth_rail_dark, width=2, dash=(8, 5))
         c.create_line(main_x1, rail_y, main_x2, rail_y, fill=earth_rail, width=5)
 
-        transport = getattr(sim, "dcs_transport", None)
-        rap_items = list(getattr(transport, "radio_access_points", []) or [])
-        rap_display_end_m = sim.track_max_m
+        rap_items = []
+        rap_display_end_m = track_max_m
         rap_y1 = rail_y - 48
         rap_y2 = rail_y - 28
         rap_palette = ("#d9ecff", "#e5f7df", "#fff0cf", "#f0e3ff")
-        active_rap_by_train = set(getattr(transport, "last_rap_by_train", {}).values()) if transport is not None else set()
+        active_rap_by_train = set()
         for idx, rap in enumerate(rap_items):
             rap_start_m = float(getattr(rap, "start_m", 0.0))
             rap_end_m = min(float(getattr(rap, "end_m", 0.0)), rap_display_end_m)
@@ -376,7 +427,7 @@ class ATSOverviewPanel(ttk.Frame):
                 for protection_lane in range(lane_count)
             }
 
-        for idx, condition in enumerate(getattr(sim, "line_conditions", [])):
+        for idx, condition in enumerate(line_conditions):
             tag = self._element_tag("line_condition", idx)
             x1 = x_from_pos(float(condition["start"]))
             x2 = x_from_pos(float(condition["end"]))
@@ -386,7 +437,7 @@ class ATSOverviewPanel(ttk.Frame):
 
         psr_labels: List[Tuple[float, float, str, str]] = []
         segment_boundary_labels: Dict[int, str] = {}
-        for idx, (start, end, _gradient, psr) in enumerate(sim.track_profile):
+        for idx, (start, end, _gradient, psr) in enumerate(track_profile):
             tag = self._element_tag("track_segment", idx)
             x1 = x_from_pos(start)
             x2 = x_from_pos(end)
@@ -396,7 +447,7 @@ class ATSOverviewPanel(ttk.Frame):
             segment_boundary_labels[int(round(start))] = tag
             segment_boundary_labels[int(round(end))] = tag
 
-        for idx, zone in enumerate(sim.tsr_zones):
+        for idx, zone in enumerate(tsr_zones):
             tag = self._element_tag("tsr", idx)
             x1 = x_from_pos(float(zone["start"]))
             x2 = x_from_pos(float(zone["end"]))
@@ -413,23 +464,23 @@ class ATSOverviewPanel(ttk.Frame):
             c.create_rectangle(psr_x - 28, psr_y - 8, psr_x + 28, psr_y + 8, fill=APP_THEME["card"], outline="", tags=(tag,))
             c.create_text(psr_x, psr_y, text=psr_text, fill=APP_THEME["muted"], font=("Consolas", 8), tags=(tag,))
 
-        for balise in getattr(sim, "balises", []):
+        for balise in balises:
             x = x_from_pos(float(balise["pos_m"]))
             if 28 <= x <= w - 28:
                 c.create_rectangle(x - 2, rail_y + 8, x + 2, rail_y + 18, fill="#234f7a", outline="")
 
-        for idx, stop in enumerate(sim.scheduled_stops):
+        for idx, stop in enumerate(scheduled_stops):
             tag = self._element_tag("station", idx)
             pos_m = float(stop["pos_m"])
             length_m = float(stop.get("length_m", 160.0))
             capacity = int(stop.get("capacity", 3))
             x1 = x_from_pos(pos_m - length_m / 2.0)
             x2 = x_from_pos(pos_m + length_m / 2.0)
-            station_state = sim.station_route_states[idx] if idx < len(getattr(sim, "station_route_states", [])) else {}
+            station_state = station_route_states[idx] if idx < len(station_route_states) else {}
             route_lane = station_state.get("route_lane")
             lane_status = {}
             for lane in range(max(1, capacity)):
-                line = sim._station_line_for_lane(idx, lane)
+                line = station_line_for_lane(idx, lane)
                 if route_lane == lane:
                     lane_status[lane] = "GREEN"
                 elif line is not None and (
@@ -457,7 +508,7 @@ class ATSOverviewPanel(ttk.Frame):
             lane_positions = [visual_lane_y(rail_y, max(1, capacity), lane) for lane in range(max(1, capacity))]
             c.create_line(stop_x, min(lane_positions) - 10, stop_x, max(lane_positions) + 10, fill=APP_THEME["danger"], width=3, tags=(tag,))
 
-        for label in sim.track_labels:
+        for label in track_labels:
             x = x_from_pos(label)
             c.create_line(x, block_y2 + 24, x, block_y2 + 32, fill=APP_THEME["muted"], dash=(2, 2))
             c.create_text(x, block_y2 + 42, text=f"{int(label)}m", fill=APP_THEME["muted"], font=("Consolas", 7))
@@ -469,11 +520,11 @@ class ATSOverviewPanel(ttk.Frame):
             return center_x - 12.0, center_x + 12.0
 
         source_lane_count = max(
-            (max(1, int(source.get("capacity", SOURCE_VISIBLE_ACTIVE_TRAINS))) for source in getattr(sim, "source_trains", [])),
+            (max(1, int(source.get("capacity", SOURCE_VISIBLE_ACTIVE_TRAINS))) for source in source_trains),
             default=SOURCE_VISIBLE_ACTIVE_TRAINS,
         )
         source_lane_slots: Dict[int, Tuple[float, float, float]] = {}
-        for idx, source in enumerate(getattr(sim, "source_trains", [])):
+        for idx, source in enumerate(source_trains):
             tag = self._element_tag("source_train", idx)
             start_m = float(source["start_m"])
             length_m = float(source["length_m"])
@@ -505,7 +556,7 @@ class ATSOverviewPanel(ttk.Frame):
             for train_id, state in getattr(sim, "ats_received_train_state", {}).items()
             if state
         ]
-        display_trains.sort(key=lambda item: float(item[1].get("position_m", sim.track_min_m)))
+        display_trains.sort(key=lambda item: float(item[1].get("position_m", track_min_m)))
         for idx, (train_id, ats_state) in enumerate(display_trains):
             ats_freshness = str(getattr(sim, "ats_train_freshness", {}).get(train_id, "LOST"))
             display_pos = float(ats_state["position_m"])
@@ -520,7 +571,7 @@ class ATSOverviewPanel(ttk.Frame):
             protection_lane = int(ats_state.get("protection_lane", 0) or 0)
             station_lane = ats_state.get("station_lane")
             active_scheduled_stop = ats_state.get("active_scheduled_stop")
-            tail = max(sim.track_min_m, display_pos - train_length)
+            tail = max(track_min_m, display_pos - train_length)
             x1 = x_from_pos(tail)
             x2 = x_from_pos(display_pos)
             x1, x2 = visible_train_span(x2, x1)
@@ -530,11 +581,11 @@ class ATSOverviewPanel(ttk.Frame):
             elif isinstance(protection_zone_id, str) and protection_zone_id.startswith("STATION:"):
                 try:
                     station_idx = int(protection_zone_id.split(":", 1)[1])
-                    station_capacity = max(1, int(sim.scheduled_stops[station_idx].get("capacity", 3)))
+                    station_capacity = max(1, int(scheduled_stops[station_idx].get("capacity", 3)))
                 except (IndexError, ValueError):
                     station_capacity = 1
-                if 0 <= station_idx < len(sim.scheduled_stops):
-                    station_start, station_end = sim._station_bounds(sim.scheduled_stops[station_idx])
+                if 0 <= station_idx < len(scheduled_stops):
+                    station_start, station_end = station_bounds(scheduled_stops[station_idx])
                     head_in_station = station_start <= display_pos <= station_end
                 else:
                     head_in_station = False
@@ -543,10 +594,10 @@ class ATSOverviewPanel(ttk.Frame):
                 else:
                     y = rail_y
             elif station_lane is not None and active_scheduled_stop is not None:
-                station_idx = sim._station_index_for_stop(active_scheduled_stop)
+                station_idx = station_index_for_stop(active_scheduled_stop)
                 if station_idx is not None:
-                    station_capacity = max(1, int(sim.scheduled_stops[station_idx].get("capacity", 3)))
-                    station_start, station_end = sim._station_bounds(sim.scheduled_stops[station_idx])
+                    station_capacity = max(1, int(scheduled_stops[station_idx].get("capacity", 3)))
+                    station_start, station_end = station_bounds(scheduled_stops[station_idx])
                     y = lane_y(rail_y, station_capacity, int(station_lane)) if station_start <= display_pos <= station_end else rail_y
                 else:
                     y = rail_y
@@ -642,7 +693,7 @@ class ATSOverviewPanel(ttk.Frame):
             if idx + 1 < len(display_trains):
                 _next_train_id, next_state = display_trains[idx + 1]
                 next_length = float(next_state.get("length_m", 120.0))
-                next_tail = max(sim.track_min_m, float(next_state.get("position_m", sim.track_min_m)) - next_length)
+                next_tail = max(track_min_m, float(next_state.get("position_m", track_min_m)) - next_length)
                 distance_m = next_tail - display_pos
                 
                 # Position for distance label (between current train head and next train tail)
