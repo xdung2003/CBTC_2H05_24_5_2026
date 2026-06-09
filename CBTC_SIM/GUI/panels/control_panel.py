@@ -10,7 +10,7 @@ class ControlPanel(ttk.Frame):
         self.on_clear_tsr = on_clear_tsr
         self.segment_label = None
 
-        ttk.Label(self, text="Control", font=("Segoe UI", int(11 * scale_factor), "bold")).pack(anchor="w")
+        ttk.Label(self, text="ATS RaSTA Commands", font=("Segoe UI", int(11 * scale_factor), "bold")).pack(anchor="w")
 
         psr_frame = ttk.LabelFrame(self, text="PSR Segment")
         psr_frame.pack(fill="x", pady=(int(8 * scale_factor), int(6 * scale_factor)))
@@ -21,7 +21,7 @@ class ControlPanel(ttk.Frame):
         self.psr_value = tk.StringVar(value="40")
         ttk.Entry(psr_frame, textvariable=self.psr_segment, width=8).grid(row=0, column=1, padx=4, pady=2)
         ttk.Entry(psr_frame, textvariable=self.psr_value, width=8).grid(row=1, column=1, padx=4, pady=2)
-        ttk.Button(psr_frame, text="Apply PSR", command=self._apply_psr).grid(row=2, column=0, columnspan=2, sticky="we", padx=4, pady=4)
+        ttk.Button(psr_frame, text="Issue PSR", command=self._apply_psr).grid(row=2, column=0, columnspan=2, sticky="we", padx=4, pady=4)
 
         tsr_frame = ttk.LabelFrame(self, text="TSR Zone")
         tsr_frame.pack(fill="x", pady=(4, 6))
@@ -34,7 +34,7 @@ class ControlPanel(ttk.Frame):
         ttk.Entry(tsr_frame, textvariable=self.tsr_start, width=8).grid(row=0, column=1, padx=4, pady=2)
         ttk.Entry(tsr_frame, textvariable=self.tsr_end, width=8).grid(row=1, column=1, padx=4, pady=2)
         ttk.Entry(tsr_frame, textvariable=self.tsr_speed, width=8).grid(row=2, column=1, padx=4, pady=2)
-        ttk.Button(tsr_frame, text="Add TSR", command=self._add_tsr).grid(row=3, column=0, columnspan=2, sticky="we", padx=4, pady=4)
+        ttk.Button(tsr_frame, text="Issue TSR", command=self._add_tsr).grid(row=3, column=0, columnspan=2, sticky="we", padx=4, pady=4)
         ttk.Button(tsr_frame, text="Clear TSR", command=self._clear_tsr).grid(row=4, column=0, columnspan=2, sticky="we", padx=4, pady=(0, 4))
 
     def _apply_psr(self):
@@ -56,7 +56,7 @@ class ControlPanel(ttk.Frame):
 class SpeedLimitsPanel(ttk.Frame):
     def __init__(self, master: tk.Widget, scale_factor: float):
         super().__init__(master, padding=int(4 * scale_factor), borderwidth=1, relief="solid", width=int(240 * scale_factor), height=int(260 * scale_factor))
-        ttk.Label(self, text="Speed Limits", font=("Segoe UI", int(12 * scale_factor), "bold")).pack(anchor="w")
+        ttk.Label(self, text="Simulator Speed Limits", font=("Segoe UI", int(12 * scale_factor), "bold")).pack(anchor="w")
         content = ttk.Frame(self)
         content.pack(fill="both", expand=True, pady=(int(4 * scale_factor), 0))
         self.text = tk.Text(

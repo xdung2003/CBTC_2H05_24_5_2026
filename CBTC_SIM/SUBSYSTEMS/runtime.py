@@ -12,6 +12,7 @@ from CONFIG.config import (
     DEPARTURE_RELEASE_MIN_AUTHORITY_M,
     LINE_CENTER_SPACING_M,
     MIN_PASSENGER_DWELL_S,
+    OVERLAP_M,
     PARALLEL_RELEASE_MARGIN_M,
     PARALLEL_ROMAN_LABELS,
     SOURCE_RELEASE_LOCK_S,
@@ -41,7 +42,16 @@ from SUBSYSTEMS.signalling import SafeMovementPacket, STOP_SVL_OFFSET_M, get_tra
 from SUBSYSTEMS.physics import equivalent_mass_adjusted_accel, kmh_to_ms, ms_to_kmh
 from SUBSYSTEMS.train import Train, train_color
 from SUBSYSTEMS.zc import ZoneController
-from SUBSYSTEMS.communication.messages import MovementAuthorityMessage, PositionReportMessage, TrainStatusMessage, WaysideStatusMessage
+from SUBSYSTEMS.communication.messages import (
+    AtsOperationCommandMessage,
+    DcsStatusMessage,
+    MovementAuthorityMessage,
+    PositionReportMessage,
+    StationStatusMessage,
+    TrainStatusMessage,
+    WaysideStatusMessage,
+    ZcStatusMessage,
+)
 from SUBSYSTEMS.communication.opcua import OpcUaSupervisionFrame
 from SUBSYSTEMS.communication.rasta import VitalSafePacket, VitalSession
 from SUBSYSTEMS.communication.transport import DcsTransport
@@ -145,6 +155,7 @@ class Simulation:
         self.zc_vital_sessions: Dict[str, VitalSession] = {}
         self.pending_zc_position_packets: List[Tuple[float, VitalSafePacket]] = []
         self.pending_ats_status_frames: List[Tuple[float, OpcUaSupervisionFrame]] = []
+        self.pending_ats_operation_packets: List[Tuple[float, VitalSafePacket]] = []
         self.last_valid_position_report: Dict[str, Dict[str, Any]] = {}
         self.position_report_freshness: Dict[str, str] = {}
         self.position_report_received_time_s: Dict[str, float] = {}
@@ -152,8 +163,17 @@ class Simulation:
         self.ats_train_freshness: Dict[str, str] = {}
         self.ats_train_received_time_s: Dict[str, float] = {}
         self.ats_received_wayside_state: Dict[str, Any] = {}
+        self.ats_received_zc_state: Dict[str, Any] = {}
+        self.ats_received_station_state: Dict[str, Any] = {}
+        self.ats_received_dcs_state: Dict[str, Any] = {}
         self.ats_wayside_freshness = "LOST"
+        self.ats_zc_freshness = "LOST"
+        self.ats_station_freshness = "LOST"
+        self.ats_dcs_freshness = "LOST"
         self.ats_wayside_received_time_s = -999.0
+        self.ats_zc_received_time_s = -999.0
+        self.ats_station_received_time_s = -999.0
+        self.ats_dcs_received_time_s = -999.0
         self._opcua_sequence_number = 0
         for train in self.trains:
             self._attach_train_communication(train)
@@ -1922,6 +1942,8 @@ class Simulation:
         )
 
     def _train_status_message(self, train: Train) -> TrainStatusMessage:
+        table_curves = getattr(train, "raw_curves", train.curves)
+        table_hidden_curves = getattr(train, "raw_hidden_curves", train.hidden_curves)
         return TrainStatusMessage(
             train_id=train.id,
             position_m=float(train.reported_pos),
@@ -1950,6 +1972,35 @@ class Simulation:
             constraint_type=str(train.constraint_type),
             constraint_target_speed_kmh=float(train.constraint_target_speed_kmh),
             distance_to_constraint_m=float(train.distance_to_constraint_m),
+            direction="FORWARD" if train.speed >= -0.01 else "REVERSE",
+            odometry_uncertainty_m=float(train.effective_position_uncertainty_m()),
+            speed_curves_kmh={
+                "P": float(ms_to_kmh(table_curves.get("P", train.curves.get("P", 0.0)))),
+                "I": float(ms_to_kmh(table_hidden_curves.get("I", train.hidden_curves.get("I", 0.0)))),
+                "W": float(ms_to_kmh(table_curves.get("W", train.curves.get("W", 0.0)))),
+                "SBI": float(ms_to_kmh(table_hidden_curves.get("SBI", train.hidden_curves.get("SBI", 0.0)))),
+                "SBD": float(ms_to_kmh(table_curves.get("SBD", train.curves.get("SBD", 0.0)))),
+                "EBI": float(ms_to_kmh(table_hidden_curves.get("EBI", train.hidden_curves.get("EBI", 0.0)))),
+                "EBD": float(ms_to_kmh(table_curves.get("EBD", train.curves.get("EBD", 0.0)))),
+            },
+            atp_action=str(train.atp_action),
+            atp_alert=str(train.atp_alert),
+            ato_target_speed_kmh=float(ms_to_kmh(train.ato_target_speed)),
+            psr_kmh=float(train.psr_kmh),
+            limit_ahead_speed_kmh=float(train.limit_ahead_speed_kmh),
+            limit_ahead_dist_m=float(train.limit_ahead_dist),
+            rolling_stock_status={
+                "tcms_alerts": [],
+                "lru_failures": [
+                    key
+                    for key, active in {
+                        "ATP": bool(train.atp_fault_active),
+                        "ATO": bool(train.ato_fault_active),
+                        "DCS": bool(train.dcs_fault_active),
+                    }.items()
+                    if active
+                ],
+            },
         )
 
     def _train_status_frame(self, train: Train) -> OpcUaSupervisionFrame:
@@ -1976,11 +2027,106 @@ class Simulation:
             track_end_m=float(self.track_end_m),
             track_labels=list(self.track_labels),
             scheduled_stops=[dict(stop) for stop in self.scheduled_stops],
-            station_route_states=[deepcopy(state) for state in self.station_route_states],
             line_conditions=[dict(condition) for condition in self.line_conditions],
-            tsr_zones=[dict(zone) for zone in self.tsr_zones],
             source_trains=[dict(source) for source in self.source_trains],
             balises=[dict(balise) for balise in self.balises],
+            radio_access_points=[
+                {
+                    "id": rap.id,
+                    "start_m": float(rap.start_m),
+                    "end_m": float(rap.end_m),
+                }
+                for rap in getattr(self.dcs_transport, "radio_access_points", [])
+            ],
+            timestamp_ms=int(self.sim_time_s * 1000),
+        )
+
+    def _zc_status_message(self) -> ZcStatusMessage:
+        secondary_detection_sections = []
+        for idx, (start, end, _gradient, _psr) in enumerate(self.track_profile):
+            occupied_by = [
+                train.id
+                for train in self.trains
+                if (train.reported_pos - train.length) < end and train.reported_pos > start
+            ]
+            secondary_detection_sections.append(
+                {
+                    "section_id": f"SEG-{idx + 1:02d}",
+                    "start_m": float(start),
+                    "end_m": float(end),
+                    "occupied": bool(occupied_by),
+                    "occupied_by_train_ids": occupied_by,
+                }
+            )
+        protection_zones = [
+            {
+                "train_id": train.id,
+                "protection_zone_id": train.protection_zone_id,
+                "protection_lane": int(train.protection_lane),
+                "safe_front_m": float(train.safe_front_end_pos),
+                "safe_rear_m": float(train.safe_rear_end_pos()),
+                "eoa_m": float(train.eoa),
+                "svl_m": float(train.stop_target_pos),
+                "overlap_m": float(OVERLAP_M),
+                "esa_active": bool(train.emergency_stop or train.emg_latch or train.trip_mode or train.emergency_recovery_hold),
+                "trip_protect_rear_m": float(train.trip_protect_rear_pos),
+            }
+            for train in self.trains
+        ]
+        return ZcStatusMessage(
+            zc_status={
+                "zc_id": "ZC_01",
+                "availability": "AVAILABLE",
+                "track_end_m": float(self.track_end_m),
+                "valid_position_reports": len(self.last_valid_position_report),
+                "fresh_position_reports": sum(1 for value in self.position_report_freshness.values() if value == "FRESH"),
+                "position_report_freshness": dict(self.position_report_freshness),
+            },
+            tsr_zones=[dict(zone) for zone in self.tsr_zones],
+            secondary_detection_sections=secondary_detection_sections,
+            protection_zones=protection_zones,
+            timestamp_ms=int(self.sim_time_s * 1000),
+        )
+
+    def _station_status_message(self) -> StationStatusMessage:
+        point_states = []
+        for station_idx, state in enumerate(self.station_route_states):
+            for line in state.get("lines", []) or []:
+                route_state = str(line.get("route_state", "FREE"))
+                point_states.append(
+                    {
+                        "point_id": f"PT-{station_idx + 1:02d}-{int(line.get('lane', 0)) + 1:02d}",
+                        "station_index": int(station_idx),
+                        "lane": int(line.get("lane", 0)),
+                        "position": "REVERSE" if state.get("route_lane") == line.get("lane") else "NORMAL",
+                        "locked": route_state in {"RESERVED", "LOCKED", "OCCUPIED", "DEPARTING", "RELEASE_PENDING"},
+                        "route_state": route_state,
+                        "occupied_by_train_id": line.get("occupied_by_train_id"),
+                    }
+                )
+        return StationStatusMessage(
+            station_route_states=[deepcopy(state) for state in self.station_route_states],
+            point_states=point_states,
+            timestamp_ms=int(self.sim_time_s * 1000),
+        )
+
+    def _dcs_status_message(self) -> DcsStatusMessage:
+        return DcsStatusMessage(
+            dcs_transport_state={
+                "active_path": str(getattr(self.dcs_transport, "active_path", "")),
+                "paths": {
+                    key: {
+                        "state": path.state.value,
+                        "sent_count": int(path.sent_count),
+                        "accepted_count": int(path.accepted_count),
+                        "lost_count": int(path.lost_count),
+                        "timeout_count": int(path.timeout_count),
+                    }
+                    for key, path in getattr(self.dcs_transport, "paths", {}).items()
+                },
+                "faults": dict(getattr(self.dcs_transport, "faults", {})),
+                "last_fault": str(getattr(self.dcs_transport, "last_fault", "")),
+            },
             timestamp_ms=int(self.sim_time_s * 1000),
         )
 
@@ -2000,6 +2146,66 @@ class Simulation:
             payload=self._wayside_status_message().to_payload(),
         )
 
+    def _opcua_status_frame(self, source_id: str, method_name: str, payload: Dict[str, Any]) -> OpcUaSupervisionFrame:
+        self._opcua_sequence_number += 1
+        return OpcUaSupervisionFrame(
+            request_id=f"{method_name}_{self._opcua_sequence_number}",
+            response_id="",
+            source_id=source_id,
+            destination_id="ATS",
+            method_name=method_name,
+            timestamp_ms=int(self.sim_time_s * 1000),
+            timeout_ms=1500,
+            retry_count=0,
+            encrypted_flag=True,
+            certificate_id="SIM_CERT_01",
+            payload=payload,
+        )
+
+    def dispatch_ats_operation_command(
+        self,
+        command: str,
+        train_id: str = "",
+        value: Any = None,
+        reason: str = "operator_request",
+    ) -> bool:
+        source_id = "ATS"
+        normalized_command = str(command).upper()
+        zc_constraint_commands = {"APPLY_PSR", "ADD_TSR", "UPDATE_TSR", "REMOVE_TSR", "CLEAR_TSR"}
+        destination_id = "ZC_01" if normalized_command in zc_constraint_commands else "OPERATIONS"
+        payload = AtsOperationCommandMessage(
+            command=normalized_command,
+            train_id=str(train_id),
+            value=value,
+            reason=reason,
+        ).to_payload()
+        packet = VitalSafePacket.create(
+            source_id=source_id,
+            destination_id=destination_id,
+            session_id=f"{source_id}:{destination_id}",
+            message_type="ATS_OPERATION_COMMAND",
+            sequence_number=self._next_vital_sequence(source_id, destination_id),
+            timestamp_ms=int(self.sim_time_s * 1000),
+            ttl_ms=1500,
+            payload=payload,
+            key_id="SIM_KEY_01",
+            secret="cbtc-sim-shared-secret",
+        )
+        target_train = next((train for train in self.trains if train.id == train_id), None)
+        route_train_id = train_id if target_train is not None else "ATS"
+        route_pos_m = float(target_train.reported_pos) if target_train is not None else 0.0
+        delivered, arrival_time_s, _event = self.dcs_transport.transport_vital(
+            packet,
+            self.sim_time_s,
+            route_train_id,
+            route_pos_m,
+        )
+        if delivered is None:
+            return False
+        self.pending_ats_operation_packets.append((arrival_time_s, delivered))
+        self.pending_ats_operation_packets.sort(key=lambda item: item[0])
+        return True
+
     def _dispatch_train_uplink_messages(self):
         for train in self.trains:
             position_packet = self._vital_position_packet(train)
@@ -2015,10 +2221,15 @@ class Simulation:
             delivered_status, status_arrival_s, _status_event = self.dcs_transport.transport_supervision(status_frame, self.sim_time_s)
             if delivered_status is not None:
                 self.pending_ats_status_frames.append((status_arrival_s, delivered_status))
-        wayside_frame = self._wayside_status_frame()
-        delivered_wayside, wayside_arrival_s, _wayside_event = self.dcs_transport.transport_supervision(wayside_frame, self.sim_time_s)
-        if delivered_wayside is not None:
-            self.pending_ats_status_frames.append((wayside_arrival_s, delivered_wayside))
+        for status_frame in (
+            self._wayside_status_frame(),
+            self._opcua_status_frame("ZC_01", "ZC_STATUS", self._zc_status_message().to_payload()),
+            self._opcua_status_frame("STATION", "STATION_STATUS", self._station_status_message().to_payload()),
+            self._opcua_status_frame("DCS_NMS", "DCS_STATUS", self._dcs_status_message().to_payload()),
+        ):
+            delivered_status, status_arrival_s, _status_event = self.dcs_transport.transport_supervision(status_frame, self.sim_time_s)
+            if delivered_status is not None:
+                self.pending_ats_status_frames.append((status_arrival_s, delivered_status))
         self.pending_zc_position_packets.sort(key=lambda item: item[0])
         self.pending_ats_status_frames.sort(key=lambda item: item[0])
 
@@ -2028,10 +2239,15 @@ class Simulation:
             delivered_status, _status_arrival_s, _status_event = self.dcs_transport.transport_supervision(status_frame, self.sim_time_s)
             if delivered_status is not None:
                 self.pending_ats_status_frames.append((self.sim_time_s, delivered_status))
-        wayside_frame = self._wayside_status_frame()
-        delivered_wayside, _wayside_arrival_s, _wayside_event = self.dcs_transport.transport_supervision(wayside_frame, self.sim_time_s)
-        if delivered_wayside is not None:
-            self.pending_ats_status_frames.append((self.sim_time_s, delivered_wayside))
+        for status_frame in (
+            self._wayside_status_frame(),
+            self._opcua_status_frame("ZC_01", "ZC_STATUS", self._zc_status_message().to_payload()),
+            self._opcua_status_frame("STATION", "STATION_STATUS", self._station_status_message().to_payload()),
+            self._opcua_status_frame("DCS_NMS", "DCS_STATUS", self._dcs_status_message().to_payload()),
+        ):
+            delivered_status, _status_arrival_s, _status_event = self.dcs_transport.transport_supervision(status_frame, self.sim_time_s)
+            if delivered_status is not None:
+                self.pending_ats_status_frames.append((self.sim_time_s, delivered_status))
         self._process_ats_status_frames()
 
     def _process_zc_position_reports(self):
@@ -2063,7 +2279,7 @@ class Simulation:
             if arrival_time_s > self.sim_time_s:
                 remaining.append((arrival_time_s, frame))
                 continue
-            if frame.method_name in {"TRAIN_STATUS", "WAYSIDE_STATUS"}:
+            if frame.method_name in {"TRAIN_STATUS", "WAYSIDE_STATUS", "ZC_STATUS", "STATION_STATUS", "DCS_STATUS"}:
                 try:
                     payload = frame.decoded_payload()
                 except Exception as exc:
@@ -2093,7 +2309,137 @@ class Simulation:
                 self.ats_received_wayside_state = dict(payload)
                 self.ats_wayside_freshness = "FRESH"
                 self.ats_wayside_received_time_s = self.sim_time_s
+            elif frame.method_name == "ZC_STATUS":
+                self.ats_received_zc_state = dict(payload)
+                self.ats_zc_freshness = "FRESH"
+                self.ats_zc_received_time_s = self.sim_time_s
+            elif frame.method_name == "STATION_STATUS":
+                self.ats_received_station_state = dict(payload)
+                self.ats_station_freshness = "FRESH"
+                self.ats_station_received_time_s = self.sim_time_s
+            elif frame.method_name == "DCS_STATUS":
+                self.ats_received_dcs_state = dict(payload)
+                self.ats_dcs_freshness = "FRESH"
+                self.ats_dcs_received_time_s = self.sim_time_s
         self.pending_ats_status_frames = remaining
+
+    def _process_ats_operation_frames(self):
+        remaining: List[Tuple[float, VitalSafePacket]] = []
+        for arrival_time_s, packet in self.pending_ats_operation_packets:
+            if arrival_time_s > self.sim_time_s:
+                remaining.append((arrival_time_s, packet))
+                continue
+            if packet.header.message_type != "ATS_OPERATION_COMMAND":
+                continue
+            try:
+                payload = packet.decoded_payload("cbtc-sim-shared-secret")
+            except Exception as exc:
+                self.dcs_transport._event(
+                    self.sim_time_s,
+                    packet.header.source_id,
+                    packet.header.destination_id,
+                    "RASTA_VITAL",
+                    "ATS",
+                    packet.header.message_type,
+                    packet.header.sequence_number,
+                    0.0,
+                    "OK",
+                    "DECRYPT_ERROR",
+                    "rejected",
+                    str(exc),
+                )
+                continue
+            self._apply_ats_operation_command(payload)
+        self.pending_ats_operation_packets = remaining
+
+    def _apply_ats_operation_command(self, payload: Dict[str, Any]):
+        command = str(payload.get("command", "")).upper()
+        train_id = str(payload.get("train_id", ""))
+        value = payload.get("value")
+
+        def selected_trains() -> List[Train]:
+            if not train_id:
+                return list(self.trains)
+            return [train for train in self.trains if train.id == train_id]
+
+        if command == "TRAIN_TRIP":
+            for train in selected_trains():
+                train.enter_trip_mode("ATS TRAIN TRIP", train.reported_pos)
+                train.emergency_recovery_hold = False
+        elif command == "EMERGENCY_STOP":
+            for train in selected_trains():
+                train.enter_trip_mode("ATS INSTANT STOP", train.reported_pos)
+                train.emergency_recovery_hold = False
+                train.ato_target_speed = 0.0
+                train.service_brake_latch = False
+                train.atp_state = "ATP_TRIP"
+                train.atp_alert = "ATS INSTANT STOP"
+                train.atp_brake = "EMERGENCY"
+                train.atp_action = "EBI"
+        elif command == "ACK_EMERGENCY":
+            for train in selected_trains():
+                train.emg_ack = True
+                train.acknowledge_emergency_safe()
+        elif command == "RESUME_TRAIN":
+            for train in selected_trains():
+                train.resume_after_emergency()
+        elif command == "PRECISE_JOG":
+            for train in selected_trains():
+                train.request_precise_jog()
+        elif command == "TOGGLE_TRAIN_FAULT":
+            subsystem = str((value or {}).get("subsystem", "")).upper() if isinstance(value, dict) else str(value).upper()
+            for train in selected_trains():
+                if subsystem in {"ATP", "ATO", "DCS"}:
+                    active_attr = f"{subsystem.lower()}_fault_active"
+                    train.set_fault(subsystem, not bool(getattr(train, active_attr, False)), self.sim_time_s)
+        elif command == "SET_DCS_LOSS_ALL":
+            active = bool(value)
+            for train in self.trains:
+                train.set_fault("DCS", active, self.sim_time_s)
+        elif command == "CLEAR_TRAIN_FAULTS":
+            for train in self.trains:
+                train.set_fault("DCS", False, self.sim_time_s)
+                train.set_fault("ATO", False, self.sim_time_s)
+                train.set_fault("ATP", False, self.sim_time_s)
+                if not (train.trip_mode or train.emg_latch or train.emergency_stop or train.emergency_recovery_hold):
+                    train.reset_non_emergency_stop_latches()
+        elif command == "APPLY_PSR" and isinstance(value, dict):
+            idx = int(value.get("segment", -1))
+            psr = float(value.get("psr_kmh", 0.0))
+            if 0 <= idx < len(self.track_profile) and psr > 0.0:
+                start, end, gradient, _old = self.track_profile[idx]
+                self.track_profile[idx] = (start, end, gradient, psr)
+                for train in self.trains:
+                    train.track_profile = self.track_profile
+        elif command == "ADD_TSR" and isinstance(value, dict):
+            start = float(value.get("start", 0.0))
+            end = float(value.get("end", 0.0))
+            speed = float(value.get("speed", 0.0))
+            if end < start:
+                start, end = end, start
+            if end > start and speed > 0.0:
+                self.tsr_zones.append({"start": start, "end": end, "speed": speed})
+        elif command == "UPDATE_TSR" and isinstance(value, dict):
+            idx = int(value.get("index", -1))
+            speed = float(value.get("speed", 0.0))
+            if 0 <= idx < len(self.tsr_zones) and speed > 0.0:
+                self.tsr_zones[idx]["speed"] = speed
+        elif command == "REMOVE_TSR" and isinstance(value, dict):
+            idx = int(value.get("index", -1))
+            if 0 <= idx < len(self.tsr_zones):
+                self.tsr_zones.pop(idx)
+        elif command == "CLEAR_TSR":
+            self.tsr_zones.clear()
+        elif command == "SET_DCS_PATH_STATE" and isinstance(value, dict):
+            self.dcs_transport.set_path_state(str(value.get("path", "")).upper(), str(value.get("state", "OK")).upper())
+        elif command == "SET_DCS_FAULT" and isinstance(value, dict):
+            self.dcs_transport.set_fault(str(value.get("fault", "")), bool(value.get("active", False)))
+        elif command == "CLEAR_COMM_FAULTS":
+            for fault in list(self.dcs_transport.faults):
+                self.dcs_transport.set_fault(fault, False)
+            for key in ("RED", "BLUE"):
+                self.dcs_transport.set_path_state(key, "OK")
+            self.dcs_transport.active_path = "RED"
 
     def _update_communication_freshness(self):
         for train in self.trains:
@@ -2123,6 +2469,18 @@ class Simulation:
             self.ats_wayside_freshness = "STALE"
         else:
             self.ats_wayside_freshness = "FRESH"
+        for attr, timestamp_attr in (
+            ("ats_zc_freshness", "ats_zc_received_time_s"),
+            ("ats_station_freshness", "ats_station_received_time_s"),
+            ("ats_dcs_freshness", "ats_dcs_received_time_s"),
+        ):
+            age = self.sim_time_s - getattr(self, timestamp_attr, -999.0)
+            if age > 3.0:
+                setattr(self, attr, "LOST")
+            elif age > 1.5:
+                setattr(self, attr, "STALE")
+            else:
+                setattr(self, attr, "FRESH")
 
     def _authority_trains_from_position_reports(self) -> List[object]:
         return [
@@ -2359,6 +2717,7 @@ class Simulation:
         self.train_generation_changed = self._spawn_source_trains()
         self._process_zc_position_reports()
         self._process_ats_status_frames()
+        self._process_ats_operation_frames()
         self._update_communication_freshness()
         immediate_packet_required = False
         for t in self.trains:

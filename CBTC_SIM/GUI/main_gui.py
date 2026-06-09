@@ -71,7 +71,6 @@ from SUBSYSTEMS.ato import ATOPilotingEngine, ATOPilotingResult
 from SUBSYSTEMS.train import Train, train_color
 from SUBSYSTEMS.zc import ZoneController
 from SUBSYSTEMS.runtime import Simulation
-from SUBSYSTEMS.communication.transport import DcsPathState
 
 for _name in _control_common.__all__:
     globals()[_name] = getattr(_control_common, _name)
@@ -126,7 +125,7 @@ ACTION_COLORS = {
 from GUI.panels.train_panel import TrainPanel
 from GUI.panels.ats_overview_panel import ATSOverviewPanel
 from GUI.panels.infrastructure_panel import InfrastructurePanel
-from GUI.panels.engineering_panel import DataFlowPanel, TimeDistancePanel
+from GUI.panels.engineering_panel import DataFlowPanel
 from GUI.panels.analytics_panel import AnalyticsPanel
 from GUI.panels.control_panel import ControlPanel, SpeedLimitsPanel
 
@@ -214,7 +213,7 @@ class App(tk.Tk):
         sim_group = self._make_button_group(btns, "Simulation Control", 0)
         scenario_group = self._make_button_group(btns, "Line Config I/O", 2)
         headway_group = self._make_button_group(btns, "Headway Target", 3)
-        tools_group = self._make_button_group(btns, "Tools", 4)
+        tools_group = self._make_button_group(btns, "Simulator Tools", 4)
 
         self.start_btn = ttk.Button(sim_group, text="Start", command=self.on_start, style="Accent.TButton")
         self.start_btn.grid(row=1, column=0, padx=3, pady=(2, 4), sticky="ew")
@@ -264,7 +263,7 @@ class App(tk.Tk):
         ttk.Button(tools_group, text="Dataflow", command=self.open_dataflow_window).grid(
             row=1, column=0, padx=2, pady=(2, 4), sticky="ew"
         )
-        ttk.Button(tools_group, text="Add TSR", command=self.open_add_tsr_dialog).grid(
+        ttk.Button(tools_group, text="Issue TSR", command=self.open_add_tsr_dialog).grid(
             row=1, column=1, padx=2, pady=(2, 4), sticky="ew"
         )
         tools_group.columnconfigure(0, weight=1)
@@ -307,23 +306,29 @@ class App(tk.Tk):
         side_toolbar.columnconfigure(0, weight=1)
         self._bind_side_toolbar_scroll(self.side_toolbar_canvas)
 
-        faults_side = ttk.LabelFrame(side_toolbar, text="Train Faults", padding=4)
-        faults_side.grid(row=0, column=0, sticky="ew", pady=(0, 5))
+        ttk.Label(
+            side_toolbar,
+            text="ATS operation commands\nvia RaSTA vital packets",
+            style="Muted.TLabel",
+            justify="left",
+        ).grid(row=0, column=0, sticky="ew", pady=(0, 5))
+
+        faults_side = ttk.LabelFrame(side_toolbar, text="Train Commands / Fault Scenarios", padding=4)
+        faults_side.grid(row=1, column=0, sticky="ew", pady=(0, 5))
         faults_side.columnconfigure(0, weight=1)
-        ttk.Button(faults_side, text="DCS", command=self.toggle_all_dcs_loss, style="Danger.TButton").grid(row=0, column=0, sticky="ew", padx=1, pady=1)
-        ttk.Button(faults_side, text="Clear", command=self.clear_all_faults, style="Inactive.TButton").grid(row=1, column=0, sticky="ew", padx=1, pady=1)
+        ttk.Button(faults_side, text="Clear", command=self.clear_all_faults, style="Inactive.TButton").grid(row=0, column=0, sticky="ew", padx=1, pady=1)
         self.emergency_fault_frame = ttk.LabelFrame(faults_side, text="EBI", padding=3)
-        self.emergency_fault_frame.grid(row=2, column=0, sticky="ew", padx=1, pady=(4, 1))
+        self.emergency_fault_frame.grid(row=1, column=0, sticky="ew", padx=1, pady=(4, 1))
         self.atp_fault_frame = ttk.LabelFrame(faults_side, text="ATP", padding=3)
-        self.atp_fault_frame.grid(row=3, column=0, sticky="ew", padx=1, pady=1)
+        self.atp_fault_frame.grid(row=2, column=0, sticky="ew", padx=1, pady=1)
         self.ato_fault_frame = ttk.LabelFrame(faults_side, text="ATO", padding=3)
-        self.ato_fault_frame.grid(row=4, column=0, sticky="ew", padx=1, pady=1)
+        self.ato_fault_frame.grid(row=3, column=0, sticky="ew", padx=1, pady=1)
         for frame in (self.emergency_fault_frame, self.atp_fault_frame, self.ato_fault_frame):
             frame.columnconfigure(0, weight=1)
         self.train_fault_buttons: Dict[str, Dict[str, ttk.Button]] = {}
 
-        comm_faults_side = ttk.LabelFrame(side_toolbar, text="Comms Faults", padding=4)
-        comm_faults_side.grid(row=1, column=0, sticky="ew", pady=(0, 5))
+        comm_faults_side = ttk.LabelFrame(side_toolbar, text="DCS Fault Commands", padding=4)
+        comm_faults_side.grid(row=2, column=0, sticky="ew", pady=(0, 5))
         comm_faults_side.columnconfigure(0, weight=1)
         comm_fault_buttons = [
             ("RED Lost", lambda: self.toggle_communication_path_loss("RED")),
@@ -356,7 +361,7 @@ class App(tk.Tk):
             canvas_shell,
             self.scale_factor,
             on_select=self.on_ats_element_selected,
-            on_edit=self.open_canvas_speed_limit_editor,
+            on_edit=None,
         )
         self.ats_overview_panel.grid(row=0, column=0, sticky="nsew")
         workspace.add(canvas_shell, weight=4)
@@ -392,9 +397,9 @@ class App(tk.Tk):
         self.analytics_panel = AnalyticsPanel(analytics_tab, self.scale_factor)
         self.analytics_panel.grid(row=0, column=0, sticky="nsew", padx=int(6 * self.scale_factor), pady=int(6 * self.scale_factor))
         self.limits_panel = SpeedLimitsPanel(infra_tab, self.scale_factor)
-        dock_tabs.add(trains_tab, text="Trains")
-        dock_tabs.add(infra_tab, text="Infrastructure")
-        dock_tabs.add(analytics_tab, text="Analytics")
+        dock_tabs.add(trains_tab, text="Simulator Train Debug")
+        dock_tabs.add(infra_tab, text="Simulator Infrastructure")
+        dock_tabs.add(analytics_tab, text="Simulator Analytics")
 
         button_row = ttk.Frame(self.content, padding=(0, 8, 0, 0), style="Shell.TFrame")
         button_row.grid(row=6, column=0, sticky="ew")
@@ -405,7 +410,7 @@ class App(tk.Tk):
         self.ats_overview_panel.update_data(self.sim)
         self.infrastructure_panel.update_data(self.sim)
         self.analytics_panel.update_data(self.sim)
-        self.limits_panel.update_limits(self.sim.track_profile, self.sim.tsr_zones)
+        self.limits_panel.update_limits(self._ats_track_profile(), self._ats_tsr_zones())
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.bind_all("<MouseWheel>", self._on_global_mousewheel, add="+")
         self.bind_all("<Button-4>", self._on_global_mousewheel, add="+")
@@ -788,9 +793,30 @@ class App(tk.Tk):
 
     def _reset_runtime_buffers(self):
         self.time_history.clear()
-        self.position_history = {train.id: deque(maxlen=240) for train in self.sim.trains}
+        self.position_history = {
+            train_id: deque(maxlen=240)
+            for train_id in getattr(self.sim, "ats_received_train_state", {})
+        }
         self.event_log.clear()
         self.prev_train_snapshot = {}
+
+    def _ats_wayside(self) -> Dict[str, Any]:
+        return dict(getattr(self.sim, "ats_received_wayside_state", {}) or {})
+
+    def _ats_zc(self) -> Dict[str, Any]:
+        return dict(getattr(self.sim, "ats_received_zc_state", {}) or {})
+
+    def _ats_station(self) -> Dict[str, Any]:
+        return dict(getattr(self.sim, "ats_received_station_state", {}) or {})
+
+    def _ats_dcs(self) -> Dict[str, Any]:
+        return dict(getattr(self.sim, "ats_received_dcs_state", {}) or {})
+
+    def _ats_track_profile(self) -> List[Tuple[float, float, float, float]]:
+        return [tuple(segment) for segment in self._ats_wayside().get("track_profile", [])]
+
+    def _ats_tsr_zones(self) -> List[Dict[str, Any]]:
+        return [dict(zone) for zone in self._ats_zc().get("tsr_zones", [])]
 
     def _on_mousewheel(self, event):
         """Handle mouse wheel scroll events (Windows and Linux)."""
@@ -827,59 +853,37 @@ class App(tk.Tk):
 
     def _record_runtime_history(self):
         self.time_history.append(self.sim.sim_time_s)
-        for train in self.sim.trains:
-            if train.id not in self.position_history:
-                self.position_history[train.id] = deque(maxlen=240)
-            self.position_history[train.id].append(train.pos)
+        for train_id, state in getattr(self.sim, "ats_received_train_state", {}).items():
+            if train_id not in self.position_history:
+                self.position_history[train_id] = deque(maxlen=240)
+            self.position_history[train_id].append(float(state.get("position_m", 0.0)))
 
     def _update_event_log(self):
         sim_stamp = f"{self.sim.sim_time_s:7.1f}s"
-        for train in self.sim.trains:
-            for record in train.pop_pending_events():
-                curves = record["curves"]
-                extra = ""
-                if record["event"] == "JOG_PROFILE_TRACE":
-                    extra = (
-                        f" src={record.get('reason', '--')}"
-                        f" target={record.get('jog_target_speed_kmh', 0.0):.2f}km/h"
-                        f" next={record.get('next_speed_kmh', 0.0):.2f}km/h"
-                        f" accel={record.get('commanded_accel_ms2', 0.0):+.2f}"
-                        f" phase={record.get('profile_phase', '--')}"
-                    )
-                self.event_log.appendleft(
-                    f"{record['sim_time']:7.1f}s  {record['train_id']}  {record['event']}"
-                    f" reason={record['reason'] or '--'} stop={record['stop_id']}"
-                    f" pos={record['current_pos']:.2f} target={record['stop_target_pos']:.2f}"
-                    f" rem={record['remaining']:.2f} err={record['stop_error']:.2f}"
-                    f" v={record['speed_kmh']:.2f}/{record['vital_speed_kmh']:.2f}km/h"
-                    f" eoa={record.get('eoa_m', 0.0):.2f} deoa={record.get('distance_to_eoa', 0.0):.2f}"
-                    f" station={record.get('station_state', '--')} line={record.get('assigned_line', '--')}"
-                    f" dwell={record.get('dwell_remaining', 0.0):.1f}s"
-                    f" P/W/SBI/EBI/EBD={curves['P']:.1f}/{curves['W']:.1f}/{curves['SBI']:.1f}/{curves['EBI']:.1f}/{curves['EBD']:.1f}"
-                    f" mode={record['curve_mode']} jog={record['jog_state']}{extra}"
-                )
+        for train_id, state in getattr(self.sim, "ats_received_train_state", {}).items():
+            fault_flags = dict(state.get("fault_flags", {}) or {})
             snapshot = (
-                train.atp_action,
-                train.atp_alert,
-                train.safe_packet_valid,
-                train.door_authorized,
-                train.commanded_stop,
+                str(state.get("atp_state", "")),
+                tuple(sorted((key, bool(value)) for key, value in fault_flags.items())),
+                str(state.get("door_state", "")),
+                bool(state.get("departure_hold", False)),
+                getattr(self.sim, "ats_train_freshness", {}).get(train_id, "LOST"),
             )
-            previous = self.prev_train_snapshot.get(train.id)
+            previous = self.prev_train_snapshot.get(train_id)
             if previous is None:
-                self.prev_train_snapshot[train.id] = snapshot
+                self.prev_train_snapshot[train_id] = snapshot
                 continue
             if previous[0] != snapshot[0]:
-                self.event_log.appendleft(f"{sim_stamp}  {train.id}  ATP action {previous[0] or 'NONE'} -> {snapshot[0] or 'NONE'}")
+                self.event_log.appendleft(f"{sim_stamp}  {train_id}  ATP state {previous[0] or 'NONE'} -> {snapshot[0] or 'NONE'}")
             if previous[1] != snapshot[1]:
-                self.event_log.appendleft(f"{sim_stamp}  {train.id}  alert {previous[1]} -> {snapshot[1]}")
+                self.event_log.appendleft(f"{sim_stamp}  {train_id}  fault flags changed via TRAIN_STATUS")
             if previous[2] != snapshot[2]:
-                self.event_log.appendleft(f"{sim_stamp}  {train.id}  DCS {'restored' if snapshot[2] else 'timeout / trip'}")
+                self.event_log.appendleft(f"{sim_stamp}  {train_id}  door {snapshot[2] or '--'}")
             if previous[3] != snapshot[3]:
-                self.event_log.appendleft(f"{sim_stamp}  {train.id}  door {'authorized' if snapshot[3] else 'locked'}")
+                self.event_log.appendleft(f"{sim_stamp}  {train_id}  departure hold {'active' if snapshot[3] else 'released'}")
             if previous[4] != snapshot[4]:
-                self.event_log.appendleft(f"{sim_stamp}  {train.id}  scheduled stop {'armed' if snapshot[4] else 'released'}")
-            self.prev_train_snapshot[train.id] = snapshot
+                self.event_log.appendleft(f"{sim_stamp}  {train_id}  TRAIN_STATUS {snapshot[4]}")
+            self.prev_train_snapshot[train_id] = snapshot
 
     def _create_aux_windows(self):
         for window in list(self.child_windows.values()):
@@ -895,7 +899,7 @@ class App(tk.Tk):
     def _update_control_track_profile(self):
         panel = getattr(self, "control_panel", None)
         if panel is not None:
-            panel.update_track_profile(self.sim.track_profile)
+            panel.update_track_profile(self._ats_track_profile())
 
     def rebuild_train_panels(self):
         # Clear existing panels
@@ -1115,13 +1119,21 @@ class App(tk.Tk):
             window.geometry(f"{screen_w}x{screen_h}+0+0")
 
     def _update_root_summary(self):
-        dcs_ok = sum(1 for train in self.sim.trains if train.safe_packet_valid)
-        emergency = sum(1 for train in self.sim.trains if train.atp_action == "EBI")
-        moving = sum(1 for train in self.sim.trains if train.speed > 0.1)
-        total_trains = len(self.sim.trains)
+        ats_states = getattr(self.sim, "ats_received_train_state", {})
+        total_trains = len(ats_states)
+        moving = sum(1 for state in ats_states.values() if float(state.get("speed_mps", 0.0)) > 0.1)
+        dcs_ok = sum(1 for state in ats_states.values() if not bool((state.get("fault_flags", {}) or {}).get("DCS", False)))
+        emergency = sum(
+            1
+            for state in ats_states.values()
+            if bool((state.get("fault_flags", {}) or {}).get("EMERGENCY", False))
+            or str(state.get("atp_state", "")) == "ATP_TRIP"
+        )
+        wayside = getattr(self.sim, "ats_wayside_freshness", "LOST")
         self.summary_var.set(
-            f"Use the ATS main tabs for full line monitoring and systems functions."
-            f"  Trains={total_trains}  moving={moving}  DCS healthy={dcs_ok}/{total_trains}  EBI active={emergency}"
+            f"ATS/OCC monitor uses TRAIN/ZC/STATION/DCS/WAYSIDE status packets only."
+            f"  ATS trains={total_trains}  moving={moving}  DCS healthy={dcs_ok}/{total_trains}  "
+            f"EBI active={emergency}  WAYSIDE_STATUS={wayside}  ZC_STATUS={getattr(self.sim, 'ats_zc_freshness', 'LOST')}"
         )
 
     def _on_close(self):
@@ -1184,7 +1196,7 @@ class App(tk.Tk):
         self.rebuild_train_panels()
         self.ats_overview_panel.update_data(self.sim)
         self.infrastructure_panel.update_data(self.sim)
-        self.limits_panel.update_limits(self.sim.track_profile, self.sim.tsr_zones)
+        self.limits_panel.update_limits(self._ats_track_profile(), self._ats_tsr_zones())
         self._update_operation_mode_status()
         if was_running:
             self.sim.start()
@@ -1209,157 +1221,126 @@ class App(tk.Tk):
             self.stop_btn.configure(style="PauseHistoryActive.TButton" if pause_active else "History.TButton")
 
     def toggle_train(self, train_id: str, emergency: bool = False):
-        for t in self.sim.trains:
-            if t.id == train_id:
-                if emergency:
-                    t.emg_ack = True
-                    t.acknowledge_emergency_safe()
-                else:
-                    t.enter_trip_mode("TRAIN TRIP", t.reported_pos)
-                    t.emergency_recovery_hold = False
-                break
+        if not emergency:
+            self.status_var.set(f"Status: onboard emergency stop is not available from train view for {train_id}")
+            return
+        for train in self.sim.trains:
+            if train.id == train_id:
+                train.emg_ack = True
+                train.acknowledge_emergency_safe()
+                self.status_var.set(f"Status: onboard safe confirmed for {train_id}")
+                return
+        self.status_var.set(f"Status: unknown train {train_id}")
 
     def resume_train(self, train_id: str):
-        for t in self.sim.trains:
-            if t.id == train_id:
-                t.resume_after_emergency()
-                break
+        for train in self.sim.trains:
+            if train.id == train_id:
+                train.resume_after_emergency()
+                self.status_var.set(f"Status: onboard resume requested for {train_id}")
+                return
+        self.status_var.set(f"Status: unknown train {train_id}")
 
     def instant_stop_train(self, train_id: str):
-        for t in self.sim.trains:
-            if t.id == train_id:
-                t.enter_trip_mode("INSTANT STOP", t.reported_pos)
-                t.emergency_recovery_hold = False
-                t.ato_target_speed = 0.0
-                t.service_brake_latch = False
-                t.atp_state = "ATP_TRIP"
-                t.atp_alert = "INSTANT STOP"
-                t.atp_brake = "EMERGENCY"
-                t.atp_action = "EBI"
-                break
+        self.sim.dispatch_ats_operation_command("EMERGENCY_STOP", train_id, reason="ats_panel")
 
     def precise_jog_train(self, train_id: str):
-        for t in self.sim.trains:
-            if t.id == train_id:
-                if t.request_precise_jog():
-                    self.status_var.set(f"Status: {train_id} precise jog requested")
-                else:
-                    remaining_m = t.distance_to_stop_target()
-                    self.status_var.set(
-                        f"Status: {train_id} cannot jog "
-                        f"(remaining={remaining_m:.2f} m, zero_speed={'YES' if t.zero_speed_detected else 'NO'})"
-                    )
-                break
+        if self.sim.dispatch_ats_operation_command("PRECISE_JOG", train_id, reason="ats_panel"):
+            self.status_var.set(f"Status: queued ATS precise jog command for {train_id}")
+        else:
+            self.status_var.set(f"Status: failed to send ATS precise jog command for {train_id}")
 
     def toggle_train_fault(self, train_id: str, subsystem: str):
         subsystem = subsystem.upper()
-        for train in self.sim.trains:
-            if train.id != train_id:
-                continue
-            if subsystem == "ATP":
-                train.set_fault("ATP", not train.atp_fault_active, self.sim.sim_time_s)
-            elif subsystem == "ATO":
-                train.set_fault("ATO", not train.ato_fault_active, self.sim.sim_time_s)
-            elif subsystem == "DCS":
-                train.set_fault("DCS", not train.dcs_fault_active, self.sim.sim_time_s)
-            self.status_var.set(f"Status: toggled {subsystem} fault on {train_id}")
-            break
-
-    def toggle_all_dcs_loss(self):
-        active = not any(train.dcs_fault_active for train in self.sim.trains)
-        for train in self.sim.trains:
-            train.set_fault("DCS", active, self.sim.sim_time_s)
+        ok = self.sim.dispatch_ats_operation_command(
+            "TOGGLE_TRAIN_FAULT",
+            train_id,
+            {"subsystem": subsystem},
+            reason="ats_panel",
+        )
         self.status_var.set(
-            "Status: DCS loss applied"
-            if active
-            else "Status: DCS loss cleared; emergency recovery still required for tripped trains"
+            f"Status: queued RaSTA {subsystem} fault command for {train_id}"
+            if ok
+            else f"Status: failed to send RaSTA {subsystem} fault command for {train_id}"
         )
 
     def clear_all_faults(self):
-        for train in self.sim.trains:
-            train.set_fault("DCS", False, self.sim.sim_time_s)
-            train.set_fault("ATO", False, self.sim.sim_time_s)
-            train.set_fault("ATP", False, self.sim.sim_time_s)
-            if not (train.trip_mode or train.emg_latch or train.emergency_stop or train.emergency_recovery_hold):
-                train.reset_non_emergency_stop_latches()
-        self.status_var.set("Status: cleared fault flags; use Safe Confirmed/Resume for tripped trains")
-
-    def _communication_event(self, result: str, action: str, reason: str, path: str = "NMS"):
-        transport = getattr(self.sim, "dcs_transport", None)
-        if transport is None:
-            return
-        transport._event(
-            self.sim.sim_time_s,
-            "GUI",
-            "DCS_NMS",
-            "OPCUA_SUPERVISION",
-            path,
-            "COMM_FAULT",
-            0,
-            0.0,
-            "OK",
-            result,
-            action,
-            reason,
+        ok = self.sim.dispatch_ats_operation_command("CLEAR_TRAIN_FAULTS", "", reason="ats_panel")
+        self.status_var.set(
+            "Status: queued RaSTA clear train fault command"
+            if ok
+            else "Status: failed to send RaSTA clear train fault command"
         )
 
     def toggle_communication_path_loss(self, path_name: str):
-        transport = getattr(self.sim, "dcs_transport", None)
-        if transport is None:
-            self.status_var.set("Status: DCS transport is not available")
-            return
         key = path_name.upper()
-        path = transport.paths.get(key)
-        if path is None:
+        transport_state = dict(self._ats_dcs().get("dcs_transport_state", {}) or {})
+        path = dict((transport_state.get("paths", {}) or {}).get(key, {}) or {})
+        if not path:
             self.status_var.set(f"Status: unknown DCS path {key}")
             return
-        new_state = DcsPathState.OK if path.state == DcsPathState.LOST else DcsPathState.LOST
-        transport.set_path_state(key, new_state.value)
-        if new_state == DcsPathState.OK and getattr(transport, "active_path", key) not in transport.paths:
-            transport.active_path = key
-        self._communication_event("ACCEPTED", "path state changed", f"{key} path -> {new_state.value}", key)
-        self.status_var.set(f"Status: {key} path {new_state.value}")
+        new_state = "OK" if str(path.get("state", "OK")).upper() == "LOST" else "LOST"
+        ok = self.sim.dispatch_ats_operation_command(
+            "SET_DCS_PATH_STATE",
+            "",
+            {"path": key, "state": new_state},
+            reason="ats_panel",
+        )
+        self.status_var.set(
+            f"Status: queued RaSTA {key} path {new_state}"
+            if ok
+            else f"Status: failed to send RaSTA {key} path {new_state}"
+        )
 
     def toggle_both_communication_paths_loss(self):
-        transport = getattr(self.sim, "dcs_transport", None)
-        if transport is None:
-            self.status_var.set("Status: DCS transport is not available")
+        transport_state = dict(self._ats_dcs().get("dcs_transport_state", {}) or {})
+        paths = dict(transport_state.get("paths", {}) or {})
+        if not paths:
+            self.status_var.set("Status: DCS transport state is not available in DCS_STATUS")
             return
-        both_lost = all(path.state == DcsPathState.LOST for path in transport.paths.values())
-        new_state = DcsPathState.OK if both_lost else DcsPathState.LOST
+        both_lost = all(str(path.get("state", "OK")).upper() == "LOST" for path in paths.values())
+        new_state = "OK" if both_lost else "LOST"
+        results = []
         for key in ("RED", "BLUE"):
-            transport.set_path_state(key, new_state.value)
-        if new_state == DcsPathState.OK:
-            transport.active_path = "RED"
-        self._communication_event("ACCEPTED", "path state changed", f"RED/BLUE paths -> {new_state.value}", "RED+BLUE")
-        self.status_var.set(f"Status: RED/BLUE paths {new_state.value}")
+            results.append(self.sim.dispatch_ats_operation_command(
+                "SET_DCS_PATH_STATE",
+                "",
+                {"path": key, "state": new_state},
+                reason="ats_panel",
+            ))
+        self.status_var.set(
+            f"Status: queued RaSTA RED/BLUE paths {new_state}"
+            if all(results)
+            else f"Status: failed to send one or more RaSTA RED/BLUE path {new_state} commands"
+        )
 
     def toggle_communication_fault(self, fault: str, label: str):
-        transport = getattr(self.sim, "dcs_transport", None)
-        if transport is None:
-            self.status_var.set("Status: DCS transport is not available")
-            return
-        active = not bool(transport.faults.get(fault, False))
-        transport.set_fault(fault, active)
+        transport_state = dict(self._ats_dcs().get("dcs_transport_state", {}) or {})
+        active = not bool((transport_state.get("faults", {}) or {}).get(fault, False))
+        ok = self.sim.dispatch_ats_operation_command(
+            "SET_DCS_FAULT",
+            "",
+            {"fault": fault, "active": active},
+            reason="ats_panel",
+        )
         state_text = "ON" if active else "OFF"
-        self._communication_event("ACCEPTED", "fault toggled", f"{label} -> {state_text}")
-        self.status_var.set(f"Status: {label} {state_text}")
+        self.status_var.set(
+            f"Status: queued RaSTA {label} {state_text}"
+            if ok
+            else f"Status: failed to send RaSTA {label} {state_text}"
+        )
 
     def clear_communication_faults(self):
-        transport = getattr(self.sim, "dcs_transport", None)
-        if transport is None:
-            self.status_var.set("Status: DCS transport is not available")
-            return
-        for fault in list(transport.faults):
-            transport.set_fault(fault, False)
-        for key in ("RED", "BLUE"):
-            transport.set_path_state(key, DcsPathState.OK.value)
-        transport.active_path = "RED"
-        self._communication_event("ACCEPTED", "faults cleared", "all communication faults cleared")
-        self.status_var.set("Status: all communication faults cleared")
+        ok = self.sim.dispatch_ats_operation_command("CLEAR_COMM_FAULTS", "", reason="ats_panel")
+        self.status_var.set(
+            "Status: queued RaSTA all communication faults clear command"
+            if ok
+            else "Status: failed to send RaSTA clear communication faults command"
+        )
 
     def on_ats_element_selected(self, element_key: str):
-        self.status_var.set(f"Status: selected {element_key}; double-click PSR segment to edit")
+        self.status_var.set(
+            f"Status: selected ATS/OCC element {element_key}; edits use Simulator Tools, not ATS canvas"
+        )
 
     def open_canvas_speed_limit_editor(self, kind: str, index: int):
         if kind == "track_segment":
@@ -1370,10 +1351,11 @@ class App(tk.Tk):
             self.status_var.set(f"Status: {kind}:{index} is not a speed-limit item")
 
     def open_psr_editor(self, segment_index: int):
-        if segment_index < 0 or segment_index >= len(self.sim.track_profile):
+        track_profile = self._ats_track_profile()
+        if segment_index < 0 or segment_index >= len(track_profile):
             self.status_var.set("Status: invalid PSR segment")
             return
-        start, end, _gradient, current_psr = self.sim.track_profile[segment_index]
+        start, end, _gradient, current_psr = track_profile[segment_index]
         value = simpledialog.askfloat(
             "Edit PSR",
             f"Segment {segment_index}: {start:.0f}-{end:.0f} m\nPSR km/h:",
@@ -1387,11 +1369,13 @@ class App(tk.Tk):
 
     def open_add_tsr_dialog(self):
         default_start = 0.0
-        default_end = min(500.0, float(getattr(self.sim, "track_end_m", 500.0)))
+        wayside = self._ats_wayside()
+        track_profile = self._ats_track_profile()
+        default_end = min(500.0, float(wayside.get("track_end_m", 500.0) or 500.0))
         if self.ats_overview_panel.selected_element:
             kind, index = self.ats_overview_panel._element_lookup.get(self.ats_overview_panel.selected_element, ("", -1))
-            if kind == "track_segment" and 0 <= index < len(self.sim.track_profile):
-                default_start, default_end, _gradient, _psr = self.sim.track_profile[index]
+            if kind == "track_segment" and 0 <= index < len(track_profile):
+                default_start, default_end, _gradient, _psr = track_profile[index]
         start = simpledialog.askfloat("Add Temporary TSR", "Start position (m):", initialvalue=float(default_start), parent=self)
         if start is None:
             return
@@ -1404,14 +1388,23 @@ class App(tk.Tk):
         self.add_tsr(str(start), str(end), str(speed))
 
     def open_tsr_editor(self, tsr_index: int):
-        if tsr_index < 0 or tsr_index >= len(self.sim.tsr_zones):
+        tsr_zones = self._ats_tsr_zones()
+        if tsr_index < 0 or tsr_index >= len(tsr_zones):
             self.status_var.set("Status: invalid TSR zone")
             return
-        zone = self.sim.tsr_zones[tsr_index]
+        zone = tsr_zones[tsr_index]
         if messagebox.askyesno("Temporary TSR", "Remove this TSR zone?", parent=self):
-            self.sim.tsr_zones.pop(tsr_index)
-            self.status_var.set(f"Status: removed TSR {tsr_index + 1}")
-            self._refresh_speed_limit_views()
+            ok = self.sim.dispatch_ats_operation_command(
+                "REMOVE_TSR",
+                "",
+                {"index": tsr_index},
+                reason="ats_panel",
+            )
+            self.status_var.set(
+                f"Status: queued RaSTA remove TSR {tsr_index + 1}"
+                if ok
+                else f"Status: failed to send RaSTA remove TSR {tsr_index + 1}"
+            )
             return
         speed = simpledialog.askfloat(
             "Edit Temporary TSR",
@@ -1422,13 +1415,21 @@ class App(tk.Tk):
         )
         if speed is None:
             return
-        zone["speed"] = float(speed)
-        self.status_var.set(f"Status: updated TSR {tsr_index + 1} to {speed:.0f} km/h")
-        self._refresh_speed_limit_views()
+        ok = self.sim.dispatch_ats_operation_command(
+            "UPDATE_TSR",
+            "",
+            {"index": tsr_index, "speed": float(speed)},
+            reason="ats_panel",
+        )
+        self.status_var.set(
+            f"Status: queued RaSTA TSR {tsr_index + 1} update to {speed:.0f} km/h"
+            if ok
+            else f"Status: failed to send RaSTA TSR {tsr_index + 1} update"
+        )
 
     def _refresh_speed_limit_views(self):
         self._update_control_track_profile()
-        self.limits_panel.update_limits(self.sim.track_profile, self.sim.tsr_zones)
+        self.limits_panel.update_limits(self._ats_track_profile(), self._ats_tsr_zones())
         self.ats_overview_panel.update_data(self.sim)
         self.infrastructure_panel.update_data(self.sim)
 
@@ -1436,15 +1437,22 @@ class App(tk.Tk):
         try:
             idx = int(segment_str)
             psr = float(psr_str)
-            if idx < 0 or idx >= len(self.sim.track_profile):
+            if idx < 0 or idx >= len(self._ats_track_profile()):
                 self.status_var.set("Status: invalid PSR segment")
                 return
-            start, end, gradient, _ = self.sim.track_profile[idx]
-            self.sim.track_profile[idx] = (start, end, gradient, psr)
         except ValueError:
             return
-        self.status_var.set(f"Status: updated segment {idx} PSR to {psr:.0f} km/h")
-        self._refresh_speed_limit_views()
+        ok = self.sim.dispatch_ats_operation_command(
+            "APPLY_PSR",
+            "",
+            {"segment": idx, "psr_kmh": psr},
+            reason="ats_panel",
+        )
+        self.status_var.set(
+            f"Status: queued RaSTA PSR command for segment {idx} to {psr:.0f} km/h"
+            if ok
+            else f"Status: failed to send RaSTA PSR command for segment {idx}"
+        )
 
     def add_tsr(self, start_str: str, end_str: str, speed_str: str):
         try:
@@ -1456,18 +1464,29 @@ class App(tk.Tk):
             if end <= start:
                 self.status_var.set("Status: TSR end must be greater than start")
                 return
-            self.sim.tsr_zones.append({"start": start, "end": end, "speed": speed})
         except ValueError:
             return
-        self.status_var.set(f"Status: added TSR {start:.0f}-{end:.0f} m at {speed:.0f} km/h")
-        self._refresh_speed_limit_views()
+        ok = self.sim.dispatch_ats_operation_command(
+            "ADD_TSR",
+            "",
+            {"start": start, "end": end, "speed": speed},
+            reason="ats_panel",
+        )
+        self.status_var.set(
+            f"Status: queued RaSTA TSR command {start:.0f}-{end:.0f} m at {speed:.0f} km/h"
+            if ok
+            else f"Status: failed to send RaSTA TSR command {start:.0f}-{end:.0f} m"
+        )
 
     def clear_tsr(self):
-        if not self.sim.tsr_zones:
+        if not self._ats_tsr_zones():
             return
-        self.sim.tsr_zones.clear()
-        self.status_var.set("Status: cleared temporary TSR zones")
-        self._refresh_speed_limit_views()
+        ok = self.sim.dispatch_ats_operation_command("CLEAR_TSR", "", reason="ats_panel")
+        self.status_var.set(
+            "Status: queued RaSTA clear TSR command"
+            if ok
+            else "Status: failed to send RaSTA clear TSR command"
+        )
 
     def tick(self):
         if self.sim.running:
@@ -1484,11 +1503,19 @@ class App(tk.Tk):
                 self._record_runtime_history()
             self._update_event_log()
             self._update_root_summary()
-            for t in self.sim.trains:
-                if t.id not in self.panels:
+            ats_states = getattr(self.sim, "ats_received_train_state", {})
+            freshness_map = getattr(self.sim, "ats_train_freshness", {})
+            for train_id, status in sorted(ats_states.items()):
+                if train_id not in self.panels:
                     self.sync_train_panels()
-                self.panels[t.id].update_from_train(t, append_history=self.sim.running)
-            self.limits_panel.update_limits(self.sim.track_profile, self.sim.tsr_zones)
+                panel = self.panels.get(train_id)
+                if panel is not None:
+                    panel.update_from_status(
+                        status,
+                        freshness=freshness_map.get(train_id, "LOST"),
+                        append_history=self.sim.running,
+                    )
+            self.limits_panel.update_limits(self._ats_track_profile(), self._ats_tsr_zones())
             self.ats_overview_panel.update_data(self.sim)
             self.infrastructure_panel.update_data(self.sim)
             if self.dataflow_panel is not None:

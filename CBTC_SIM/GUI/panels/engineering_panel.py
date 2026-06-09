@@ -7,10 +7,10 @@ class TimeDistancePanel(ttk.Frame):
     def __init__(self, master: tk.Widget):
         super().__init__(master, padding=8, style="Panel.TFrame")
         self.columnconfigure(0, weight=1)
-        ttk.Label(self, text="ATS - Time Distance Graph", style="SectionTitle.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(self, text="Simulator Time-Distance Graph", style="SectionTitle.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(
             self,
-            text="Actual running graph versus line distance for OCC regulation and dwell supervision",
+            text="Internal simulated running graph; not an ATS/OCC telemetry path",
             style="Muted.TLabel",
         ).grid(row=1, column=0, sticky="w", pady=(2, 6))
         self.canvas = tk.Canvas(self, height=300, background=APP_THEME["canvas"], highlightthickness=1, highlightbackground=APP_THEME["border"])
@@ -501,9 +501,9 @@ class DataFlowPanel(ttk.Frame):
     def _draw_legend(self, x: float, y: float, compact: bool = False):
         rows = [
             ("#5b6fd6", "Vital: CC <-> ZC authority data", None),
-            ("#1f8a8a", "Supervision: CC/ZC/Stations -> ATS", None),
-            ("#8b5cf6", "ATS/OCC commands", None),
-            ("#6b7280", "Station/YAML internal state", None),
+            ("#1f8a8a", "OPC UA-like supervision to ATS/OCC", None),
+            ("#8b5cf6", "Simulator injection/direct state", None),
+            ("#6b7280", "Scenario/internal infrastructure state", None),
         ]
         row_h = self._scale(17 if compact else 20)
         w = self._scale(330 if compact else 360)
@@ -564,7 +564,7 @@ class DataFlowPanel(ttk.Frame):
             zc_w,
             self._scale(126),
             "ZC",
-            "Computes MA\nEOA + SVL\nuses CC + station state",
+            "Computes MA\nEOA + speed limits\nuses CC + station state",
             "#eef8f0",
         )
         ats = self._function_block(
@@ -572,8 +572,8 @@ class DataFlowPanel(ttk.Frame):
             top + self._scale(40),
             ats_w,
             self._scale(126),
-            "ATS",
-            "OCC supervision\noperator commands\nno MA/EOA issue",
+            "ATS/OCC",
+            "OPC UA supervision only\nno direct state reads\nno MA/EOA issue",
             "#fff7e8",
         )
 
@@ -630,7 +630,7 @@ class DataFlowPanel(ttk.Frame):
         )
         self._lane_arrow(
             [(zc["left"], zc["cy"] + self._scale(10)), (cc_bus_x, zc["cy"] + self._scale(10)), (cc_bus_x, last_cc["cy"]), (last_cc["right"], last_cc["cy"])],
-            "MA_UPDATE: EOA + SVL",
+            "MA_UPDATE: EOA + limits",
             ma_color,
             label_segment=0,
             label_offset=self._scale(16),
@@ -646,19 +646,19 @@ class DataFlowPanel(ttk.Frame):
         )
         self._lane_arrow(
             [(zc["right"], zc["bottom"] - self._scale(38)), (ats["left"], zc["bottom"] - self._scale(38))],
-            "ZC_STATE -> ATS",
+            "ZC_STATUS -> ATS",
             opc_color,
             label_offset=-self._scale(16),
         )
         self._lane_arrow(
             [(ats["left"], ats["top"] + self._scale(28)), (zc["right"], zc["top"] + self._scale(28))],
-            "ATS route/TSR -> ZC",
+            "ATS RaSTA PSR/TSR -> ZC",
             command_color,
             label_offset=-self._scale(16),
         )
         self._lane_arrow(
             [(ats["cx"], ats["top"]), (ats["cx"], command_y), (cc_bus_x, command_y), (cc_bus_x, first_cc["top"]), (first_cc["right"], first_cc["top"])],
-            "ATS CMD: stop/hold/resume",
+            "ATS RaSTA operation/fault command",
             command_color,
             label_segment=1,
             label_offset=-self._scale(16),
@@ -676,7 +676,7 @@ class DataFlowPanel(ttk.Frame):
         )
         self._lane_arrow(
             [(station_bus_x, last_station["cy"]), (station_bus_x, supervision_y + self._scale(38)), (ats["right"] - self._scale(26), supervision_y + self._scale(38)), (ats["right"] - self._scale(26), ats["bottom"])],
-            "WAYSIDE_STATUS / OPC UA -> ATS",
+            "STATION_STATUS / OPC UA -> ATS",
             opc_color,
             label_segment=1,
             label_offset=self._scale(16),

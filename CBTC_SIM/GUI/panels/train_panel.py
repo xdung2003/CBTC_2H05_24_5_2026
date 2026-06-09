@@ -178,10 +178,11 @@ class TrainPanel(ttk.Frame):
         btn_row.grid(row=5, column=0, columnspan=2, sticky="ew", padx=int(10 * scale_factor), pady=(int(8 * scale_factor), int(10 * scale_factor)))
         btn_row.columnconfigure(0, weight=1)
         btn_row.columnconfigure(1, weight=1)
-        self.toggle_btn = ttk.Button(btn_row, text="Emergency Stop", command=self._toggle, style="Accent.TButton")
+        self.toggle_btn = ttk.Button(btn_row, text="", command=self._toggle, style="Accent.TButton")
         self.toggle_btn.grid(row=0, column=0, sticky="ew", padx=(0, int(4 * scale_factor)))
         self.more_btn = ttk.Button(btn_row, text="More Details", command=self._show_details)
         self.more_btn.grid(row=0, column=1, sticky="ew", padx=(int(4 * scale_factor), 0))
+        self._set_recovery_button_state(0)
 
     def _on_mousewheel(self, event):
         self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
@@ -275,7 +276,9 @@ class TrainPanel(ttk.Frame):
         ttk.Label(status_frame, textvariable=self.detail_alarm_var, justify="left").pack(anchor="w")
         
         # Update the details with current data
-        if hasattr(self, 'last_train'):
+        if hasattr(self, 'last_status'):
+            self._update_details_from_status(self.last_status, "FRESH")
+        elif hasattr(self, 'last_train'):
             self._update_details_window(self.last_train)
 
     def _cleanup_details(self, window):
@@ -475,13 +478,183 @@ class TrainPanel(ttk.Frame):
             self.emg_state = max(self.emg_state, 1)
         elif self.emg_state != 2:
             self.emg_state = 0
-        if self.emg_state == 0:
-            text = "Emergency Stop"
-        elif self.emg_state == 1:
-            text = "Safe Confirmed"
-        elif self.emg_state == 2:
-            text = "Resume Train"
-        self.toggle_btn.config(text=text)
+        self._set_recovery_button_state(self.emg_state)
+
+    def update_from_status(self, status: dict, freshness: str = "FRESH", append_history: bool = True):
+        self.last_status = dict(status)
+        actual_kmh = ms_to_kmh(float(status.get("speed_mps", 0.0)))
+        speed_curves = dict(status.get("speed_curves_kmh", {}) or {})
+        permitted_kmh = float(speed_curves.get("P", status.get("constraint_target_speed_kmh", 0.0)) or 0.0)
+        warning_kmh = float(speed_curves.get("W", 0.0) or 0.0)
+        sbi_kmh = float(speed_curves.get("SBI", 0.0) or 0.0)
+        ebi_kmh = float(speed_curves.get("EBI", 0.0) or 0.0)
+        constraint_type = str(status.get("constraint_type", "NONE"))
+        if constraint_type == "STOP":
+            target_distance_m = float(status.get("distance_to_eoa_m", 0.0) or 0.0)
+            target_speed_kmh = 0.0
+        else:
+            target_distance_m = float(status.get("distance_to_constraint_m", status.get("distance_to_eoa_m", 0.0)) or 0.0)
+            target_speed_kmh = permitted_kmh
+        if math.isinf(target_distance_m):
+            target_distance_text = "--"
+        else:
+            target_distance_text = f"{target_distance_m:,.0f} m"
+        self.target_distance_var.set(target_distance_text)
+        self.target_speed_var.set(f"{target_speed_kmh:.1f} km/h")
+
+        mode = str(status.get("mode", "--"))
+        if mode == "ATO":
+            self.mode_var.set("A")
+            self.mode_label.configure(foreground="#1f77b4")
+        elif mode.startswith("CMD"):
+            self.mode_var.set("M")
+            self.mode_label.configure(foreground="#9a6b00")
+        else:
+            self.mode_var.set(mode[:1] if mode else "--")
+            self.mode_label.configure(foreground="#5a2630")
+
+        fault_flags = dict(status.get("fault_flags", {}) or {})
+        atp_state = str(status.get("atp_state", "UNKNOWN"))
+        if freshness != "FRESH":
+            alert_text = f"ATS {freshness}"
+            badge_bg = "#f0d68a"
+            badge_fg = "#5a2630"
+        elif fault_flags.get("EMERGENCY") or atp_state in ("ATP_EMERGENCY", "ATP_TRIP"):
+            alert_text = "EBI/TRIP"
+            badge_bg = "#d84b3c"
+            badge_fg = "white"
+        elif any(fault_flags.values()):
+            alert_text = "FAULT"
+            badge_bg = "#f0a132"
+            badge_fg = "#5a2630"
+        else:
+            alert_text = "ATS OK"
+            badge_bg = "#74b65d"
+            badge_fg = "white"
+        self.badge_var.set(alert_text)
+        self.badge_label.configure(bg=badge_bg, fg=badge_fg)
+
+        door_state = str(status.get("door_state", "CLOSED")).replace("_", " ").title()
+        self.door_var.set(f"Door: {door_state}")
+        stop = status.get("active_scheduled_stop") or {}
+        if status.get("departure_hold"):
+            docking_text = "Departure Hold"
+        elif stop:
+            docking_text = str(stop.get("station_name", stop.get("name", "Scheduled Stop")))
+        elif status.get("station_lane") is not None:
+            docking_text = f"Lane {status.get('station_lane')}"
+        else:
+            docking_text = "Monitoring"
+        self.docking_var.set(docking_text)
+        self.headway_var.set("--")
+
+        self.curve_vars["Actual"].set(f"{actual_kmh:.1f} km/h")
+        self.curve_vars["Permitted"].set(f"{permitted_kmh:.1f} km/h")
+        self.curve_vars["Warning"].set(f"{warning_kmh:.1f} km/h")
+        self.curve_vars["SBI"].set(f"{sbi_kmh:.1f} km/h")
+        self.curve_vars["EBI"].set(f"{ebi_kmh:.1f} km/h")
+
+        if freshness != "FRESH":
+            message = f"TRAIN_STATUS {freshness}: displaying last received packet"
+        elif fault_flags.get("DCS"):
+            message = "TRAIN_STATUS reports DCS fault"
+        elif atp_state in ("ATP_EMERGENCY", "ATP_TRIP"):
+            message = f"ATP state from TRAIN_STATUS: {atp_state}"
+        else:
+            message = "TRAIN_STATUS supervision packet received"
+        self.message_var.set(message)
+        self.release_label.grid_remove()
+        self.jog_label.grid_remove()
+
+        if append_history:
+            self._push_status_history(actual_kmh, speed_curves)
+        self._draw_chart()
+        if hasattr(self, "detail_metric_vars"):
+            self._update_details_from_status(status, freshness)
+
+        if atp_state == "ATP_RECOVERY_HOLD":
+            self.emg_state = 2
+        elif fault_flags.get("EMERGENCY") or atp_state in ("ATP_EMERGENCY", "ATP_TRIP"):
+            self.emg_state = max(self.emg_state, 1)
+        elif self.emg_state != 2:
+            self.emg_state = 0
+        self._set_recovery_button_state(self.emg_state)
+
+    def _update_details_from_status(self, status: dict, freshness: str):
+        if not hasattr(self, "detail_metric_vars"):
+            return
+        pos_m = float(status.get("position_m", 0.0) or 0.0)
+        speed_kmh = ms_to_kmh(float(status.get("speed_mps", 0.0) or 0.0))
+        eoa_m = float(status.get("eoa_m", 0.0) or 0.0)
+        target_distance_m = float(status.get("distance_to_eoa_m", 0.0) or 0.0)
+        metrics = {
+            "Position": f"{pos_m:,.1f} m",
+            "Speed": f"{speed_kmh:.1f} km/h",
+            "Acceleration": "n/a via ATS",
+            "Mass": "n/a via ATS",
+            "Mode": str(status.get("mode", "--")),
+            "ATP State": str(status.get("atp_state", "--")),
+            "Brake": str(status.get("brake_state", "--")),
+            "Action": str(status.get("atp_action", "--")),
+        }
+        for key, value in metrics.items():
+            var = self.detail_metric_vars.get(key)
+            if var is not None:
+                var.set(value)
+        self.detail_target_var.set(
+            "\n".join(
+                [
+                    f"EOA             : {eoa_m:,.1f} m",
+                    f"Distance target : {target_distance_m:,.1f} m",
+                    f"Constraint      : {status.get('constraint_type', '--')}",
+                    f"ATO target      : {float(status.get('ato_target_speed_kmh', 0.0) or 0.0):.1f} km/h",
+                    f"Freshness       : {freshness}",
+                ]
+            )
+        )
+        curves = dict(status.get("speed_curves_kmh", {}) or {})
+        fault_flags = dict(status.get("fault_flags", {}) or {})
+        self.detail_state_var.set(
+            "\n".join(
+                [
+                    f"Door state      : {status.get('door_state', '--')}",
+                    f"Station lane    : {status.get('station_lane', '--')}",
+                    f"Departure hold  : {bool(status.get('departure_hold', False))}",
+                    f"Direction       : {status.get('direction', '--')}",
+                    f"Odo uncertainty : {float(status.get('odometry_uncertainty_m', 0.0) or 0.0):.2f} m",
+                ]
+            )
+        )
+        self.detail_alarm_var.set(
+            "\n".join(
+                [
+                    f"Fault flags     : {fault_flags}",
+                    f"ATP alert       : {status.get('atp_alert', '--')}",
+                    f"Speed curves    : P={float(curves.get('P', 0.0)):.1f} W={float(curves.get('W', 0.0)):.1f} "
+                    f"SBI={float(curves.get('SBI', 0.0)):.1f} EBI={float(curves.get('EBI', 0.0)):.1f}",
+                    "Source          : ATS TRAIN_STATUS packet",
+                ]
+            )
+        )
+
+    def _push_status_history(self, actual_kmh: float, speed_curves: dict):
+        self.hist_actual.append(actual_kmh)
+        for key in self.hist_curves:
+            self.hist_curves[key].append(float(speed_curves.get(key, 0.0) or 0.0))
+
+    def _set_recovery_button_state(self, state: int):
+        self.emg_state = state
+        if state == 1:
+            self.toggle_btn.config(text="Safe Confirmed")
+            self.toggle_btn.grid(row=0, column=0, sticky="ew", padx=(0, int(4 * self.scale_factor)))
+            self.more_btn.grid_configure(column=1, columnspan=1, padx=(int(4 * self.scale_factor), 0))
+        elif state == 2:
+            self.toggle_btn.config(text="Resume Train")
+            self.toggle_btn.grid(row=0, column=0, sticky="ew", padx=(0, int(4 * self.scale_factor)))
+            self.more_btn.grid_configure(column=1, columnspan=1, padx=(int(4 * self.scale_factor), 0))
+        else:
+            self.toggle_btn.grid_remove()
+            self.more_btn.grid_configure(column=0, columnspan=2, padx=0)
 
     def _push_history(self, train: Train):
         chart_curves = getattr(train, "raw_curves", train.curves)
@@ -571,9 +744,7 @@ class TrainPanel(ttk.Frame):
         canvas.create_line(*to_points(self.hist_actual), fill=CURVE_COLORS["actual"], width=3)
 
     def _toggle(self):
-        if self.emg_state == 0:
-            self.on_toggle(self.train_id)
-        elif self.emg_state == 1:
+        if self.emg_state == 1:
             self.on_toggle(self.train_id, emergency=True)
         elif self.emg_state == 2:
             self.on_resume(self.train_id)

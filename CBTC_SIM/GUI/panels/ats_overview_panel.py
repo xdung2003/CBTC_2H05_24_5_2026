@@ -18,7 +18,7 @@ class ATSOverviewPanel(ttk.Frame):
         self._drag_start: Tuple[int, int] | None = None
         self._drag_origin: Tuple[float, float] = (0.0, 0.0)
         self._dragged = False
-        ttk.Label(self, text="ATS Canvas", style="SectionTitle.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(self, text="ATS/OCC Monitor", style="SectionTitle.TLabel").grid(row=0, column=0, sticky="w")
         self.summary_var = tk.StringVar(value="")
         ttk.Label(self, textvariable=self.summary_var, style="Muted.TLabel").grid(row=1, column=0, sticky="w", pady=(int(2 * scale_factor), int(6 * scale_factor)))
         self.canvas = tk.Canvas(self, height=int(285 * scale_factor), background=APP_THEME["canvas"], highlightthickness=1, highlightbackground=APP_THEME["border"])
@@ -119,7 +119,9 @@ class ATSOverviewPanel(ttk.Frame):
             or str(state.get("atp_state", "")) == "ATP_TRIP"
         )
         self.summary_var.set(
-            f"OCC view  |  trains={len(ats_states)}  WAYSIDE_STATUS={getattr(sim, 'ats_wayside_freshness', 'LOST')}  ESA active={esa_active}"
+            f"OCC view via status packets only  |  trains={len(ats_states)}  "
+            f"WAYSIDE={getattr(sim, 'ats_wayside_freshness', 'LOST')}  "
+            f"ZC={getattr(sim, 'ats_zc_freshness', 'LOST')}  ESA active={esa_active}"
         )
         self._draw(sim)
 
@@ -140,6 +142,8 @@ class ATSOverviewPanel(ttk.Frame):
                 c.create_rectangle(gx - 1, gy - 1, gx + 1, gy + 1, fill=APP_THEME["canvas_grid"], outline="")
 
         wayside = dict(getattr(sim, "ats_received_wayside_state", {}) or {})
+        zc_state = dict(getattr(sim, "ats_received_zc_state", {}) or {})
+        station_state_payload = dict(getattr(sim, "ats_received_station_state", {}) or {})
         wayside_freshness = str(getattr(sim, "ats_wayside_freshness", "LOST"))
         if not wayside:
             c.create_text(
@@ -156,9 +160,9 @@ class ATSOverviewPanel(ttk.Frame):
         track_end_m = float(wayside.get("track_end_m", track_max_m))
         track_labels = list(wayside.get("track_labels", []))
         scheduled_stops = [dict(stop) for stop in wayside.get("scheduled_stops", [])]
-        station_route_states = [dict(state) for state in wayside.get("station_route_states", [])]
+        station_route_states = [dict(state) for state in station_state_payload.get("station_route_states", [])]
         line_conditions = [dict(condition) for condition in wayside.get("line_conditions", [])]
-        tsr_zones = [dict(zone) for zone in wayside.get("tsr_zones", [])]
+        tsr_zones = [dict(zone) for zone in zc_state.get("tsr_zones", [])]
         source_trains = [dict(source) for source in wayside.get("source_trains", [])]
         balises = [dict(balise) for balise in wayside.get("balises", [])]
 

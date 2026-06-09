@@ -7,7 +7,7 @@ class AnalyticsPanel(ttk.Frame):
         super().__init__(master, padding=int(8 * scale_factor), style="Panel.TFrame")
         self.columnconfigure(0, weight=1)
         self.rowconfigure(2, weight=1)
-        ttk.Label(self, text="Line Configuration Analytics", style="SectionTitle.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(self, text="ATS Supervision Summary", style="SectionTitle.TLabel").grid(row=0, column=0, sticky="w")
         self.summary_var = tk.StringVar(value="")
         ttk.Label(self, textvariable=self.summary_var, style="Muted.TLabel").grid(row=1, column=0, sticky="w", pady=(int(2 * scale_factor), int(6 * scale_factor)))
         text_frame = ttk.Frame(self, style="Panel.TFrame")
@@ -34,72 +34,60 @@ class AnalyticsPanel(ttk.Frame):
         self.text.configure(yscrollcommand=vscroll.set, xscrollcommand=hscroll.set)
 
     def update_data(self, sim: Simulation):
-        def fmt_seconds(value):
-            if value is None:
-                return "--"
-            if value == float("inf") or (isinstance(value, float) and math.isinf(value)):
-                return "terminal"
-            return f"{float(value):,.1f}s"
-
-        min_headway = sim.analytics["min_headway_s"]
-        min_headway_text = "--" if min_headway is None else f"{min_headway:.1f}s"
-        completed = len(sim.analytics["journey_times"])
-        total_trains = len(sim.trains)
+        train_states = dict(getattr(sim, "ats_received_train_state", {}) or {})
+        total_trains = len(train_states)
+        speeds = [ms_to_kmh(float(state.get("speed_mps", 0.0) or 0.0)) for state in train_states.values()]
+        avg_speed = sum(speeds) / len(speeds) if speeds else 0.0
+        moving = sum(1 for speed in speeds if speed > 0.5)
+        dcs_faults = sum(1 for state in train_states.values() if bool((state.get("fault_flags", {}) or {}).get("DCS", False)))
+        ebi_active = sum(
+            1
+            for state in train_states.values()
+            if bool((state.get("fault_flags", {}) or {}).get("EMERGENCY", False))
+            or str(state.get("atp_state", "")) in ("ATP_EMERGENCY", "ATP_TRIP")
+        )
         self.summary_var.set(
-            f"Moving-block comparison metrics  |  min headway={min_headway_text}  "
-            f"completed={completed}/{total_trains}  EBI={sim.analytics['ebi_count']}  SBI={sim.analytics['sbi_count']}"
+            f"ATS packets only  |  trains={total_trains}  moving={moving}  "
+            f"avg speed={avg_speed:.1f} km/h  EBI/TRIP={ebi_active}  DCS fault={dcs_faults}"
         )
 
         lines = [
-            "Line Configuration KPI",
+            "ATS TRAIN/ZC/STATION/DCS/WAYSIDE status summary",
             "-" * 88,
             f"Simulation time        : {sim.sim_time_s:,.1f} s",
-            f"Minimum headway        : {min_headway_text}",
-            f"Emergency interventions: {sim.analytics['ebi_count']}",
-            f"Service interventions  : {sim.analytics['sbi_count']}",
+            f"WAYSIDE_STATUS         : {getattr(sim, 'ats_wayside_freshness', 'LOST')}",
+            f"ZC_STATUS              : {getattr(sim, 'ats_zc_freshness', 'LOST')}",
+            f"STATION_STATUS         : {getattr(sim, 'ats_station_freshness', 'LOST')}",
+            f"DCS_STATUS             : {getattr(sim, 'ats_dcs_freshness', 'LOST')}",
+            f"Received train packets : {total_trains}",
+            f"Moving trains          : {moving}",
+            f"Average reported speed : {avg_speed:.1f} km/h",
+            f"Emergency/trip states  : {ebi_active}",
+            f"DCS fault flags        : {dcs_faults}",
             "",
-            "Train  Mode   Pos(m)   Speed  Headway   Journey     DCS     ATP",
+            "Train  Fresh    Mode   Pos(m)   Speed   Door          DCS     ATP",
             "-" * 88,
         ]
-        for train in sorted(sim.trains, key=lambda item: item.id):
-            journey = sim.analytics["journey_times"].get(train.id)
-            journey_text = "--" if journey is None else f"{journey:,.1f}s"
-            headway_text = "--" if train.headway_time_s is None else f"{train.headway_time_s:,.1f}s"
-            link_text = "MUTE" if train.dcs_muted else "OK" if train.safe_packet_valid else "TIMEOUT"
+        freshness_map = dict(getattr(sim, "ats_train_freshness", {}) or {})
+        for train_id, state in sorted(train_states.items()):
+            fault_flags = dict(state.get("fault_flags", {}) or {})
+            dcs_text = "FAULT" if fault_flags.get("DCS") else "OK"
             lines.append(
-                f"{train.id:<5} {train.drive_mode:<6} {train.pos:>7.1f} {ms_to_kmh(train.speed):>6.1f} "
-                f"{headway_text:>8} {journey_text:>10} {link_text:<7} {train.atp_state}"
+                f"{train_id:<5} {freshness_map.get(train_id, 'LOST'):<8} {str(state.get('mode', '--')):<6} "
+                f"{float(state.get('position_m', 0.0)):>7.1f} "
+                f"{ms_to_kmh(float(state.get('speed_mps', 0.0))):>6.1f} "
+                f"{str(state.get('door_state', '--')):<13} {dcs_text:<7} {str(state.get('atp_state', '--'))}"
             )
 
-        station_metrics = sorted(
-            sim.analytics.get("station_passenger_metrics", []),
-            key=lambda item: (int(item.get("station_index", 0)), str(item.get("station_name", ""))),
-        )
-        lines.extend(["", "Station Headway / Train Wait", "-" * 88])
-        if not station_metrics:
-            lines.append("No station arrivals recorded yet.")
-        else:
-            lines.append("Station       Train   Arrive       Headway    Avg HW     Wait")
-            lines.append("-" * 88)
-            for station in station_metrics:
-                station_name = str(station.get("station_name", f"STATION_{station.get('station_index', '')}"))
-                avg_headway = station.get("avg_arrival_headway_s")
-                arrivals = sorted(
-                    station.get("arrivals", []),
-                    key=lambda item: (float(item.get("arrival_time_s", 0.0)), str(item.get("train_id", ""))),
-                )
-                if not arrivals:
-                    lines.append(f"{station_name:<13} {'--':<7} {'--':>10} {'--':>10} {fmt_seconds(avg_headway):>9} {'--':>8}")
-                    continue
-                for record in arrivals:
-                    wait_s = record.get("station_wait_s", record.get("passenger_dwell_s", record.get("planned_dwell_s")))
-                    lines.append(
-                        f"{station_name:<13} {str(record.get('train_id', '--')):<7} "
-                        f"{fmt_seconds(record.get('arrival_time_s')):>10} "
-                        f"{fmt_seconds(record.get('arrival_headway_s')):>10} "
-                        f"{fmt_seconds(avg_headway):>9} "
-                        f"{fmt_seconds(wait_s):>8}"
-                    )
+        wayside = dict(getattr(sim, "ats_received_wayside_state", {}) or {})
+        zc_state = dict(getattr(sim, "ats_received_zc_state", {}) or {})
+        station_state = dict(getattr(sim, "ats_received_station_state", {}) or {})
+        lines.extend(["", "Wayside records", "-" * 88])
+        lines.append(f"Track segments         : {len(wayside.get('track_profile', []) or [])}")
+        lines.append(f"Temporary restrictions : {len(zc_state.get('tsr_zones', []) or [])}")
+        lines.append(f"Scheduled stops        : {len(wayside.get('scheduled_stops', []) or [])}")
+        lines.append(f"Line conditions        : {len(wayside.get('line_conditions', []) or [])}")
+        lines.append(f"Station routes         : {len(station_state.get('station_route_states', []) or [])}")
 
         self.text.configure(state="normal")
         self.text.delete("1.0", "end")

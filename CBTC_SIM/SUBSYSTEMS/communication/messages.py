@@ -64,6 +64,16 @@ class TrainStatusMessage:
     constraint_type: str = "NONE"
     constraint_target_speed_kmh: float = 0.0
     distance_to_constraint_m: float = float("inf")
+    direction: str = "FORWARD"
+    odometry_uncertainty_m: float = 0.0
+    speed_curves_kmh: Dict[str, float] = field(default_factory=dict)
+    atp_action: str = ""
+    atp_alert: str = ""
+    ato_target_speed_kmh: float = 0.0
+    psr_kmh: float = 0.0
+    limit_ahead_speed_kmh: float = 0.0
+    limit_ahead_dist_m: float = float("inf")
+    rolling_stock_status: Dict[str, Any] = field(default_factory=dict)
 
     def to_payload(self) -> Dict[str, Any]:
         return asdict(self)
@@ -77,11 +87,41 @@ class WaysideStatusMessage:
     track_end_m: float
     track_labels: list
     scheduled_stops: list
-    station_route_states: list
     line_conditions: list
-    tsr_zones: list
     source_trains: list
     balises: list
+    radio_access_points: list
+    timestamp_ms: int = 0
+
+    def to_payload(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class ZcStatusMessage:
+    zc_status: Dict[str, Any]
+    tsr_zones: list
+    secondary_detection_sections: list = field(default_factory=list)
+    protection_zones: list = field(default_factory=list)
+    timestamp_ms: int = 0
+
+    def to_payload(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class StationStatusMessage:
+    station_route_states: list
+    point_states: list = field(default_factory=list)
+    timestamp_ms: int = 0
+
+    def to_payload(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class DcsStatusMessage:
+    dcs_transport_state: Dict[str, Any]
     timestamp_ms: int = 0
 
     def to_payload(self) -> Dict[str, Any]:

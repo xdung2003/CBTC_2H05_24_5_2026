@@ -7,7 +7,7 @@ class InfrastructurePanel(ttk.Frame):
         super().__init__(master, padding=int(8 * scale_factor), style="Panel.TFrame")
         self.columnconfigure(0, weight=1)
         self.rowconfigure(1, weight=1)
-        ttk.Label(self, text="ATS - Infrastructure State", style="SectionTitle.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(self, text="ATS Wayside Status", style="SectionTitle.TLabel").grid(row=0, column=0, sticky="w")
         text_frame = ttk.Frame(self, style="Panel.TFrame")
         text_frame.grid(row=1, column=0, sticky="nsew", pady=(int(6 * scale_factor), 0))
         text_frame.columnconfigure(0, weight=1)
@@ -33,67 +33,116 @@ class InfrastructurePanel(ttk.Frame):
         self.text.configure(yscrollcommand=vscroll.set, xscrollcommand=hscroll.set)
 
     def update_data(self, sim: Simulation):
-        lines = ["Static Guideway / Infrastructure"]
+        wayside = dict(getattr(sim, "ats_received_wayside_state", {}) or {})
+        zc_state = dict(getattr(sim, "ats_received_zc_state", {}) or {})
+        station_state = dict(getattr(sim, "ats_received_station_state", {}) or {})
+        dcs_state = dict(getattr(sim, "ats_received_dcs_state", {}) or {})
+        train_states = dict(getattr(sim, "ats_received_train_state", {}) or {})
+        track_profile = [tuple(segment) for segment in wayside.get("track_profile", [])]
+        tsr_zones = [dict(zone) for zone in zc_state.get("tsr_zones", [])]
+        lines = ["ATS status-packet supervision view"]
         lines.append("-" * 72)
-        for idx, (start, end, gradient, psr) in enumerate(sim.track_profile, 1):
-            occupied = any((t.pos - t.length) < end and t.pos > start for t in sim.trains)
+        lines.append(f"WAYSIDE_STATUS freshness: {getattr(sim, 'ats_wayside_freshness', 'LOST')}")
+        lines.append(f"ZC_STATUS freshness     : {getattr(sim, 'ats_zc_freshness', 'LOST')}")
+        lines.append(f"STATION_STATUS freshness: {getattr(sim, 'ats_station_freshness', 'LOST')}")
+        lines.append(f"DCS_STATUS freshness    : {getattr(sim, 'ats_dcs_freshness', 'LOST')}")
+        lines.append(f"TRAIN_STATUS packets    : {len(train_states)}")
+        zc_status = dict(zc_state.get("zc_status", {}) or {})
+        if zc_status:
+            lines.append(
+                f"ZC availability         : {zc_status.get('zc_id', 'ZC')} {zc_status.get('availability', '--')}  "
+                f"fresh PR={zc_status.get('fresh_position_reports', 0)}/{zc_status.get('valid_position_reports', 0)}"
+            )
+        lines.append("")
+        secondary_sections = [dict(item) for item in zc_state.get("secondary_detection_sections", [])]
+        for idx, (start, end, gradient, psr) in enumerate(track_profile, 1):
+            section = secondary_sections[idx - 1] if idx - 1 < len(secondary_sections) else {}
+            occupied = bool(section.get("occupied", False))
+            occupied_by = ",".join(str(item) for item in section.get("occupied_by_train_ids", []) or [])
             signal = "RED" if occupied else "GREEN"
             axle = "OCC" if occupied else "CLEAR"
-            lines.append(f"SEG-{idx:02d} {start:>5.0f}-{end:<5.0f}  {axle:<20} gradient={gradient:+.3f} SSP={psr:.0f} km/h")
+            lines.append(
+                f"SEG-{idx:02d} {start:>5.0f}-{end:<5.0f}  {axle:<20} "
+                f"gradient={gradient:+.3f} SSP={psr:.0f} km/h occupied_by={occupied_by or '--'}"
+            )
             lines.append(f"SIG-{idx:02d}             {signal:<20} virtual lineside aspect")
-        transport = getattr(sim, "dcs_transport", None)
-        rap_items = list(getattr(transport, "radio_access_points", []) or [])
+        rap_items = [dict(item) for item in wayside.get("radio_access_points", [])]
         if rap_items:
             lines.append("")
             lines.append("Radio access points")
             lines.append("-" * 72)
             for rap in rap_items:
-                lines.append(f"{rap.id:<8} {rap.start_m:>5.0f}-{rap.end_m:<5.0f}  DCS RADIO COVERAGE")
-        if getattr(sim, "balises", []):
+                lines.append(
+                    f"{str(rap.get('id', 'RAP')):<8} "
+                    f"{float(rap.get('start_m', 0.0)):>5.0f}-{float(rap.get('end_m', 0.0)):<5.0f}  DCS RADIO COVERAGE"
+                )
+        balises = [dict(balise) for balise in wayside.get("balises", [])]
+        if balises:
             lines.append("")
             lines.append("Balise / Beacon Layout")
             lines.append("-" * 72)
-            for balise in sim.balises:
+            for balise in balises:
                 lines.append(f"{str(balise.get('id', 'BALISE')):<8} pos={float(balise['pos_m']):>6.1f}m")
-        if sim.tsr_zones:
+        if tsr_zones:
             lines.append("")
             lines.append("Temporary speed restrictions")
             lines.append("-" * 72)
-            for idx, zone in enumerate(sim.tsr_zones, 1):
+            for idx, zone in enumerate(tsr_zones, 1):
                 lines.append(
                     f"TSR-{idx:02d} {float(zone['start']):>5.0f}-{float(zone['end']):<5.0f}  ACTIVE               limit={float(zone['speed']):.0f} km/h"
                 )
         lines.append("")
-        lines.append("Train Configuration")
+        lines.append("ATS Train Status")
         lines.append("-" * 72)
-        for train in sim.trains:
-            adhesion_pct = ATP_ADHESION_FACTOR * 100.0
-            mute_count = len(train.dcs_mute_windows)
+        for train_id, state in sorted(train_states.items()):
+            fault_flags = dict(state.get("fault_flags", {}) or {})
             lines.append(
-                f"{train.id:<10} mass={train.mass:>8.0f}kg  length={train.length:>5.1f}m  "
-                f"mode={train.drive_mode:<5} ATO_cap={getattr(train, 'max_ato_speed_kmh', 70.0):>4.0f}km/h  "
-                f"manual_cap={train.max_manual_speed_kmh:>4.0f}km/h  mute_windows={mute_count}"
+                f"{train_id:<10} pos={float(state.get('position_m', 0.0)):>7.1f}m  "
+                f"speed={ms_to_kmh(float(state.get('speed_mps', 0.0))):>5.1f}km/h  "
+                f"mode={str(state.get('mode', '--')):<6} ATP={str(state.get('atp_state', '--')):<14} faults={fault_flags}"
             )
         lines.append("")
-        lines.append("Safety Logic Baseline")
+        lines.append("ZC Protection / ESA / Overlap")
         lines.append("-" * 72)
-        lines.extend(
-            [
-                f"Service brake model : factor={ATP_SERVICE_BRAKE_FACTOR:.2f}  buildup={ATP_BRAKE_BUILDUP_S:.2f}s",
-                f"Emergency brake     : factor={ATP_EMERGENCY_BRAKE_FACTOR:.2f}  overlap={OVERLAP_M:.1f}m",
-                f"Reaction delays     : P={ATP_P_REACTION_S:.1f}s  W={ATP_W_REACTION_S:.1f}s  SBI={ATP_SBI_REACTION_S:.1f}s  EBI={ATP_EBI_REACTION_S:.1f}s",
-                f"Odometer error      : rate={ODOMETER_ERROR_RATE:.2f} m/m  base CI={POS_UNCERT_M:.1f}m  balise CI={BALISE_POS_UNCERT_M:.1f}m  station CI={STATION_POS_UNCERT_M:.1f}m",
-                f"DCS transmission    : min={DCS_DELAY_MIN_S:.2f}s  max={DCS_DELAY_MAX_S:.2f}s  timeout={DCS_TIMEOUT_S:.1f}s",
-            ]
-        )
+        protection_zones = [dict(item) for item in zc_state.get("protection_zones", [])]
+        if not protection_zones:
+            lines.append("No protection-zone records in ZC_STATUS.")
+        for zone in protection_zones:
+            esa = "ESA_ACTIVE" if zone.get("esa_active") else "NORMAL"
+            lines.append(
+                f"{str(zone.get('train_id', '--')):<8} EOA={float(zone.get('eoa_m', 0.0)):>7.1f}m "
+                f"SVL={float(zone.get('svl_m', 0.0)):>7.1f}m overlap={float(zone.get('overlap_m', 0.0)):>5.1f}m "
+                f"{esa:<10} zone={zone.get('protection_zone_id') or '--'}"
+            )
         lines.append("")
-        lines.append("Route / Emergency Assets")
+        lines.append("Wayside Route / Conditions")
         lines.append("-" * 72)
-        for idx, train in enumerate(sim.trains, 1):
-            switch_state = "DIVERGING" if train.commanded_stop else "NORMAL"
-            esa_state = "ACTIVE" if train.atp_action == "EBI" else "STANDBY"
-            lines.append(f"SW-{idx:02d}              {switch_state:<20} simulated route authority")
-            lines.append(f"ESA-{idx:02d}             {esa_state:<20} linked to {train.id}")
+        route_states = [dict(item) for item in station_state.get("station_route_states", [])]
+        conditions = [dict(item) for item in wayside.get("line_conditions", [])]
+        if not route_states and not conditions:
+            lines.append("No route or line-condition records in STATION_STATUS/WAYSIDE_STATUS.")
+        for idx, state in enumerate(route_states, 1):
+            lines.append(f"ROUTE-{idx:02d} {state}")
+        for idx, condition in enumerate(conditions, 1):
+            lines.append(f"COND-{idx:02d}  {condition}")
+        point_states = [dict(item) for item in station_state.get("point_states", [])]
+        if point_states:
+            lines.append("")
+            lines.append("Point / Route Lock States")
+            lines.append("-" * 72)
+            for point in point_states:
+                locked = "LOCKED" if point.get("locked") else "FREE"
+                lines.append(
+                    f"{str(point.get('point_id', '--')):<10} pos={point.get('position', '--'):<7} "
+                    f"{locked:<6} route={point.get('route_state', '--'):<16} occupied={point.get('occupied_by_train_id') or '--'}"
+                )
+        dcs_transport_state = dict(dcs_state.get("dcs_transport_state", {}) or {})
+        if dcs_transport_state:
+            lines.append("")
+            lines.append("DCS Transport Status")
+            lines.append("-" * 72)
+            lines.append(f"active_path={dcs_transport_state.get('active_path', '--')} last_fault={dcs_transport_state.get('last_fault', '--')}")
+            lines.append(f"faults={dcs_transport_state.get('faults', {})}")
         content = "\n".join(lines)
         if content == self._last_content:
             return
