@@ -35,10 +35,19 @@ class ZoneController:
         stop_eoa_map: Dict[str, float],
         trains_for_authority: List[object],
     ) -> Dict[str, SafeMovementPacket]:
-        authority_trains = [train for train in trains_for_authority if getattr(train, "position_report_freshness", "LOST") == "FRESH"]
-        if len(authority_trains) != len(trains_for_authority):
+        protection_trains = [
+            train
+            for train in trains_for_authority
+            if bool(getattr(train, "has_position_report", True))
+        ]
+        if len(protection_trains) != len(trains_for_authority):
             return {}
-        mal_map = self.compute_mal(authority_trains)
+        authority_trains = [
+            train
+            for train in protection_trains
+            if bool(getattr(train, "may_receive_authority", False))
+        ]
+        mal_map = self.compute_mal(protection_trains)
         packets: Dict[str, SafeMovementPacket] = {}
         packet_order = sorted(authority_trains, key=lambda item: item.reported_pos, reverse=True)
         for train in packet_order:
@@ -54,6 +63,14 @@ class ZoneController:
             next_speed, next_dist = next_lower_limit(track_profile, pos_for_limits, psr, tsr_zones)
             mal = mal_map.get(train.id)
             mal_m = mal.mal_m if mal is not None else track_end_m
+            protected_by_obstacle = False
+            if mal is not None:
+                for obstacle in protection_trains:
+                    if obstacle.id == train.id or bool(getattr(obstacle, "may_receive_authority", False)):
+                        continue
+                    if abs(float(obstacle.safe_rear_end_pos()) - float(mal.protected_rear_m)) <= 1.0:
+                        protected_by_obstacle = True
+                        break
             stop_eoa = stop_eoa_map.get(train.id)
             # Station stop/holding EOA is a constraint on top of moving-block MA,
             # not a replacement for leader protection on the open line.
@@ -65,6 +82,8 @@ class ZoneController:
                     "gradient": gradient,
                     "next_speed_limit_kmh": next_speed,
                     "next_speed_limit_dist_m": next_dist,
+                    "ma_reason": "OBSTACLE_PROTECTION" if protected_by_obstacle else (mal.reason if mal is not None else "TRACK_END"),
+                    "protected_rear_m": mal.protected_rear_m if mal is not None else track_end_m,
                 },
             )
         return packets

@@ -1,7 +1,43 @@
 from __future__ import annotations
 
-from GUI.main_gui import *
 import json
+import tkinter as tk
+from collections import deque
+from tkinter import ttk
+from typing import Dict
+
+from CONFIG.config import (
+    ATP_ADHESION_FACTOR,
+    ATP_BRAKE_BUILDUP_S,
+    ATP_EBI_REACTION_S,
+    ATP_EMERGENCY_BRAKE_FACTOR,
+    ATP_P_REACTION_S,
+    ATP_SBI_REACTION_S,
+    ATP_SERVICE_BRAKE_FACTOR,
+    ATP_W_REACTION_S,
+    BALISE_POS_UNCERT_M,
+    DCS_DELAY_MAX_S,
+    DCS_DELAY_MIN_S,
+    DCS_TIMEOUT_S,
+    MAX_JERK_MS3,
+    ODOMETER_ERROR_RATE,
+    OVERLAP_M,
+    POS_UNCERT_M,
+    PRECISE_STOP_POS_UNCERT_M,
+    STATION_POS_UNCERT_M,
+)
+from SUBSYSTEMS.runtime import Simulation
+
+APP_THEME = {
+    "canvas": "#fbf3ef",
+    "canvas_grid": "#dec8bf",
+    "border": "#6b2e35",
+    "text": "#5a2630",
+    "muted": "#8a5b52",
+    "accent": "#b85c2d",
+    "warning": "#f0a132",
+    "log_bg": "#fffaf2",
+}
 
 class TimeDistancePanel(ttk.Frame):
     def __init__(self, master: tk.Widget):
@@ -217,14 +253,15 @@ class DataFlowPanel(ttk.Frame):
             highlightbackground=APP_THEME["border"],
         )
         self.canvas.grid(row=0, column=0, sticky="nsew")
-        canvas_hscroll = ttk.Scrollbar(diagram_frame, orient="horizontal", command=self.canvas.xview)
-        canvas_hscroll.grid(row=1, column=0, sticky="ew")
-        self.canvas.configure(xscrollcommand=canvas_hscroll.set)
+        self.canvas_hscroll = ttk.Scrollbar(diagram_frame, orient="horizontal", command=self.canvas.xview)
+        self.canvas_hscroll.grid(row=1, column=0, sticky="ew")
+        self.canvas.configure(xscrollcommand=self.canvas_hscroll.set)
         self.canvas.bind("<Button-1>", self._on_canvas_packet_click)
         self.canvas_packet_events = []
         self._last_sim = None
         self._resize_after_id = None
         self.canvas.bind("<Configure>", self._on_canvas_resize, add="+")
+        self.bind("<Destroy>", self._on_destroy, add="+")
 
         filter_frame = ttk.Frame(self, style="Panel.TFrame")
         filter_frame.grid(row=3, column=0, sticky="ew", pady=(int(6 * scale_factor), 0))
@@ -276,9 +313,17 @@ class DataFlowPanel(ttk.Frame):
                 pass
         self._resize_after_id = self.after(120, self._redraw_last_sim)
 
+    def _on_destroy(self, _event):
+        if self._resize_after_id is not None:
+            try:
+                self.after_cancel(self._resize_after_id)
+            except tk.TclError:
+                pass
+            self._resize_after_id = None
+
     def _redraw_last_sim(self):
         self._resize_after_id = None
-        if self._last_sim is not None:
+        if self._last_sim is not None and self.winfo_exists():
             self.update_data(self._last_sim)
 
     def _on_canvas_packet_click(self, event):
@@ -408,7 +453,8 @@ class DataFlowPanel(ttk.Frame):
         return filtered
 
     def _scale(self, value: float) -> int:
-        return int(round(value * self.scale_factor))
+        scale = getattr(self, "_diagram_scale", self.scale_factor)
+        return int(round(value * scale))
 
     def _function_block(self, x: float, y: float, w: float, h: float, title: str, body: str, fill: str) -> dict[str, float]:
         c = self.canvas
@@ -441,8 +487,80 @@ class DataFlowPanel(ttk.Frame):
             "h": h,
         }
 
+    def _diagram_box(
+        self,
+        x: float,
+        y: float,
+        w: float,
+        h: float,
+        title: str,
+        bullets: list[str],
+        outline: str,
+        fill: str,
+        title_color: str | None = None,
+    ) -> dict[str, float]:
+        c = self.canvas
+        title_color = outline if title_color is None else title_color
+        self._rounded_rect(x, y, x + w, y + h, self._scale(10), fill=fill, outline=outline, width=2)
+        c.create_text(
+            x + w / 2,
+            y + self._scale(20),
+            text=title,
+            fill=title_color,
+            font=("Segoe UI", self._scale(12), "bold"),
+        )
+        for idx, bullet in enumerate(bullets):
+            c.create_text(
+                x + self._scale(16),
+                y + self._scale(48) + idx * self._scale(22),
+                anchor="w",
+                text=f"• {bullet}",
+                fill="#111827",
+                font=("Segoe UI", self._scale(9)),
+            )
+        return {
+            "left": x,
+            "right": x + w,
+            "top": y,
+            "bottom": y + h,
+            "cx": x + w / 2,
+            "cy": y + h / 2,
+            "w": w,
+            "h": h,
+        }
+
+    def _process_box(self, x: float, y: float, w: float, h: float, text: str, color: str) -> dict[str, float]:
+        c = self.canvas
+        self._rounded_rect(x, y, x + w, y + h, self._scale(8), fill="#ffffff", outline=color, width=2)
+        c.create_text(
+            x + w / 2,
+            y + h / 2,
+            text=text,
+            fill=color,
+            font=("Segoe UI", self._scale(11), "bold"),
+        )
+        return {"left": x, "right": x + w, "top": y, "bottom": y + h, "cx": x + w / 2, "cy": y + h / 2}
+
+    def _rounded_rect(self, x1: float, y1: float, x2: float, y2: float, radius: float, **kwargs):
+        radius = max(1.0, min(radius, (x2 - x1) / 2, (y2 - y1) / 2))
+        points = [
+            x1 + radius, y1,
+            x2 - radius, y1,
+            x2, y1,
+            x2, y1 + radius,
+            x2, y2 - radius,
+            x2, y2,
+            x2 - radius, y2,
+            x1 + radius, y2,
+            x1, y2,
+            x1, y2 - radius,
+            x1, y1 + radius,
+            x1, y1,
+        ]
+        return self.canvas.create_polygon(points, smooth=True, splinesteps=12, **kwargs)
+
     def _route_label(self, x: float, y: float, text: str, color: str, anchor: str = "center"):
-        self.canvas.create_text(
+        text_id = self.canvas.create_text(
             x,
             y,
             text=text,
@@ -450,6 +568,18 @@ class DataFlowPanel(ttk.Frame):
             anchor=anchor,
             font=("Consolas", self._scale(8), "bold"),
         )
+        bbox = self.canvas.bbox(text_id)
+        if bbox is not None:
+            pad = self._scale(3)
+            bg_id = self.canvas.create_rectangle(
+                bbox[0] - pad,
+                bbox[1] - pad,
+                bbox[2] + pad,
+                bbox[3] + pad,
+                fill=APP_THEME["canvas"],
+                outline="",
+            )
+            self.canvas.tag_lower(bg_id, text_id)
 
     def _lane_arrow(
         self,
@@ -497,12 +627,19 @@ class DataFlowPanel(ttk.Frame):
             y2 + padding,
         )
         self.canvas.configure(scrollregion=scrollregion)
+        if hasattr(self, "canvas_hscroll"):
+            canvas_width = int(self.canvas.winfo_width() or 0)
+            needs_hscroll = scrollregion[2] - scrollregion[0] > canvas_width + 2
+            if needs_hscroll:
+                self.canvas_hscroll.grid()
+            else:
+                self.canvas_hscroll.grid_remove()
 
     def _draw_legend(self, x: float, y: float, compact: bool = False):
         rows = [
-            ("#5b6fd6", "Vital: CC <-> ZC authority data", None),
-            ("#1f8a8a", "OPC UA-like supervision to ATS/OCC", None),
-            ("#8b5cf6", "Simulator injection/direct state", None),
+            ("#5b6fd6", "RaSTA vital through DCS", None),
+            ("#1f8a8a", "OPC UA-like supervision through DCS", (6, 4)),
+            ("#8b5cf6", "ATS operation/fault command through RaSTA", (4, 3)),
             ("#6b7280", "Scenario/internal infrastructure state", None),
         ]
         row_h = self._scale(17 if compact else 20)
@@ -534,174 +671,210 @@ class DataFlowPanel(ttk.Frame):
         c.delete("all")
         self.canvas_packet_events = []
 
-        width = max(self._scale(720), int(c.winfo_width() or self._scale(980)))
-        margin = self._scale(36 if width < self._scale(900) else 54)
-        trains = list(getattr(sim, "trains", []))
-        train_count = len(trains)
-        stops = list(getattr(sim, "scheduled_stops", []))
-        visible_trains = trains[:6] if trains else []
-        top = self._scale(72)
-        cc_w = self._scale(220)
-        cc_h = self._scale(82)
-        cc_gap = self._scale(22)
-        station_w = self._scale(235)
-        station_h = self._scale(76)
-        station_gap = self._scale(20)
-        zc_w = self._scale(220)
-        ats_w = self._scale(230)
-        side_gap = max(self._scale(70), (width - 2 * margin - cc_w - station_w - zc_w - ats_w) / 3)
-        cc_x = margin
-        station_x = cc_x + cc_w + side_gap
-        zc_x = station_x + station_w + side_gap
-        ats_x = zc_x + zc_w + side_gap
-        if ats_x + ats_w > width - margin:
-            side_gap = self._scale(70)
-            ats_x = zc_x + zc_w + side_gap
+        canvas_w = max(960, int(c.winfo_width() or self.winfo_width() or 0))
+        design_w = 1456.0
+        fit_scale = min(self.scale_factor, max(0.58 * self.scale_factor, (canvas_w - 12) / design_w))
+        previous_scale = getattr(self, "_diagram_scale", self.scale_factor)
+        self._diagram_scale = fit_scale
+        width = self._scale(1456)
+        height = self._scale(856)
+        c.configure(height=height)
 
-        zc = self._function_block(
-            zc_x,
-            top + self._scale(40),
-            zc_w,
-            self._scale(126),
-            "ZC",
-            "Computes MA\nEOA + speed limits\nuses CC + station state",
-            "#eef8f0",
-        )
-        ats = self._function_block(
-            ats_x,
-            top + self._scale(40),
-            ats_w,
-            self._scale(126),
-            "ATS/OCC",
-            "OPC UA supervision only\nno direct state reads\nno MA/EOA issue",
-            "#fff7e8",
-        )
+        blue = "#0b4bd3"
+        orange = "#ff5a00"
+        purple = "#6d20d8"
+        green = "#0a7a16"
+        teal = "#00838c"
+        red = "#ff2020"
+        gray = "#5c6670"
+        dark_green = "#0b6b1c"
+        brown = "#a54200"
 
-        cc_blocks = []
-        if visible_trains:
-            for idx, train in enumerate(visible_trains):
-                y = top + idx * (cc_h + cc_gap)
-                link = "OK" if getattr(train, "safe_packet_valid", False) else "STALE"
-                body = (
-                    f"pos={float(getattr(train, 'pos', 0.0)):6.1f}m\n"
-                    f"EOA={float(getattr(train, 'eoa', 0.0)):6.1f}m  link={link}"
-                )
-                cc_blocks.append(self._function_block(cc_x, y, cc_w, cc_h, f"CC {train.id}", body, "#eef3ff"))
-        else:
-            cc_blocks.append(self._function_block(cc_x, top, cc_w, cc_h, "CC", "No active train", "#eef3ff"))
-
-        station_blocks = []
-        visible_stops = stops[:5] if stops else []
-        active_stop_ids = {str(getattr(train, "active_scheduled_stop", "") or "") for train in trains}
-        if visible_stops:
-            for idx, stop in enumerate(visible_stops):
-                y = top + idx * (station_h + station_gap)
-                name = str(stop.get("name", f"STATION_{idx + 1}"))
-                occupied = name in active_stop_ids
-                status = "DWELL/OCCUPIED" if occupied else "AVAILABLE"
-                body = f"pos={float(stop.get('pos_m', 0.0)):6.1f}m\nstate={status}"
-                station_blocks.append(self._function_block(station_x, y, station_w, station_h, name, body, "#f4f4f5"))
-        else:
-            station_blocks.append(self._function_block(station_x, top, station_w, station_h, "Station State", "No stations configured", "#f4f4f5"))
-
-        vital_color = "#5b6fd6"
-        ma_color = "#b85c00"
-        opc_color = "#1f8a8a"
-        command_color = "#8b5cf6"
-        internal_color = "#6b7280"
-        first_cc = cc_blocks[0]
-        last_cc = cc_blocks[-1]
-        first_station = station_blocks[0]
-        last_station = station_blocks[-1]
-        cc_bus_x = first_cc["right"] + self._scale(26)
-        station_bus_x = first_station["right"] + self._scale(24)
-        supervision_y = max(last_cc["bottom"], last_station["bottom"], zc["bottom"], ats["bottom"]) + self._scale(52)
-        command_y = top - self._scale(36)
-
-        for idx, cc in enumerate(cc_blocks):
-            y = cc["cy"]
-            self._lane_arrow([(cc["right"], y), (cc_bus_x, y)], "", vital_color, dash=(6, 4))
-        self._lane_arrow(
-            [(cc_bus_x, first_cc["cy"]), (cc_bus_x, zc["cy"] - self._scale(28)), (zc["left"], zc["cy"] - self._scale(28))],
-            "POSITION_REPORT",
-            vital_color,
-            label_segment=1,
-            label_offset=-self._scale(16),
+        train = self._diagram_box(
+            self._scale(54),
+            self._scale(20),
+            self._scale(264),
+            self._scale(150),
+            "TÀU / CC ONBOARD",
+            ["CC_A / CC_B", "Tạo POSITION_REPORT", "Nhận MA_UPDATE", "Gửi TRAIN_STATUS"],
+            blue,
+            "#f7fbff",
         )
-        self._lane_arrow(
-            [(zc["left"], zc["cy"] + self._scale(10)), (cc_bus_x, zc["cy"] + self._scale(10)), (cc_bus_x, last_cc["cy"]), (last_cc["right"], last_cc["cy"])],
-            "MA_UPDATE: EOA + limits",
-            ma_color,
-            label_segment=0,
-            label_offset=self._scale(16),
+        ats = self._diagram_box(
+            self._scale(54),
+            self._scale(360),
+            self._scale(246),
+            self._scale(176),
+            "ATS / OCC",
+            ["Nhận trạng thái non-vital", "Giám sát", "Gửi ATS_OPERATION_COMMAND", "Không tạo MA/EOA"],
+            brown,
+            "#fffaf4",
         )
-
-        self._lane_arrow(
-            [(first_cc["right"], first_cc["bottom"] - self._scale(10)), (cc_bus_x, first_cc["bottom"] - self._scale(10)), (cc_bus_x, supervision_y), (ats["left"], supervision_y), (ats["left"], ats["bottom"] - self._scale(24))],
-            "TRAIN_STATUS -> ATS",
-            opc_color,
-            label_segment=2,
-            label_offset=self._scale(16),
-            dash=(6, 4),
+        dcs = self._diagram_box(
+            self._scale(639),
+            self._scale(232),
+            self._scale(270),
+            self._scale(324),
+            "DCS TRANSPORT",
+            [],
+            purple,
+            "#fbf7ff",
+            title_color=purple,
         )
-        self._lane_arrow(
-            [(zc["right"], zc["bottom"] - self._scale(38)), (ats["left"], zc["bottom"] - self._scale(38))],
-            "ZC_STATUS -> ATS",
-            opc_color,
-            label_offset=-self._scale(16),
-        )
-        self._lane_arrow(
-            [(ats["left"], ats["top"] + self._scale(28)), (zc["right"], zc["top"] + self._scale(28))],
-            "ATS RaSTA PSR/TSR -> ZC",
-            command_color,
-            label_offset=-self._scale(16),
-        )
-        self._lane_arrow(
-            [(ats["cx"], ats["top"]), (ats["cx"], command_y), (cc_bus_x, command_y), (cc_bus_x, first_cc["top"]), (first_cc["right"], first_cc["top"])],
-            "ATS RaSTA operation/fault command",
-            command_color,
-            label_segment=1,
-            label_offset=-self._scale(16),
-            dash=(6, 4),
-        )
-
-        for station in station_blocks:
-            self._lane_arrow([(station["right"], station["cy"]), (station_bus_x, station["cy"])], "", internal_color)
-        self._lane_arrow(
-            [(station_bus_x, first_station["cy"]), (station_bus_x, zc["bottom"] + self._scale(28)), (zc["cx"], zc["bottom"] + self._scale(28)), (zc["cx"], zc["bottom"])],
-            "Station constraints -> ZC",
-            internal_color,
-            label_segment=1,
-            label_offset=-self._scale(16),
-        )
-        self._lane_arrow(
-            [(station_bus_x, last_station["cy"]), (station_bus_x, supervision_y + self._scale(38)), (ats["right"] - self._scale(26), supervision_y + self._scale(38)), (ats["right"] - self._scale(26), ats["bottom"])],
-            "STATION_STATUS / OPC UA -> ATS",
-            opc_color,
-            label_segment=1,
-            label_offset=self._scale(16),
-        )
-
-        note_y = max(supervision_y + self._scale(68), last_station["bottom"] + self._scale(42), last_cc["bottom"] + self._scale(42))
-        note_h = self._scale(54)
-        c.create_rectangle(margin, note_y, width - margin, note_y + note_h, fill=APP_THEME["canvas"], outline=APP_THEME["border"])
+        vital = self._process_box(dcs["left"] + self._scale(20), dcs["top"] + self._scale(94), self._scale(230), self._scale(72), "transport_vital()", red)
+        supervision = self._process_box(dcs["left"] + self._scale(20), dcs["top"] + self._scale(224), self._scale(230), self._scale(72), "transport_supervision()", blue)
         c.create_text(
-            margin + self._scale(12),
-            note_y + self._scale(10),
-            anchor="nw",
-            text="Canvas hides DCS transport by design. Use the packet log below for DCS/RaSTA/OPC UA details; click a packet row to open the Packet Inspector.",
-            fill=APP_THEME["text"],
-            font=("Consolas", self._scale(8), "bold"),
-            width=width - 2 * margin - self._scale(24),
+            dcs["cx"],
+            dcs["bottom"] - self._scale(30),
+            text="Chỉ vận chuyển dữ liệu",
+            fill=purple,
+            font=("Segoe UI", self._scale(10), "bold"),
+        )
+        zc = self._diagram_box(
+            self._scale(1144),
+            self._scale(20),
+            self._scale(239),
+            self._scale(152),
+            "ZC_01",
+            ["Nhận POSITION_REPORT", "Tính EOA / SvL / MA", "Build safe packets", "Xuất MA_UPDATE"],
+            dark_green,
+            "#f5fff5",
+        )
+        runtime = self._diagram_box(
+            self._scale(1183),
+            self._scale(303),
+            self._scale(199),
+            self._scale(118),
+            "ZC_01 / RUNTIME STATE",
+            ["APPLY_PSR", "ADD/UPDATE", "REMOVE/CLEAR_TSR"],
+            orange,
+            "#fff8f1",
+            title_color=brown,
+        )
+        sgd = self._diagram_box(
+            self._scale(1169),
+            self._scale(534),
+            self._scale(214),
+            self._scale(120),
+            "SGD / GA / DEPOT / STATION",
+            ["Track profile / balise", "Route / capacity", "Line conditions"],
+            brown,
+            "#fffaf4",
+        )
+        nms = self._diagram_box(
+            self._scale(620),
+            self._scale(612),
+            self._scale(260),
+            self._scale(84),
+            "DCS_NMS / DCS TRANSPORT",
+            ["RED/BLUE status", "Counters / faults"],
+            gray,
+            "#f9fafb",
+        )
+        # Vital train-to-ground and ground-to-train paths.
+        self._lane_arrow(
+            [(train["right"], self._scale(82)), (self._scale(758), self._scale(82)), (self._scale(758), dcs["top"])],
+            "POSITION_REPORT / RaSTA_VITAL",
+            orange,
+            label_segment=0,
+            label_offset=-self._scale(16),
+            dash=(6, 4),
+        )
+        self._lane_arrow(
+            [(self._scale(802), dcs["top"]), (self._scale(802), self._scale(83)), (zc["left"], self._scale(83))],
+            "",
+            orange,
+            dash=(6, 4),
+        )
+        self._lane_arrow(
+            [(zc["left"], self._scale(140)), (self._scale(862), self._scale(140)), (self._scale(862), dcs["top"])],
+            "",
+            blue,
+            dash=(6, 4),
+        )
+        self._lane_arrow(
+            [(self._scale(704), dcs["top"]), (self._scale(704), self._scale(138)), (train["right"], self._scale(138))],
+            "MA_UPDATE / RaSTA_VITAL",
+            blue,
+            label_segment=1,
+            label_offset=-self._scale(16),
+            dash=(6, 4),
         )
 
-        compact_legend = width < self._scale(1040)
-        legend_w = self._scale(330 if compact_legend else 360)
-        legend_x = width - margin - legend_w
-        legend_y = note_y + note_h + self._scale(20)
-        self._draw_legend(legend_x, legend_y, compact=compact_legend)
-        c.configure(height=max(self._scale(560), legend_y + self._scale(125)))
-        self._update_canvas_scrollregion()
+        # Non-vital supervision and runtime command paths.
+        self._lane_arrow(
+            [(train["cx"], train["bottom"]), (train["cx"], self._scale(265)), (dcs["left"], self._scale(265))],
+            "TRAIN_STATUS /\nOPCUA_SUPERVISION",
+            purple,
+            label_segment=1,
+            label_offset=-self._scale(28),
+        )
+        self._lane_arrow(
+            [(train["cx"], train["bottom"]), (train["cx"], self._scale(330)), (ats["left"] + self._scale(150), self._scale(330)), (ats["left"] + self._scale(150), ats["top"])],
+            "",
+            purple,
+        )
+        self._lane_arrow(
+            [(ats["right"], self._scale(385)), (dcs["left"], self._scale(385))],
+            "ATS_OPERATION_COMMAND ->\nRUNTIME STATE",
+            red,
+            label_segment=0,
+            label_offset=-self._scale(38),
+            dash=(6, 4),
+        )
+        self._lane_arrow(
+            [(dcs["right"], self._scale(393)), (runtime["left"], self._scale(393))],
+            "",
+            red,
+            dash=(6, 4),
+        )
+        self._lane_arrow(
+            [(runtime["cx"], runtime["top"]), (runtime["cx"], zc["bottom"])],
+            "",
+            red,
+            dash=(6, 4),
+        )
+        self._lane_arrow(
+            [(zc["cx"] - self._scale(10), zc["bottom"]), (zc["cx"] - self._scale(10), self._scale(282)), (dcs["right"], self._scale(282))],
+            "ZC_STATUS",
+            teal,
+            label_segment=1,
+            label_offset=-self._scale(16),
+        )
+        self._lane_arrow(
+            [(dcs["left"], self._scale(425)), (ats["right"], self._scale(425))],
+            "ZC_STATUS",
+            teal,
+            label_offset=-self._scale(16),
+        )
+        self._lane_arrow(
+            [(sgd["left"], self._scale(560)), (dcs["right"], self._scale(560))],
+            "WAYSIDE_STATUS +\nSTATION_STATUS",
+            green,
+            label_offset=-self._scale(28),
+        )
+        self._lane_arrow(
+            [(dcs["left"], self._scale(465)), (ats["right"], self._scale(465))],
+            "WAYSIDE_STATUS +\nSTATION_STATUS",
+            green,
+            label_offset=-self._scale(28),
+        )
+        self._lane_arrow(
+            [(nms["cx"], nms["top"]), (nms["cx"], dcs["bottom"])],
+            "DCS_STATUS",
+            gray,
+            label_offset=-self._scale(16),
+        )
+        self._lane_arrow(
+            [(dcs["left"], self._scale(540)), (ats["right"], self._scale(540))],
+            "DCS_STATUS",
+            gray,
+            label_offset=-self._scale(16),
+        )
+        c.create_line(vital["cx"], vital["bottom"], vital["cx"], supervision["top"], fill=gray, width=2, arrow=tk.BOTH, dash=(2, 3))
+
+        self._update_canvas_scrollregion(padding=self._scale(18))
+        self._diagram_scale = previous_scale
 
     def update_data(self, sim: Simulation):
         self._last_sim = sim

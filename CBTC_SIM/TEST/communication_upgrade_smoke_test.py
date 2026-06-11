@@ -40,7 +40,14 @@ def make_packet(sim: Simulation, train, seq: int, eoa_m: float, timestamp_ms: in
     )
 
 
-def make_position_packet(sim: Simulation, train, seq: int, timestamp_ms: int | None = None, ttl_ms: int = 1000):
+def make_position_packet(
+    sim: Simulation,
+    train,
+    seq: int,
+    timestamp_ms: int | None = None,
+    ttl_ms: int = 1000,
+    train_integrity_ok: bool = True,
+):
     timestamp_ms = int(sim.sim_time_s * 1000) if timestamp_ms is None else timestamp_ms
     payload = PositionReportMessage(
         train_id=train.id,
@@ -49,7 +56,7 @@ def make_position_packet(sim: Simulation, train, seq: int, timestamp_ms: int | N
         speed_mps=float(train.speed),
         direction="FORWARD",
         localization_uncertainty_m=float(train.effective_position_uncertainty_m()),
-        train_integrity_ok=True,
+        train_integrity_ok=train_integrity_ok,
         timestamp_ms=timestamp_ms,
     ).to_payload()
     return VitalSafePacket.create(
@@ -225,6 +232,62 @@ def main():
     sim_pos._process_zc_position_reports()
     assert any(event.result == "OUT_OF_ORDER" for event in sim_pos.dcs_transport.events), "out-of-order vital packet should be rejected"
 
+    sim_integrity = Simulation(load_scenario())
+    run_steps(sim_integrity, 3)
+    integrity_train = max(sim_integrity.trains, key=lambda item: item.reported_pos)
+    integrity_train.pos = 800.0
+    integrity_train.reported_pos = 800.0
+    integrity_train.safe_front_end_pos = 800.0
+    integrity_train.speed = 0.0
+    integrity_train.set_fault("INTEGRITY", True, sim_integrity.sim_time_s)
+    unsafe_report = sim_integrity._position_report_message(integrity_train)
+    assert not unsafe_report.train_integrity_ok, "POSITION_REPORT should expose virtual integrity line loss"
+    integrity_status = sim_integrity._train_status_message(integrity_train)
+    assert integrity_status.fault_flags["INTEGRITY"], "TRAIN_STATUS should report train integrity loss"
+    assert not integrity_status.fault_flags["DCS"], "train integrity loss should not be mislabeled as a DCS fault"
+    unsafe_packet = sim_integrity._vital_position_packet(integrity_train)
+    sim_integrity.pending_zc_position_packets.append((sim_integrity.sim_time_s, unsafe_packet))
+    sim_integrity._process_zc_position_reports()
+    assert sim_integrity.position_report_freshness[integrity_train.id] == "UNSAFE", "ZC should mark failed train integrity as UNSAFE"
+    unsafe_packets = sim_integrity.zc.build_safe_packets(
+        sim_integrity.track_profile,
+        sim_integrity.tsr_zones,
+        sim_integrity.track_end_m,
+        {},
+        trains_for_authority=sim_integrity._authority_trains_from_position_reports(),
+    )
+    assert integrity_train.id not in unsafe_packets, "ZC must not issue MA to a failed-integrity train"
+    assert unsafe_packets, "ZC should keep issuing MA to healthy trains protected by the unsafe train report"
+    zc_payload = sim_integrity._zc_status_message().to_payload()
+    assert zc_payload["virtual_obstacles"], "ZC_STATUS should publish virtual obstacle blocks for ATS display"
+    virtual_obstacle = next(item for item in zc_payload["virtual_obstacles"] if item["train_id"] == integrity_train.id)
+    occupied_span_m = float(virtual_obstacle["occupied_end_m"]) - float(virtual_obstacle["occupied_start_m"])
+    protected_span_m = float(virtual_obstacle["end_m"]) - float(virtual_obstacle["start_m"])
+    assert occupied_span_m >= integrity_train.length, "virtual obstacle occupied core should cover the failed train"
+    assert protected_span_m >= occupied_span_m, "virtual obstacle display should not be smaller than its occupied core"
+    run_steps(sim_integrity, 20)
+    healthy_dcs_faults = [
+        train.id
+        for train in sim_integrity.trains
+        if train.id != integrity_train.id and sim_integrity._train_status_message(train).fault_flags["DCS"]
+    ]
+    assert not healthy_dcs_faults, "one failed-integrity train must not trigger DCS faults for the whole line"
+
+    sim_lost_report = Simulation(load_scenario())
+    run_steps(sim_lost_report, 6)
+    non_comm_train = max(sim_lost_report.trains, key=lambda item: item.reported_pos)
+    sim_lost_report.position_report_freshness[non_comm_train.id] = "LOST"
+    sim_lost_report.zc.mark_position_report_freshness(non_comm_train.id, "LOST")
+    lost_report_packets = sim_lost_report.zc.build_safe_packets(
+        sim_lost_report.track_profile,
+        sim_lost_report.tsr_zones,
+        sim_lost_report.track_end_m,
+        {},
+        trains_for_authority=sim_lost_report._authority_trains_from_position_reports(),
+    )
+    assert non_comm_train.id not in lost_report_packets, "ZC must not issue MA to a non-communicating train"
+    assert lost_report_packets, "ZC should keep healthy trains moving behind a last-known non-communicating obstacle"
+
     scenario_reports = load_scenario()
     scenario_reports["communication"]["use_vital_position_report_for_zc"] = True
     sim_reports = Simulation(scenario_reports)
@@ -238,17 +301,36 @@ def main():
         "safe_rear_m": 900.0,
         "speed_mps": 0.0,
         "localization_uncertainty_m": 1.0,
+        "train_integrity_ok": True,
     }
     sim_reports.last_valid_position_report[follow.id] = {
         "safe_front_m": 500.0,
         "safe_rear_m": 400.0,
         "speed_mps": 0.0,
         "localization_uncertainty_m": 1.0,
+        "train_integrity_ok": True,
     }
     sim_reports.position_report_freshness[lead.id] = "FRESH"
     sim_reports.position_report_freshness[follow.id] = "FRESH"
     mal = sim_reports.zc.compute_mal(sim_reports._authority_trains_from_position_reports())
     assert mal[follow.id].protected_rear_m == 900.0, "ZC should compute MA from vital position report when enabled"
+    sim_reports.last_valid_position_report[lead.id]["train_integrity_ok"] = False
+    sim_reports.position_report_freshness[lead.id] = "UNSAFE"
+    obstacle_packets = sim_reports.zc.build_safe_packets(
+        sim_reports.track_profile,
+        sim_reports.tsr_zones,
+        sim_reports.track_end_m,
+        {},
+        trains_for_authority=[
+            view
+            for view in sim_reports._authority_trains_from_position_reports()
+            if view.id in {lead.id, follow.id}
+        ],
+    )
+    assert lead.id not in obstacle_packets, "ZC must not issue MA to the unsafe obstacle train"
+    assert obstacle_packets[follow.id].variants.get("ma_reason") == "OBSTACLE_PROTECTION", "ZC should label MA cutbacks caused by protected obstacles"
+    sim_reports.last_valid_position_report[lead.id]["train_integrity_ok"] = True
+    sim_reports.position_report_freshness[lead.id] = "FRESH"
     sim_reports.position_report_freshness[lead.id] = "LOST"
     no_report_packets = sim_reports.zc.build_safe_packets(
         sim_reports.track_profile,

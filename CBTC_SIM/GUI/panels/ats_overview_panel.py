@@ -163,8 +163,12 @@ class ATSOverviewPanel(ttk.Frame):
         station_route_states = [dict(state) for state in station_state_payload.get("station_route_states", [])]
         line_conditions = [dict(condition) for condition in wayside.get("line_conditions", [])]
         tsr_zones = [dict(zone) for zone in zc_state.get("tsr_zones", [])]
+        virtual_obstacles = [dict(item) for item in zc_state.get("virtual_obstacles", [])]
         source_trains = [dict(source) for source in wayside.get("source_trains", [])]
         balises = [dict(balise) for balise in wayside.get("balises", [])]
+        radio_access_points = [dict(rap) for rap in wayside.get("radio_access_points", [])]
+        dcs_state = dict(getattr(sim, "ats_received_dcs_state", {}) or {})
+        dcs_transport_state = dict(dcs_state.get("dcs_transport_state", {}) or {})
 
         def station_bounds(stop: Dict[str, object]) -> Tuple[float, float]:
             pos_m = float(stop.get("pos_m", 0.0))
@@ -218,15 +222,15 @@ class ATSOverviewPanel(ttk.Frame):
         c.create_line(main_x2, rail_y, w - 28, rail_y, fill=earth_rail_dark, width=2, dash=(8, 5))
         c.create_line(main_x1, rail_y, main_x2, rail_y, fill=earth_rail, width=5)
 
-        rap_items = []
+        rap_items = radio_access_points
         rap_display_end_m = track_max_m
         rap_y1 = rail_y - 48
         rap_y2 = rail_y - 28
         rap_palette = ("#d9ecff", "#e5f7df", "#fff0cf", "#f0e3ff")
-        active_rap_by_train = set()
+        active_rap_by_train = set(str(value) for value in dict(dcs_transport_state.get("last_rap_by_train", {}) or {}).values())
         for idx, rap in enumerate(rap_items):
-            rap_start_m = float(getattr(rap, "start_m", 0.0))
-            rap_end_m = min(float(getattr(rap, "end_m", 0.0)), rap_display_end_m)
+            rap_start_m = float(rap.get("start_m", 0.0))
+            rap_end_m = min(float(rap.get("end_m", 0.0)), rap_display_end_m)
             if rap_end_m <= rap_start_m:
                 continue
             x1 = x_from_pos(rap_start_m)
@@ -234,7 +238,9 @@ class ATSOverviewPanel(ttk.Frame):
             if x2 < 28 or x1 > w - 28:
                 continue
             fill = rap_palette[idx % len(rap_palette)]
-            outline = APP_THEME["accent"] if getattr(rap, "id", "") in active_rap_by_train else APP_THEME["canvas_grid"]
+            rap_id = str(rap.get("id", f"RAP_{idx + 1:02d}"))
+            active = rap_id in active_rap_by_train
+            outline = APP_THEME["accent"] if active else APP_THEME["canvas_grid"]
             c.create_rectangle(
                 max(28, x1),
                 rap_y1,
@@ -242,22 +248,30 @@ class ATSOverviewPanel(ttk.Frame):
                 rap_y2,
                 fill=fill,
                 outline=outline,
-                width=2 if getattr(rap, "id", "") in active_rap_by_train else 1,
+                width=2 if active else 1,
+            )
+            c.create_line(
+                (max(28, x1) + min(w - 28, x2)) / 2,
+                rap_y2,
+                (max(28, x1) + min(w - 28, x2)) / 2,
+                rail_y - 8,
+                fill=outline,
+                dash=(2, 2),
             )
             c.create_text(
                 (max(28, x1) + min(w - 28, x2)) / 2,
                 rap_y1 - 8,
-                text=str(getattr(rap, "id", f"RAP_{idx + 1:02d}")),
-                fill=APP_THEME["muted"],
+                text=rap_id,
+                fill=APP_THEME["accent"] if active else APP_THEME["muted"],
                 font=("Consolas", 7, "bold"),
             )
         sorted_raps = sorted(
             rap_items,
-            key=lambda item: (float(getattr(item, "start_m", 0.0)), float(getattr(item, "end_m", 0.0))),
+            key=lambda item: (float(item.get("start_m", 0.0)), float(item.get("end_m", 0.0))),
         )
         for left, right in zip(sorted_raps, sorted_raps[1:]):
-            overlap_start = max(float(getattr(left, "start_m", 0.0)), float(getattr(right, "start_m", 0.0)))
-            overlap_end = min(float(getattr(left, "end_m", 0.0)), float(getattr(right, "end_m", 0.0)), rap_display_end_m)
+            overlap_start = max(float(left.get("start_m", 0.0)), float(right.get("start_m", 0.0)))
+            overlap_end = min(float(left.get("end_m", 0.0)), float(right.get("end_m", 0.0)), rap_display_end_m)
             if overlap_end <= overlap_start:
                 continue
             x1 = max(28, x_from_pos(overlap_start))
@@ -517,6 +531,52 @@ class ATSOverviewPanel(ttk.Frame):
             c.create_line(x, block_y2 + 24, x, block_y2 + 32, fill=APP_THEME["muted"], dash=(2, 2))
             c.create_text(x, block_y2 + 42, text=f"{int(label)}m", fill=APP_THEME["muted"], font=("Consolas", 7))
 
+        for idx, obstacle in enumerate(virtual_obstacles):
+            start_m = float(obstacle.get("protection_start_m", obstacle.get("start_m", 0.0)))
+            end_m = float(obstacle.get("protection_end_m", obstacle.get("end_m", start_m)))
+            x1 = max(28, x_from_pos(start_m))
+            x2 = min(w - 28, x_from_pos(end_m))
+            if x2 <= 28 or x1 >= w - 28 or x2 <= x1:
+                continue
+            if x2 - x1 < 56:
+                center_x = (x1 + x2) / 2.0
+                x1 = max(28, center_x - 28)
+                x2 = min(w - 28, center_x + 28)
+            block_y1 = rail_y - 25
+            block_y2_local = rail_y + 25
+            c.create_rectangle(
+                x1,
+                block_y1,
+                x2,
+                block_y2_local,
+                fill="#ffb36b",
+                outline=APP_THEME["danger"],
+                width=2,
+                stipple="gray25",
+            )
+            occupied_start_m = float(obstacle.get("occupied_start_m", obstacle.get("safe_rear_m", start_m)))
+            occupied_end_m = float(obstacle.get("occupied_end_m", obstacle.get("safe_front_m", end_m)))
+            occ_x1 = max(28, x_from_pos(occupied_start_m))
+            occ_x2 = min(w - 28, x_from_pos(occupied_end_m))
+            if occ_x2 > occ_x1:
+                c.create_rectangle(
+                    occ_x1,
+                    rail_y - 14,
+                    occ_x2,
+                    rail_y + 14,
+                    fill="#ff4d4f",
+                    outline=APP_THEME["danger"],
+                    width=2,
+                    stipple="gray50",
+                )
+            c.create_text(
+                (x1 + x2) / 2,
+                block_y1 - 10,
+                text="ZC PROTECTED OBSTACLE",
+                fill=APP_THEME["danger"],
+                font=("Consolas", 7, "bold"),
+            )
+
         def visible_train_span(head_x: float, tail_x: float) -> Tuple[float, float]:
             if abs(head_x - tail_x) >= 10.0:
                 return min(tail_x, head_x), max(tail_x, head_x)
@@ -610,12 +670,13 @@ class ATSOverviewPanel(ttk.Frame):
             dcs_fault = bool(display_fault_flags.get("DCS", False)) or ats_freshness in ("STALE", "LOST")
             atp_fault = bool(display_fault_flags.get("ATP", False))
             ato_fault = bool(display_fault_flags.get("ATO", False))
+            integrity_fault = bool(display_fault_flags.get("INTEGRITY", False))
             emergency_fault = bool(display_fault_flags.get("EMERGENCY", False) or display_atp == "ATP_TRIP")
-            fault_active = atp_fault or ato_fault or dcs_fault or emergency_fault
+            fault_active = atp_fault or ato_fault or dcs_fault or integrity_fault or emergency_fault
             train_fill = "#6b7d90" if fault_active else static_color
             train_alert_outline = (
                 APP_THEME["danger"]
-                if atp_fault
+                if atp_fault or integrity_fault
                 else "#4d5964"
                 if emergency_fault
                 else "#ff9f1c"
@@ -625,24 +686,39 @@ class ATSOverviewPanel(ttk.Frame):
                 else ""
             )
             train_half_height = 3
-            c.create_rectangle(
-                x1 - 2,
-                y - train_half_height - 1,
-                x2 + 2,
-                y + train_half_height + 1,
-                fill="#000000",
-                outline="#000000",
-                width=2,
-            )
-            c.create_rectangle(
-                x1,
-                y - train_half_height,
-                x2,
-                y + train_half_height,
-                fill=train_fill,
-                outline="#000000",
-                width=1,
-            )
+            if integrity_fault:
+                gap_m = max(8.0, train_length * 0.08)
+                break_pos = max(display_pos - train_length + gap_m, min(display_pos - gap_m, display_pos - train_length * 0.45))
+                break_x = x_from_pos(break_pos)
+                gap_px = 5
+                rear_x2 = max(x1 + 3, break_x - gap_px)
+                front_x1 = min(x2 - 3, break_x + gap_px)
+                c.create_rectangle(x1 - 2, y - train_half_height - 1, rear_x2 + 2, y + train_half_height + 1, fill="#000000", outline="#000000", width=2)
+                c.create_rectangle(front_x1 - 2, y - train_half_height - 1, x2 + 2, y + train_half_height + 1, fill="#000000", outline="#000000", width=2)
+                c.create_rectangle(x1, y - train_half_height, rear_x2, y + train_half_height, fill="#7a1028", outline="#000000", width=1)
+                c.create_rectangle(front_x1, y - train_half_height, x2, y + train_half_height, fill="#f05a5a", outline="#000000", width=1)
+                c.create_line(break_x - 5, y - 9, break_x + 5, y + 9, fill=APP_THEME["danger"], width=3)
+                c.create_line(break_x - 5, y + 9, break_x + 5, y - 9, fill=APP_THEME["danger"], width=3)
+                c.create_text((x1 + x2) / 2, y + 22, text="BROKEN CONSIST", fill=APP_THEME["danger"], font=("Consolas", 7, "bold"))
+            else:
+                c.create_rectangle(
+                    x1 - 2,
+                    y - train_half_height - 1,
+                    x2 + 2,
+                    y + train_half_height + 1,
+                    fill="#000000",
+                    outline="#000000",
+                    width=2,
+                )
+                c.create_rectangle(
+                    x1,
+                    y - train_half_height,
+                    x2,
+                    y + train_half_height,
+                    fill=train_fill,
+                    outline="#000000",
+                    width=1,
+                )
             if train_alert_outline:
                 c.create_rectangle(
                     x1 - 4,
@@ -653,11 +729,15 @@ class ATSOverviewPanel(ttk.Frame):
                     width=2,
                 )
             eoa_m = float(ats_state.get("eoa_m", display_pos))
+            eoa_reason = str(ats_state.get("eoa_reason", ""))
             eoa_x = x_from_pos(eoa_m)
             if 28 <= eoa_x <= w - 28:
                 c.create_line(eoa_x, rail_y - 30, eoa_x, rail_y + 32, fill=train_fill, dash=(3, 3), width=2)
-                c.create_rectangle(eoa_x - 18, rail_y - 45, eoa_x + 18, rail_y - 32, fill=APP_THEME["card"], outline=train_fill)
-                c.create_text(eoa_x, rail_y - 39, text="EOA", fill=train_fill, font=("Consolas", 7, "bold"))
+                eoa_label = "EOA OBSTACLE_PROTECTION" if eoa_reason == "OBSTACLE_PROTECTION" else "EOA"
+                label_half_w = 58 if eoa_reason == "OBSTACLE_PROTECTION" else 18
+                eoa_fill = APP_THEME["danger"] if eoa_reason == "OBSTACLE_PROTECTION" else train_fill
+                c.create_rectangle(eoa_x - label_half_w, rail_y - 45, eoa_x + label_half_w, rail_y - 32, fill=APP_THEME["card"], outline=eoa_fill)
+                c.create_text(eoa_x, rail_y - 39, text=eoa_label, fill=eoa_fill, font=("Consolas", 7, "bold"))
             constraint_dist = float(ats_state.get("distance_to_constraint_m", float("inf")))
             constraint_type = str(ats_state.get("constraint_type", "NONE"))
             if constraint_type != "NONE" and constraint_dist != float("inf"):
@@ -686,6 +766,8 @@ class ATSOverviewPanel(ttk.Frame):
                 fault_labels.append("ATO")
             if dcs_fault:
                 fault_labels.append("DCS")
+            if integrity_fault:
+                fault_labels.append("INT")
             if emergency_fault and not atp_fault:
                 fault_labels.append("EMG")
             if bool(ats_state.get("departure_hold", False)):

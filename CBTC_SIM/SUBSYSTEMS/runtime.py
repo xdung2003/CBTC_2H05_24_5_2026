@@ -15,6 +15,7 @@ from CONFIG.config import (
     OVERLAP_M,
     PARALLEL_RELEASE_MARGIN_M,
     PARALLEL_ROMAN_LABELS,
+    SAFETY_MARGIN_M,
     SOURCE_RELEASE_LOCK_S,
     SOURCE_TRAIN_EXIT_M,
     SOURCE_TRAIN_LENGTH_M,
@@ -59,19 +60,31 @@ from SUBSYSTEMS.communication.transport import DcsTransport
 
 class _VitalPositionTrainView:
     def __init__(self, train: Train, report: Dict[str, Any] | None, freshness: str):
+        self.has_position_report = report is not None
         self._report = report or {}
+        self.position_report_freshness = freshness
         self.id = train.id
-        self.reported_pos = float(self._report.get("safe_front_m", -1.0))
+        self.is_real_train = True
+        self.reported_pos = float(self._report.get("safe_front_m", -1.0)) + self._front_uncertainty_expansion_m()
         self.speed = float(self._report.get("speed_mps", 0.0))
         self.vital_speed = self.speed
         self.mass = train.mass
         self.length = train.length
-        self.trip_mode = bool(self._report.get("trip_mode", False))
-        self.trip_protect_rear_pos = float(self._report.get("trip_protect_rear_m", self.safe_rear_end_pos()))
+        self.train_integrity_ok = bool(self._report.get("train_integrity_ok", False))
+        self.may_receive_authority = bool(
+            self.has_position_report
+            and self.position_report_freshness == "FRESH"
+            and self.train_integrity_ok
+        )
+        report_trip_mode = bool(self._report.get("trip_mode", False))
+        self.trip_mode = report_trip_mode or not self.may_receive_authority
+        if report_trip_mode and "trip_protect_rear_m" in self._report:
+            self.trip_protect_rear_pos = float(self._report["trip_protect_rear_m"])
+        else:
+            self.trip_protect_rear_pos = self.safe_rear_end_pos()
         self.protection_zone_id = self._report.get("protection_zone_id")
         self.protection_lane = int(self._report.get("protection_lane", 0) or 0)
         self.active_scheduled_stop = self._report.get("active_scheduled_stop")
-        self.position_report_freshness = freshness
 
     def effective_position_uncertainty_m(self) -> float:
         base = float(self._report.get("localization_uncertainty_m", 999.0))
@@ -79,8 +92,26 @@ class _VitalPositionTrainView:
 
     def safe_rear_end_pos(self) -> float:
         if "safe_rear_m" in self._report:
-            return float(self._report["safe_rear_m"])
+            return float(self._report["safe_rear_m"]) - self._rear_uncertainty_expansion_m()
         return self.reported_pos - self.length
+
+    def _rear_uncertainty_expansion_m(self) -> float:
+        if self.position_report_freshness == "STALE":
+            return 50.0
+        if self.position_report_freshness == "EXPIRED":
+            return 150.0
+        if self.position_report_freshness == "LOST":
+            return 300.0
+        return 0.0
+
+    def _front_uncertainty_expansion_m(self) -> float:
+        if self.position_report_freshness == "STALE":
+            return 50.0
+        if self.position_report_freshness == "EXPIRED":
+            return 150.0
+        if self.position_report_freshness == "LOST":
+            return 300.0
+        return 0.0
 
 
 class Simulation:
@@ -1889,7 +1920,7 @@ class Simulation:
             next_speed_limit_kmh=float(packet.variants.get("next_speed_limit_kmh", 0.0)),
             next_speed_limit_dist_m=float(packet.variants.get("next_speed_limit_dist_m", float("inf"))),
             issued_time_s=float(packet.issued_time_s),
-            reason=reason,
+            reason=str(packet.variants.get("ma_reason", reason) or reason),
         )
 
     def _vital_ma_packet(self, train: Train, packet: SafeMovementPacket, reason: str) -> VitalSafePacket:
@@ -1916,7 +1947,7 @@ class Simulation:
             speed_mps=float(train.speed),
             direction="FORWARD" if train.speed >= -0.01 else "REVERSE",
             localization_uncertainty_m=float(train.effective_position_uncertainty_m()),
-            train_integrity_ok=bool(train.safe_packet_valid and not train.trip_mode),
+            train_integrity_ok=bool(train.train_integrity_ok()),
             timestamp_ms=int(self.sim_time_s * 1000),
             trip_mode=bool(train.trip_mode),
             trip_protect_rear_m=float(train.trip_protect_rear_pos),
@@ -1954,9 +1985,10 @@ class Simulation:
             door_state="AUTHORIZED" if train.door_authorized else "LOCKED",
             brake_state=str(train.atp_brake),
             fault_flags={
-                "DCS": bool(train.dcs_fault_active or train.dcs_muted or not train.safe_packet_valid),
+                "DCS": bool(train.dcs_fault_active or train.dcs_muted or (not train.safe_packet_valid and train.train_integrity_ok())),
                 "ATO": bool(train.ato_fault_active),
                 "ATP": bool(train.atp_fault_active),
+                "INTEGRITY": bool(not train.train_integrity_ok()),
                 "EMERGENCY": bool(train.emergency_stop or train.emg_latch or train.trip_mode or train.emergency_recovery_hold),
             },
             timestamp_ms=int(self.sim_time_s * 1000),
@@ -1968,6 +2000,7 @@ class Simulation:
             station_lane=train.station_lane,
             departure_hold=bool(train.departure_hold),
             eoa_m=float(train.eoa),
+            eoa_reason=str(train.last_dispatched_eoa_reason),
             distance_to_eoa_m=float(train.distance_to_eoa),
             constraint_type=str(train.constraint_type),
             constraint_target_speed_kmh=float(train.constraint_target_speed_kmh),
@@ -1997,6 +2030,7 @@ class Simulation:
                         "ATP": bool(train.atp_fault_active),
                         "ATO": bool(train.ato_fault_active),
                         "DCS": bool(train.dcs_fault_active),
+                        "INTEGRITY": bool(not train.train_integrity_ok()),
                     }.items()
                     if active
                 ],
@@ -2073,6 +2107,45 @@ class Simulation:
             }
             for train in self.trains
         ]
+        virtual_obstacles = []
+        for view in self._authority_trains_from_position_reports():
+            if not bool(getattr(view, "has_position_report", False)):
+                continue
+            if bool(getattr(view, "may_receive_authority", False)):
+                continue
+            safe_rear = float(view.safe_rear_end_pos())
+            safe_front = float(getattr(view, "reported_pos", safe_rear))
+            train_length = max(0.0, float(getattr(view, "length", 0.0)))
+            nominal_rear = safe_front - train_length
+            occupied_start = min(safe_rear, nominal_rear, safe_front)
+            occupied_end = max(safe_front, occupied_start)
+            if occupied_end < 0.0 or occupied_start > float(self.track_end_m):
+                continue
+            occupied_start = max(0.0, min(float(self.track_end_m), occupied_start))
+            occupied_end = max(0.0, min(float(self.track_end_m), occupied_end))
+            if occupied_end <= occupied_start:
+                continue
+            protection_margin = float(SAFETY_MARGIN_M + OVERLAP_M)
+            protection_start = max(0.0, occupied_start - protection_margin)
+            protection_end = min(float(self.track_end_m), occupied_end + STOP_SVL_OFFSET_M)
+            virtual_obstacles.append(
+                {
+                    "id": f"VB_{view.id}",
+                    "train_id": view.id,
+                    "start_m": protection_start,
+                    "end_m": protection_end,
+                    "occupied_start_m": occupied_start,
+                    "occupied_end_m": occupied_end,
+                    "protection_start_m": protection_start,
+                    "protection_end_m": protection_end,
+                    "protection_margin_m": protection_margin,
+                    "safe_rear_m": safe_rear,
+                    "safe_front_m": safe_front,
+                    "train_length_m": train_length,
+                    "freshness": str(getattr(view, "position_report_freshness", "LOST")),
+                    "reason": "ZC PROTECTED OBSTACLE",
+                }
+            )
         return ZcStatusMessage(
             zc_status={
                 "zc_id": "ZC_01",
@@ -2085,6 +2158,7 @@ class Simulation:
             tsr_zones=[dict(zone) for zone in self.tsr_zones],
             secondary_detection_sections=secondary_detection_sections,
             protection_zones=protection_zones,
+            virtual_obstacles=virtual_obstacles,
             timestamp_ms=int(self.sim_time_s * 1000),
         )
 
@@ -2126,6 +2200,8 @@ class Simulation:
                 },
                 "faults": dict(getattr(self.dcs_transport, "faults", {})),
                 "last_fault": str(getattr(self.dcs_transport, "last_fault", "")),
+                "last_rap_by_train": dict(getattr(self.dcs_transport, "last_rap_by_train", {})),
+                "handover_count": int(getattr(self.dcs_transport, "handover_count", 0)),
             },
             timestamp_ms=int(self.sim_time_s * 1000),
         )
@@ -2264,10 +2340,15 @@ class Simulation:
             self.dcs_transport.log_validation(self.sim_time_s, packet, result.result, result.action, result.reason, path="ZC")
             if result.accepted and packet.header.message_type == "POSITION_REPORT":
                 decoded_payload = packet.decoded_payload(session.secret)
-                self.last_valid_position_report[train_id] = dict(decoded_payload)
-                self.position_report_freshness[train_id] = "FRESH"
                 self.position_report_received_time_s[train_id] = self.sim_time_s
-                self.zc.store_position_report(train_id, decoded_payload, "FRESH")
+                if bool(decoded_payload.get("train_integrity_ok", False)):
+                    self.last_valid_position_report[train_id] = dict(decoded_payload)
+                    self.position_report_freshness[train_id] = "FRESH"
+                    self.zc.store_position_report(train_id, decoded_payload, "FRESH")
+                else:
+                    self.last_valid_position_report[train_id] = dict(decoded_payload)
+                    self.position_report_freshness[train_id] = "UNSAFE"
+                    self.zc.store_position_report(train_id, decoded_payload, "UNSAFE")
             elif train_id not in self.position_report_freshness:
                 self.position_report_freshness[train_id] = "LOST"
                 self.zc.mark_position_report_freshness(train_id, "LOST")
@@ -2389,7 +2470,7 @@ class Simulation:
         elif command == "TOGGLE_TRAIN_FAULT":
             subsystem = str((value or {}).get("subsystem", "")).upper() if isinstance(value, dict) else str(value).upper()
             for train in selected_trains():
-                if subsystem in {"ATP", "ATO", "DCS"}:
+                if subsystem in {"ATP", "ATO", "DCS", "INTEGRITY"}:
                     active_attr = f"{subsystem.lower()}_fault_active"
                     train.set_fault(subsystem, not bool(getattr(train, active_attr, False)), self.sim_time_s)
         elif command == "SET_DCS_LOSS_ALL":
@@ -2401,6 +2482,7 @@ class Simulation:
                 train.set_fault("DCS", False, self.sim_time_s)
                 train.set_fault("ATO", False, self.sim_time_s)
                 train.set_fault("ATP", False, self.sim_time_s)
+                train.set_fault("INTEGRITY", False, self.sim_time_s)
                 if not (train.trip_mode or train.emg_latch or train.emergency_stop or train.emergency_recovery_hold):
                     train.reset_non_emergency_stop_latches()
         elif command == "APPLY_PSR" and isinstance(value, dict):
@@ -2444,7 +2526,10 @@ class Simulation:
     def _update_communication_freshness(self):
         for train in self.trains:
             age = self.sim_time_s - self.position_report_received_time_s.get(train.id, -999.0)
-            if age > 2.0:
+            last_report = self.last_valid_position_report.get(train.id)
+            if last_report is not None and not bool(last_report.get("train_integrity_ok", True)):
+                freshness = "UNSAFE"
+            elif age > 2.0:
                 freshness = "LOST"
             elif age > 1.0:
                 freshness = "EXPIRED"
@@ -2599,6 +2684,8 @@ class Simulation:
                 train.last_dispatched_eoa is None or packet.eoa_m > train.last_dispatched_eoa + 1e-6
             ):
                 reason = "DEPARTURE_RELEASE"
+            if str(packet.variants.get("ma_reason", "")) == "OBSTACLE_PROTECTION":
+                reason = "OBSTACLE_PROTECTION"
             self._log_eoa_update(train, train.last_dispatched_eoa, packet.eoa_m, reason, station_idx)
             packet.issued_time_s = self.sim_time_s
             vital_packet = self._vital_ma_packet(train, packet, reason)

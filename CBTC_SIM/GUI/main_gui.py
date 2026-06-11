@@ -323,7 +323,9 @@ class App(tk.Tk):
         self.atp_fault_frame.grid(row=2, column=0, sticky="ew", padx=1, pady=1)
         self.ato_fault_frame = ttk.LabelFrame(faults_side, text="ATO", padding=3)
         self.ato_fault_frame.grid(row=3, column=0, sticky="ew", padx=1, pady=1)
-        for frame in (self.emergency_fault_frame, self.atp_fault_frame, self.ato_fault_frame):
+        self.integrity_fault_frame = ttk.LabelFrame(faults_side, text="Integrity", padding=3)
+        self.integrity_fault_frame.grid(row=4, column=0, sticky="ew", padx=1, pady=1)
+        for frame in (self.emergency_fault_frame, self.atp_fault_frame, self.ato_fault_frame, self.integrity_fault_frame):
             frame.columnconfigure(0, weight=1)
         self.train_fault_buttons: Dict[str, Dict[str, ttk.Button]] = {}
 
@@ -1046,7 +1048,7 @@ class App(tk.Tk):
     def _rebuild_train_fault_buttons(self):
         if not hasattr(self, "emergency_fault_frame"):
             return
-        for frame in (self.emergency_fault_frame, self.atp_fault_frame, self.ato_fault_frame):
+        for frame in (self.emergency_fault_frame, self.atp_fault_frame, self.ato_fault_frame, self.integrity_fault_frame):
             for child in frame.winfo_children():
                 child.destroy()
         self.train_fault_buttons = {}
@@ -1073,10 +1075,18 @@ class App(tk.Tk):
             )
             ato_btn.grid(row=row, column=0, sticky="ew", padx=1, pady=1)
             self._bind_side_toolbar_scroll(ato_btn)
-            self.train_fault_buttons[train.id] = {"emergency": emergency_btn, "atp": atp_btn, "ato": ato_btn}
+            integrity_btn = ttk.Button(
+                self.integrity_fault_frame,
+                text=train.id,
+                command=lambda train_id=train.id: self.toggle_train_fault(train_id, "INTEGRITY"),
+            )
+            integrity_btn.grid(row=row, column=0, sticky="ew", padx=1, pady=1)
+            self._bind_side_toolbar_scroll(integrity_btn)
+            self.train_fault_buttons[train.id] = {"emergency": emergency_btn, "atp": atp_btn, "ato": ato_btn, "integrity": integrity_btn}
         self._bind_side_toolbar_tree(self.emergency_fault_frame)
         self._bind_side_toolbar_tree(self.atp_fault_frame)
         self._bind_side_toolbar_tree(self.ato_fault_frame)
+        self._bind_side_toolbar_tree(self.integrity_fault_frame)
 
     def _hide_all_child_windows(self):
         for window in self.child_windows.values():

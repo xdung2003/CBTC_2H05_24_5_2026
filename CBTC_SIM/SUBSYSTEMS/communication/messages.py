@@ -60,6 +60,7 @@ class TrainStatusMessage:
     station_lane: int | None = None
     departure_hold: bool = False
     eoa_m: float = 0.0
+    eoa_reason: str = ""
     distance_to_eoa_m: float = 0.0
     constraint_type: str = "NONE"
     constraint_target_speed_kmh: float = 0.0
@@ -103,6 +104,7 @@ class ZcStatusMessage:
     tsr_zones: list
     secondary_detection_sections: list = field(default_factory=list)
     protection_zones: list = field(default_factory=list)
+    virtual_obstacles: list = field(default_factory=list)
     timestamp_ms: int = 0
 
     def to_payload(self) -> Dict[str, Any]:

@@ -336,7 +336,7 @@ class TrainPanel(ttk.Frame):
                 ]
             )
         )
-        integrity_text = "Confirmed" if train.safe_packet_valid and not train.trip_mode else "Degraded"
+        integrity_text = "Confirmed" if train.train_integrity_ok() else "Lost"
         self.detail_state_var.set(
             "\n".join(
                 [
@@ -348,7 +348,7 @@ class TrainPanel(ttk.Frame):
                     f"Station state  : {train.station_state}  line={train.station_lane if train.station_lane is not None else '--'}",
                     f"Train integrity: {integrity_text}",
                     f"Zero speed mon : {'ON' if train.zero_speed_detected else 'OFF'}  standstill={'ON' if train.standstill_monitoring else 'OFF'}",
-                    f"DCS / ZC link   : {'VALID' if train.safe_packet_valid else 'TIMEOUT'}  age={train.safe_packet_age_s:.1f}s",
+                    f"DCS / ZC link   : {'WITHHELD (INTEGRITY)' if not train.train_integrity_ok() else 'VALID' if train.safe_packet_valid else 'TIMEOUT'}  age={train.safe_packet_age_s:.1f}s",
                 ]
             )
         )
@@ -400,7 +400,11 @@ class TrainPanel(ttk.Frame):
         alert_text = f"ATP {train.atp_alert}"
         badge_bg = "#d7f7dc"
         badge_fg = "#16351f"
-        if train.atp_action == "OFF":
+        if not train.train_integrity_ok():
+            alert_text = "CONSIST BREAK"
+            badge_bg = "#7a1028"
+            badge_fg = "white"
+        elif train.atp_action == "OFF":
             badge_bg = "#ffefc4"
             badge_fg = "#704d00"
         elif train.atp_action == "WARN":
@@ -445,7 +449,9 @@ class TrainPanel(ttk.Frame):
 
         # Update message area
         message = ""
-        if train.atp_action in ["WARN", "SBI", "EBI"]:
+        if not train.train_integrity_ok():
+            message = "TRAIN INTEGRITY LOST: virtual consist line open"
+        elif train.atp_action in ["WARN", "SBI", "EBI"]:
             message = f"ATP {train.atp_action}: {train.atp_alert}"
         elif train.dwell_remaining_s > 0.0:
             message = f"DWELL: {train.dwell_remaining_s:.1f}s"
@@ -519,6 +525,10 @@ class TrainPanel(ttk.Frame):
             alert_text = f"ATS {freshness}"
             badge_bg = "#f0d68a"
             badge_fg = "#5a2630"
+        elif fault_flags.get("INTEGRITY"):
+            alert_text = "CONSIST BREAK"
+            badge_bg = "#7a1028"
+            badge_fg = "white"
         elif fault_flags.get("EMERGENCY") or atp_state in ("ATP_EMERGENCY", "ATP_TRIP"):
             alert_text = "EBI/TRIP"
             badge_bg = "#d84b3c"
@@ -556,6 +566,8 @@ class TrainPanel(ttk.Frame):
 
         if freshness != "FRESH":
             message = f"TRAIN_STATUS {freshness}: displaying last received packet"
+        elif fault_flags.get("INTEGRITY"):
+            message = "TRAIN_STATUS reports TRAIN INTEGRITY LOST / possible broken consist"
         elif fault_flags.get("DCS"):
             message = "TRAIN_STATUS reports DCS fault"
         elif atp_state in ("ATP_EMERGENCY", "ATP_TRIP"):

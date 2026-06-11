@@ -47,6 +47,7 @@ DEFAULT_SCENARIO: Dict[str, Any] = {
     "train_defaults": {
         "length_m": 60.0,
         "mass_kg": 291600.0,
+        "car_count": 4,
     },
     "track": {
         "segments": [
@@ -157,6 +158,7 @@ def _normalize_trains(raw_trains: List[Dict[str, Any]], defaults: Dict[str, Any]
                 "start_pos": start_pos,
                 "length_m": float(train.get("length_m", defaults["length_m"])),
                 "mass_kg": float(train.get("mass_kg", defaults["mass_kg"])),
+                "car_count": int(train.get("car_count", defaults.get("car_count", 4))),
                 "drive_mode": drive_mode,
                 "requested_drive_mode": raw_drive_mode,
                 "max_ato_speed_kmh": float(train.get("max_ato_speed_kmh", defaults.get("max_ato_speed_kmh", 70.0))),
@@ -205,6 +207,7 @@ def normalize_scenario(data: Dict[str, Any], source_path: str | None = None) -> 
     train_defaults = {
         "length_m": float(merged["train_defaults"]["length_m"]),
         "mass_kg": float(merged["train_defaults"]["mass_kg"]),
+        "car_count": int(merged["train_defaults"].get("car_count", 4)),
         "drive_mode": str(merged["train_defaults"].get("drive_mode", "ATO")),
         "max_ato_speed_kmh": float(merged["train_defaults"].get("max_ato_speed_kmh", 70.0)),
         "max_manual_speed_kmh": float(merged["train_defaults"].get("max_manual_speed_kmh", 45.0)),

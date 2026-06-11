@@ -97,6 +97,8 @@ class Train:
         self.estimated_speed = 0.0
         self.vital_speed = 0.0
         self.length = float(train_cfg["length_m"])
+        self.car_count = max(1, int(train_cfg.get("car_count", 4) or 4))
+        self.virtual_integrity_links = [True for _ in range(max(0, self.car_count - 1))]
         self.mass = float(train_cfg["mass_kg"])
         self.drive_mode = str(train_cfg.get("drive_mode", "ATO")).upper()
         self.requested_drive_mode = str(train_cfg.get("requested_drive_mode", self.drive_mode)).upper()
@@ -245,6 +247,7 @@ class Train:
         self.dcs_fault_active = False
         self.ato_fault_active = False
         self.atp_fault_active = False
+        self.integrity_fault_active = False
         self.collision_latched = False
         self.collision_partner_id = ""
         self.collision_overlap_m = 0.0
@@ -337,6 +340,23 @@ class Train:
                 if self.trip_mode and self.trip_reason == "ATP FAULT":
                     self.atp_alert = "FAULT CLEARED - CONFIRM SAFE"
                 self.log_event("ATP_FAULT_CLEARED", "awaiting_safe_recovery")
+        elif subsystem in {"INTEGRITY", "COUPLER", "COUPLER_BREAK", "CONSIST_BREAK"}:
+            self.integrity_fault_active = bool(active)
+            if active:
+                if self.virtual_integrity_links:
+                    self.virtual_integrity_links[0] = False
+                self.enter_trip_mode("TRAIN INTEGRITY LOST", self.reported_pos)
+                self.atp_state = "ATP_TRIP"
+                self.atp_alert = "TRAIN INTEGRITY LOST"
+                self.atp_action = "EBI"
+                self.atp_brake = "EMERGENCY"
+                self.emg_latch = True
+                self.log_event("TRAIN_INTEGRITY_LOST", "virtual_integrity_line_open")
+            else:
+                self.virtual_integrity_links = [True for _ in range(max(0, self.car_count - 1))]
+                if self.trip_mode and self.trip_reason == "TRAIN INTEGRITY LOST":
+                    self.atp_alert = "INTEGRITY RESTORED - CONFIRM SAFE"
+                self.log_event("TRAIN_INTEGRITY_RESTORED", "awaiting_safe_recovery")
 
     def compute_ato_pid_accel(self, error: float, control_speed: float, a_service: float, a_traction: float) -> float:
         if abs(error) < kmh_to_ms(0.2):
@@ -532,6 +552,9 @@ class Train:
         if self.has_balise_fix:
             return BALISE_POS_UNCERT_M
         return POS_UNCERT_M
+
+    def train_integrity_ok(self) -> bool:
+        return bool(not self.integrity_fault_active and all(self.virtual_integrity_links))
 
     def safe_rear_end_pos(self) -> float:
         """Conservative rear-end location used by ZC for moving-block MAL."""
@@ -1054,7 +1077,14 @@ class Train:
             self.atp_action = "EBI"
             self.atp_brake = "EMERGENCY"
             self.emg_latch = True
-        if not self.safe_packet_valid:
+        if not self.train_integrity_ok():
+            self.enter_trip_mode("TRAIN INTEGRITY LOST", self.reported_pos)
+            self.atp_state = "ATP_TRIP"
+            self.atp_alert = "TRAIN INTEGRITY LOST"
+            self.atp_action = "EBI"
+            self.atp_brake = "EMERGENCY"
+            self.emg_latch = True
+        if not self.safe_packet_valid and self.train_integrity_ok():
             if self.drive_mode == "ATO":
                 self.drive_mode = "CMD25"
                 self.dcs_degraded_requested = True
