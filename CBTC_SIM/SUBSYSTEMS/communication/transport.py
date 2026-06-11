@@ -361,26 +361,70 @@ class DcsTransport:
         source = str(getattr(frame, "source_id", ""))
         dest = str(getattr(frame, "destination_id", ""))
         method = str(getattr(frame, "method_name", ""))
+
         if hasattr(frame, "is_vital_forbidden") and frame.is_vital_forbidden():
-            return None, now_s, self._event(now_s, source, dest, "OPCUA_SUPERVISION", "NONE", method, int(getattr(frame, "retry_count", 0)), 0.0, "OK", "REJECTED", "ignored", "OPC UA-like cannot carry MA/EOA")
+            return None, now_s, self._event(
+                now_s, source, dest, "OPCUA_SUPERVISION", "NONE",
+                method, int(getattr(frame, "retry_count", 0)),
+                0.0, "OK", "REJECTED", "ignored",
+                "OPC UA-like cannot carry MA/EOA",
+            )
+
         if path is None:
             for item in self.paths.values():
                 item.timeout_count += 1
-            return None, now_s, self._event(now_s, source, dest, "OPCUA_SUPERVISION", "NONE", method, int(getattr(frame, "retry_count", 0)), 0.0, "OK", "TIMEOUT", "ignored", "supervision network lost")
+            return None, now_s, self._event(
+                now_s, source, dest, "OPCUA_SUPERVISION", "NONE",
+                method, int(getattr(frame, "retry_count", 0)),
+                0.0, "OK", "TIMEOUT", "ignored",
+                "supervision network lost",
+            )
+
+        path.sent_count += 1
+
         if self.faults["opcua_loss"]:
             path.timeout_count += 1
-            return None, now_s, self._event(now_s, source, dest, "OPCUA_SUPERVISION", path.name, method, int(getattr(frame, "retry_count", 0)), 0.0, "OK", "TIMEOUT", "ignored", "OPC UA-like supervision loss")
+            return None, now_s, self._event(
+                now_s, source, dest, "OPCUA_SUPERVISION", path.name,
+                method, int(getattr(frame, "retry_count", 0)),
+                0.0, "OK", "TIMEOUT", "ignored",
+                "OPC UA-like supervision loss",
+            )
+
         if failover:
-            self._event(now_s, source, dest, "OPCUA_SUPERVISION", path.name, method, 0, 0.0, "OK", "FAILOVER", "path switched", f"active path -> {path.name}")
+            self._event(
+                now_s, source, dest, "OPCUA_SUPERVISION", path.name,
+                method, 0, 0.0, "OK", "FAILOVER", "path switched",
+                f"active path -> {path.name}",
+            )
+
         loss_rate = path.loss_rate(0.0, self.faults["packet_loss"]) * 0.5
         if random.random() < loss_rate:
             path.lost_count += 1
             path.timeout_count += 1
-            return None, now_s, self._event(now_s, source, dest, "OPCUA_SUPERVISION", path.name, method, int(getattr(frame, "retry_count", 0)), 0.0, "OK", "TIMEOUT", "ignored", "supervision packet loss")
+            return None, now_s, self._event(
+                now_s, source, dest, "OPCUA_SUPERVISION", path.name,
+                method, int(getattr(frame, "retry_count", 0)),
+                0.0, "OK", "TIMEOUT", "ignored",
+                "supervision packet loss",
+            )
+
         latency = path.latency_ms(0.0, self.faults["high_latency"]) * 0.45
+        path.accepted_count += 1
+
         details = {
-            "route": {"source": source, "destination": dest, "protocol": "OPCUA_SUPERVISION", "path": path.name, "rap": "wired/supervision"},
-            "message": {"type": method, "schema": "OpcUaSupervisionFrame", "payload": getattr(frame, "payload", {})},
+            "route": {
+                "source": source,
+                "destination": dest,
+                "protocol": "OPCUA_SUPERVISION",
+                "path": path.name,
+                "rap": "wired/supervision",
+            },
+            "message": {
+                "type": method,
+                "schema": "OpcUaSupervisionFrame",
+                "payload": getattr(frame, "payload", {}),
+            },
             "frame": {
                 "request_id": getattr(frame, "request_id", ""),
                 "response_id": getattr(frame, "response_id", ""),
@@ -392,27 +436,45 @@ class DcsTransport:
                 "encrypted_payload": getattr(frame, "encrypted_payload", ""),
                 "payload_format": getattr(frame, "payload_format", ""),
             },
-            "radio": {"modulation_scheme": "N/A", "signal_quality": "GOOD", "bit_error_rate_sim": 0.0, "symbol_error_sim": 0.0, "coverage_status": "SUPERVISION_NETWORK", "handover_status": "N/A"},
-            "chain": ["Message", "Serialized Payload", "Encrypted Payload", "OPC UA-like Frame", "DCS Transport", "Decrypt", "Decoded Message"],
+            "radio": {
+                "modulation_scheme": "N/A",
+                "signal_quality": "GOOD",
+                "bit_error_rate_sim": 0.0,
+                "symbol_error_sim": 0.0,
+                "coverage_status": "SUPERVISION_NETWORK",
+                "handover_status": "N/A",
+            },
+            "chain": [
+                "Message",
+                "Serialized Payload",
+                "Encrypted Payload",
+                "OPC UA-like Frame",
+                "DCS Transport",
+                "Decrypt",
+                "Decoded Message",
+            ],
         }
-        return frame, now_s + latency / 1000.0, self._event(now_s, source, dest, "OPCUA_SUPERVISION", path.name, method, int(getattr(frame, "retry_count", 0)), latency, "OK", "ACCEPTED", "supervision delivered", "non-vital", details=details)
 
+        return frame, now_s + latency / 1000.0, self._event(
+            now_s, source, dest, "OPCUA_SUPERVISION", path.name,
+            method, int(getattr(frame, "retry_count", 0)),
+            latency, "OK", "ACCEPTED", "supervision delivered",
+            "non-vital", details=details,
+        )
     def log_validation(self, now_s: float, packet: Any, result: str, action: str, reason: str, latency_ms: float = 0.0, path: str = "CC"):
-        self.events.append(
-            self._event(
-                now_s,
-                str(getattr(packet.header, "source_id", "")),
-                str(getattr(packet.header, "destination_id", "")),
-                "RASTA_VITAL",
-                path,
-                str(getattr(packet.header, "message_type", "")),
-                int(getattr(packet.header, "sequence_number", -1)),
-                latency_ms,
-                "OK",
-                result,
-                action,
-                reason,
-            )
+        self._event(
+            now_s,
+            str(getattr(packet.header, "source_id", "")),
+            str(getattr(packet.header, "destination_id", "")),
+            "RASTA_VITAL",
+            path,
+            str(getattr(packet.header, "message_type", "")),
+            int(getattr(packet.header, "sequence_number", -1)),
+            latency_ms,
+            "OK",
+            result,
+            action,
+            reason,
         )
 
     def _event(self, time_s: float, source: str, dest: str, protocol: str, path: str, msg_type: str, seq: int, latency: float, ttl: str, result: str, action: str, reason: str, details: Dict[str, Any] | None = None) -> DcsPacketEvent:

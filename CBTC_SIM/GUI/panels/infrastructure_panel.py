@@ -123,11 +123,15 @@ class InfrastructurePanel(ttk.Frame):
         content = "\n".join(lines)
         if content == self._last_content:
             return
-        first, _last = self.text.yview()
+        yview = self.text.yview()
+        xview = self.text.xview()
         self.text.configure(state="normal")
         self.text.delete("1.0", "end")
         self.text.insert("1.0", content)
-        self.text.yview_moveto(first)
+        if yview:
+            self.text.yview_moveto(yview[0])
+        if xview:
+            self.text.xview_moveto(xview[0])
         self.text.configure(state="disabled")
         self._last_content = content
 

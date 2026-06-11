@@ -89,9 +89,15 @@ class AnalyticsPanel(ttk.Frame):
         lines.append(f"Line conditions        : {len(wayside.get('line_conditions', []) or [])}")
         lines.append(f"Station routes         : {len(station_state.get('station_route_states', []) or [])}")
 
+        yview = self.text.yview()
+        xview = self.text.xview()
         self.text.configure(state="normal")
         self.text.delete("1.0", "end")
         self.text.insert("1.0", "\n".join(lines))
+        if yview:
+            self.text.yview_moveto(yview[0])
+        if xview:
+            self.text.xview_moveto(xview[0])
         self.text.configure(state="disabled")
 
 

@@ -95,9 +95,15 @@ class SpeedLimitsPanel(ttk.Frame):
             for idx, z in enumerate(tsr_zones, 1):
                 lines.append(f"  {idx}: {z['start']:.0f}-{z['end']:.0f} m  {z['speed']:.0f} km/h")
 
+        yview = self.text.yview()
+        xview = self.text.xview()
         self.text.configure(state="normal")
         self.text.delete("1.0", "end")
         self.text.insert("1.0", "\n".join(lines))
+        if yview:
+            self.text.yview_moveto(yview[0])
+        if xview:
+            self.text.xview_moveto(xview[0])
         self.text.configure(state="disabled")
 
 

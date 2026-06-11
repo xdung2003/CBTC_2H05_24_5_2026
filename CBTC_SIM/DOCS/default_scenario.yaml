@@ -2,7 +2,7 @@ name: Cấu hình tuyến mặc định
 display:
   window_title: CBTC ATC Simulation - Single Monitor
   track_min_m: -220.0
-  track_max_m: 3000.0
+  track_max_m: 2000.0
   track_labels:
   - 0
   - 500
@@ -24,10 +24,8 @@ radio_access_points:
   end_m: 1700.0
 - id: RAP_03
   start_m: 1600.0
-  end_m: 2600.0
-- id: RAP_04
-  start_m: 2500.0
-  end_m: 4200.0
+  end_m: 2500.0
+
 localization:
   balises:
   - id: BL_-200
@@ -54,16 +52,7 @@ localization:
     pos_m: 1800.0
   - id: BL_2000
     pos_m: 2000.0
-  - id: BL_2200
-    pos_m: 2200.0
-  - id: BL_2400
-    pos_m: 2400.0
-  - id: BL_2600
-    pos_m: 2600.0
-  - id: BL_2800
-    pos_m: 2800.0
-  - id: BL_3000
-    pos_m: 3000.0
+
 track:
   segments:
   - start_m: 0.0

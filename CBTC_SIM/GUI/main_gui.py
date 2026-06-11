@@ -824,12 +824,17 @@ class App(tk.Tk):
 
     def _on_global_mousewheel(self, event):
         widget = event.widget
+        if isinstance(widget, str):
+            try:
+                widget = self.nametowidget(widget)
+            except (KeyError, tk.TclError):
+                return None
         if isinstance(widget, tk.Text):
             return None
         try:
             if widget.winfo_toplevel() is not self:
                 return None
-        except tk.TclError:
+        except (AttributeError, tk.TclError):
             return None
         if getattr(event, "num", None) == 4:
             delta = -3

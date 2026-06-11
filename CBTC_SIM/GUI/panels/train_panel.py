@@ -256,6 +256,12 @@ class TrainPanel(ttk.Frame):
         }
         for var in self.detail_metric_vars.values():
             ttk.Label(metrics_frame, textvariable=var).pack(anchor="w")
+
+        # Train Location
+        location_frame = ttk.LabelFrame(scrollable_frame, text="Train Location")
+        location_frame.pack(fill="x", padx=10, pady=5)
+        self.detail_location_var = tk.StringVar(value="")
+        ttk.Label(location_frame, textvariable=self.detail_location_var, justify="left").pack(anchor="w")
         
         # Target & Planning
         target_frame = ttk.LabelFrame(scrollable_frame, text="Target & Planning")
@@ -285,6 +291,8 @@ class TrainPanel(ttk.Frame):
         # Clean up attributes when details window is closed
         if hasattr(self, 'detail_metric_vars'):
             delattr(self, 'detail_metric_vars')
+        if hasattr(self, 'detail_location_var'):
+            delattr(self, 'detail_location_var')
         if hasattr(self, 'detail_target_var'):
             delattr(self, 'detail_target_var')
         if hasattr(self, 'detail_plan_var'):
@@ -306,11 +314,27 @@ class TrainPanel(ttk.Frame):
         target_distance_m = train.distance_to_eoa if train.constraint_type == "STOP" else train.distance_to_constraint_m
         target_speed_kmh = 0.0 if train.constraint_type == "STOP" else train.constraint_target_speed_kmh
         current_tsr_kmh = min(train.psr_kmh, train.limit_ahead_speed_kmh) if train.limit_ahead_dist <= 0.0 else train.psr_kmh
+        head_pos_m = float(train.pos)
+        tail_pos_m = head_pos_m - float(train.length)
+        safe_front_m = float(train.safe_front_end_pos)
+        safe_rear_m = float(train.safe_rear_end_pos())
 
         self.detail_metric_vars["actual"].set(f"Actual       : {actual_kmh:.1f} km/h")
         self.detail_metric_vars["permitted"].set(f"Permitted    : {permitted_kmh:.1f} km/h")
         self.detail_metric_vars["warning"].set(f"Warning      : {warning_kmh:.1f} km/h")
         self.detail_metric_vars["intervention"].set(f"Intervention : {intervention_kmh:.1f} km/h")
+        self.detail_location_var.set(
+            "\n".join(
+                [
+                    f"Head / front  : {head_pos_m:,.1f} m",
+                    f"Tail / rear   : {tail_pos_m:,.1f} m",
+                    f"Train length  : {float(train.length):,.1f} m",
+                    f"Safe front    : {safe_front_m:,.1f} m",
+                    f"Safe rear     : {safe_rear_m:,.1f} m",
+                    f"Reported pos  : {float(train.reported_pos):,.1f} m",
+                ]
+            )
+        )
 
         self.detail_target_var.set(
             "\n".join(
@@ -599,20 +623,24 @@ class TrainPanel(ttk.Frame):
         speed_kmh = ms_to_kmh(float(status.get("speed_mps", 0.0) or 0.0))
         eoa_m = float(status.get("eoa_m", 0.0) or 0.0)
         target_distance_m = float(status.get("distance_to_eoa_m", 0.0) or 0.0)
-        metrics = {
-            "Position": f"{pos_m:,.1f} m",
-            "Speed": f"{speed_kmh:.1f} km/h",
-            "Acceleration": "n/a via ATS",
-            "Mass": "n/a via ATS",
-            "Mode": str(status.get("mode", "--")),
-            "ATP State": str(status.get("atp_state", "--")),
-            "Brake": str(status.get("brake_state", "--")),
-            "Action": str(status.get("atp_action", "--")),
-        }
-        for key, value in metrics.items():
-            var = self.detail_metric_vars.get(key)
-            if var is not None:
-                var.set(value)
+        length_m = float(status.get("length_m", 0.0) or 0.0)
+        tail_m = pos_m - length_m if length_m > 0.0 else None
+        safe_front_m = status.get("safe_front_m")
+        safe_rear_m = status.get("safe_rear_m")
+        curves = dict(status.get("speed_curves_kmh", {}) or {})
+        self.detail_metric_vars["actual"].set(f"Actual       : {speed_kmh:.1f} km/h")
+        self.detail_metric_vars["permitted"].set(f"Permitted    : {float(curves.get('P', 0.0) or 0.0):.1f} km/h")
+        self.detail_metric_vars["warning"].set(f"Warning      : {float(curves.get('W', 0.0) or 0.0):.1f} km/h")
+        self.detail_metric_vars["intervention"].set(f"Intervention : {float(curves.get('EBI', 0.0) or 0.0):.1f} km/h")
+        location_lines = [
+            f"Head / front  : {pos_m:,.1f} m",
+            f"Tail / rear   : {'--' if tail_m is None else f'{tail_m:,.1f} m'}",
+            f"Train length  : {'--' if length_m <= 0.0 else f'{length_m:,.1f} m'}",
+            f"Safe front    : {'--' if safe_front_m is None else f'{float(safe_front_m):,.1f} m'}",
+            f"Safe rear     : {'--' if safe_rear_m is None else f'{float(safe_rear_m):,.1f} m'}",
+        ]
+        if hasattr(self, "detail_location_var"):
+            self.detail_location_var.set("\n".join(location_lines))
         self.detail_target_var.set(
             "\n".join(
                 [
@@ -624,7 +652,6 @@ class TrainPanel(ttk.Frame):
                 ]
             )
         )
-        curves = dict(status.get("speed_curves_kmh", {}) or {})
         fault_flags = dict(status.get("fault_flags", {}) or {})
         self.detail_state_var.set(
             "\n".join(

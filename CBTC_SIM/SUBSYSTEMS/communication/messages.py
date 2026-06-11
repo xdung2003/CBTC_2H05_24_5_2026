@@ -53,6 +53,8 @@ class TrainStatusMessage:
     timestamp_ms: int = 0
     freshness: str = "FRESH"
     length_m: float = 0.0
+    safe_front_m: float = 0.0
+    safe_rear_m: float = 0.0
     color: str = ""
     protection_zone_id: str | None = None
     protection_lane: int = 0

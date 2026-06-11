@@ -2005,6 +2005,8 @@ class Simulation:
             },
             timestamp_ms=int(self.sim_time_s * 1000),
             length_m=float(train.length),
+            safe_front_m=float(train.safe_front_end_pos),
+            safe_rear_m=float(train.safe_rear_end_pos()),
             color=str(train.color),
             protection_zone_id=train.protection_zone_id,
             protection_lane=int(train.protection_lane),

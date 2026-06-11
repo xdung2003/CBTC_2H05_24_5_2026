@@ -220,9 +220,15 @@ class EngineeringPanel(ttk.Frame):
                 f"DCS transmission     : min={DCS_DELAY_MIN_S:.2f}s  max={DCS_DELAY_MAX_S:.2f}s  timeout={DCS_TIMEOUT_S:.1f}s",
             ]
         )
+        yview = self.text.yview()
+        xview = self.text.xview()
         self.text.configure(state="normal")
         self.text.delete("1.0", "end")
         self.text.insert("1.0", "\n".join(lines))
+        if yview:
+            self.text.yview_moveto(yview[0])
+        if xview:
+            self.text.xview_moveto(xview[0])
         self.text.configure(state="disabled")
 
 
@@ -267,16 +273,23 @@ class DataFlowPanel(ttk.Frame):
         filter_frame.grid(row=3, column=0, sticky="ew", pady=(int(6 * scale_factor), 0))
         filter_frame.columnconfigure(5, weight=1)
         self.packet_filter_var = tk.StringVar(value="All")
-        self.packet_search_var = tk.StringVar(value="")
+        self.packet_flow_var = tk.StringVar(value="All flows")
+        self.packet_flow_combo = None
         filter_values = ("All", "Vital only", "OPC UA only", "Rejected only")
         ttk.Label(filter_frame, text="Filter", style="Muted.TLabel").grid(row=0, column=0, sticky="w", padx=(0, 4))
         filter_combo = ttk.Combobox(filter_frame, textvariable=self.packet_filter_var, values=filter_values, width=14, state="readonly")
         filter_combo.grid(row=0, column=1, sticky="w", padx=(0, 8))
-        filter_combo.bind("<<ComboboxSelected>>", lambda _event: self.event_generate("<<DataflowFilterChanged>>"))
-        ttk.Label(filter_frame, text="Train / Protocol / Result", style="Muted.TLabel").grid(row=0, column=2, sticky="w", padx=(0, 4))
-        search_entry = ttk.Entry(filter_frame, textvariable=self.packet_search_var, width=24)
-        search_entry.grid(row=0, column=3, sticky="w")
-        search_entry.bind("<KeyRelease>", lambda _event: self.event_generate("<<DataflowFilterChanged>>"))
+        filter_combo.bind("<<ComboboxSelected>>", self._on_filter_changed)
+        ttk.Label(filter_frame, text="Flow", style="Muted.TLabel").grid(row=0, column=2, sticky="w", padx=(0, 4))
+        self.packet_flow_combo = ttk.Combobox(
+            filter_frame,
+            textvariable=self.packet_flow_var,
+            values=("All flows",),
+            width=58,
+            state="readonly",
+        )
+        self.packet_flow_combo.grid(row=0, column=3, sticky="ew")
+        self.packet_flow_combo.bind("<<ComboboxSelected>>", self._on_filter_changed)
 
         text_frame = ttk.Frame(self, style="Panel.TFrame")
         text_frame.grid(row=4, column=0, sticky="nsew", pady=(int(6 * scale_factor), 0))
@@ -422,9 +435,34 @@ class DataFlowPanel(ttk.Frame):
         text.insert("1.0", "\n".join(lines))
         text.configure(state="disabled")
 
+    def _on_filter_changed(self, _event=None):
+        self.event_generate("<<DataflowFilterChanged>>")
+        if self._last_sim is not None and self.winfo_exists():
+            self.update_data(self._last_sim)
+
+    def _event_flow_label(self, event) -> str:
+        return (
+            f"{event.source_id} -> {event.destination_id} | "
+            f"{event.protocol} | {event.path} | {event.msg_type}"
+        )
+
+    def _refresh_flow_options(self, events):
+        flow_values = ["All flows"]
+        seen = set()
+        for event in events:
+            label = self._event_flow_label(event)
+            if label in seen:
+                continue
+            seen.add(label)
+            flow_values.append(label)
+        if self.packet_flow_combo is not None and tuple(self.packet_flow_combo["values"]) != tuple(flow_values):
+            self.packet_flow_combo.configure(values=tuple(flow_values))
+        if self.packet_flow_var.get() not in flow_values:
+            self.packet_flow_var.set("All flows")
+
     def _filtered_packet_events(self, events):
         mode = self.packet_filter_var.get() if hasattr(self, "packet_filter_var") else "All"
-        query = self.packet_search_var.get().strip().lower() if hasattr(self, "packet_search_var") else ""
+        selected_flow = self.packet_flow_var.get() if hasattr(self, "packet_flow_var") else "All flows"
         rejected_results = {"REJECTED", "TIMEOUT", "REPLAY", "CRC_ERROR", "HMAC_ERROR", "OUT_OF_ORDER", "DECRYPT_ERROR"}
         filtered = []
         for event in events:
@@ -434,21 +472,8 @@ class DataFlowPanel(ttk.Frame):
                 continue
             if mode == "Rejected only" and event.result not in rejected_results and event.action not in ("ignored", "rejected"):
                 continue
-            if query:
-                haystack = " ".join(
-                    str(item).lower()
-                    for item in (
-                        event.source_id,
-                        event.destination_id,
-                        event.protocol,
-                        event.path,
-                        event.msg_type,
-                        event.result,
-                        event.reason,
-                    )
-                )
-                if query not in haystack:
-                    continue
+            if selected_flow != "All flows" and self._event_flow_label(event) != selected_flow:
+                continue
             filtered.append(event)
         return filtered
 
@@ -560,27 +585,17 @@ class DataFlowPanel(ttk.Frame):
         return self.canvas.create_polygon(points, smooth=True, splinesteps=12, **kwargs)
 
     def _route_label(self, x: float, y: float, text: str, color: str, anchor: str = "center"):
-        text_id = self.canvas.create_text(
+        # Label không có nền để tránh che line phía sau.
+        # Giảm nhẹ cỡ chữ để vùng trung tâm đỡ rối.
+        self.canvas.create_text(
             x,
             y,
             text=text,
             fill=color,
             anchor=anchor,
-            font=("Consolas", self._scale(8), "bold"),
+            font=("Consolas", self._scale(7), "bold"),
         )
-        bbox = self.canvas.bbox(text_id)
-        if bbox is not None:
-            pad = self._scale(3)
-            bg_id = self.canvas.create_rectangle(
-                bbox[0] - pad,
-                bbox[1] - pad,
-                bbox[2] + pad,
-                bbox[3] + pad,
-                fill=APP_THEME["canvas"],
-                outline="",
-            )
-            self.canvas.tag_lower(bg_id, text_id)
-
+        
     def _lane_arrow(
         self,
         points: list[tuple[float, float]],
@@ -639,7 +654,8 @@ class DataFlowPanel(ttk.Frame):
         rows = [
             ("#5b6fd6", "Wireless/RAP link through DCS", (6, 4)),
             ("#1f8a8a", "Wired/backbone link through DCS", None),
-            ("#8b5cf6", "ATS operation/fault command to train", (6, 4)),
+            ("#ff2020", "ATS operation command to CC/Train", (6, 4)),
+            ("#ff5a00", "ATS operation command to ZC", (6, 4)),
             ("#6b7280", "Scenario/internal infrastructure state", None),
         ]
         row_h = self._scale(17 if compact else 20)
@@ -704,7 +720,7 @@ class DataFlowPanel(ttk.Frame):
             self._scale(60),
             self._scale(384),
             self._scale(250),
-            self._scale(172),
+            self._scale(196),   # tăng chiều cao để các line DCS->ATS nằm gọn trong box
             "ATS / OCC",
             ["Nhận trạng thái non-vital", "Giám sát", "Gửi ATS_OPERATION_COMMAND", "Không tạo MA/EOA"],
             brown,
@@ -800,85 +816,206 @@ class DataFlowPanel(ttk.Frame):
             dash=(6, 4),
         )
 
-        # Non-vital supervision and runtime command paths.
+        # =========================
+        # Clean lane layout for ATS / DCS / TRAIN / ZC area
+        # =========================
+
+        # Lane Y positions: sắp lại để các line DCS -> ATS đi ngang, nằm gọn trong khối ATS
+        train_status_y = self._scale(350)
+        ats_cmd_train_y = self._scale(430)
+        zc_status_y = self._scale(466)
+        ats_cmd_zc_y = self._scale(500)
+        wayside_y = self._scale(532)
+        dcs_status_y = self._scale(564)
+
+        # ---------- TRAIN_STATUS : TRAIN -> DCS ----------
+        # Tách riêng lane vào DCS và lane ra ATS.
+        # Đường DCS -> ATS đi ngang thẳng vào cạnh phải ATS, không gập lên đỉnh ATS.
+        train_status_in_y = self._scale(350)
+        train_status_out_y = self._scale(398)
+
         self._lane_arrow(
-            [(train["cx"], train["bottom"]), (train["cx"], self._scale(294)), (dcs["left"], self._scale(294))],
-            "TRAIN_STATUS /\nOPCUA_SUPERVISION",
+            [
+                (train["cx"], train["bottom"]),
+                (train["cx"], train_status_in_y),
+                (dcs["left"], train_status_in_y),
+            ],
+            "TRAIN_STATUS / OPCUA",
             purple,
             label_segment=1,
-            label_offset=-self._scale(28),
+            label_offset=-self._scale(14),
             dash=(6, 4),
         )
+
+        # ---------- TRAIN_STATUS : DCS -> ATS ----------
         self._lane_arrow(
-            [(dcs["left"], self._scale(362)), (ats["right"] - self._scale(88), self._scale(362)), (ats["right"] - self._scale(88), ats["top"])],
+            [
+                (dcs["left"], train_status_out_y),
+                (ats["right"], train_status_out_y),
+            ],
             "",
             purple,
-            label_offset=-self._scale(22),
             dash=(6, 4),
         )
+
+        # ---------- ATS command to TRAIN : ATS -> DCS ----------
         self._lane_arrow(
-            [(ats["right"], self._scale(420)), (dcs["left"], self._scale(420))],
-            "ATS_OPERATION_COMMAND ->\nRUNTIME STATE",
+            [
+                (ats["right"], ats_cmd_train_y),
+                (dcs["left"], ats_cmd_train_y),
+            ],
+            "ATS_CMD→TRAIN / VITAL",
             red,
             label_segment=0,
-            label_offset=-self._scale(38),
+            label_offset=-self._scale(14),
+            dash=(6, 4),
         )
+
+        # ---------- ATS command to TRAIN : DCS -> CC/TRAIN ----------
+        # Đi vòng gọn lên mép phải tàu, tránh cắt qua bó line giữa
+        train_cmd_x = train["right"] + self._scale(18)
+        dcs_train_branch_y = self._scale(214)
+
         self._lane_arrow(
-            [(dcs["right"], self._scale(420)), (zc["left"] + self._scale(70), self._scale(420)), (zc["left"] + self._scale(70), zc["bottom"])],
-            "",
+            [
+                (dcs["left"] + self._scale(34), dcs["top"]),
+                (dcs["left"] + self._scale(34), dcs_train_branch_y),
+                (train_cmd_x, dcs_train_branch_y),
+                (train_cmd_x, train["bottom"] - self._scale(10)),
+                (train["right"], train["bottom"] - self._scale(10)),
+            ],
+            "→ CC/TRAIN",
             red,
+            label_segment=1,
+            label_offset=-self._scale(14),
+            dash=(6, 4),
         )
-        # ZC_STATUS: cho mũi tên đi ra thật từ đáy khối ZC rồi mới rẽ sang DCS.
-        # Lỗi cũ: điểm đầu dùng (zc["left"], y=342), nhưng y=342 nằm ngoài khối ZC,
-        # nên gốc mũi tên nhìn như đang lơ lửng.
+
+        # ---------- ZC_STATUS : ZC -> DCS ----------
+        # Giữ nhánh này không gắn label để tránh lặp chữ 2 lần
         self._lane_arrow(
             [
                 (zc["left"] + self._scale(28), zc["bottom"]),
-                (zc["left"] + self._scale(28), self._scale(342)),
-                (dcs["right"], self._scale(342)),
+                (zc["left"] + self._scale(28), self._scale(336)),
+                (dcs["right"], self._scale(336)),
+            ],
+            "",
+            teal,
+        )
+
+        # ---------- ZC_STATUS : DCS -> ATS ----------
+        self._lane_arrow(
+            [
+                (dcs["left"], zc_status_y),
+                (ats["right"], zc_status_y),
             ],
             "ZC_STATUS",
             teal,
-            label_segment=1,
-            label_offset=-self._scale(16),
+            label_segment=0,
+            label_offset=-self._scale(14),
         )
+
+        # ---------- ATS command to ZC : ATS -> DCS ----------
         self._lane_arrow(
-            [(dcs["left"], self._scale(456)), (ats["right"], self._scale(456))],
-            "ZC_STATUS",
-            teal,
-            label_offset=-self._scale(16),
+            [
+                (ats["right"], ats_cmd_zc_y),
+                (dcs["left"], ats_cmd_zc_y),
+            ],
+            "ATS_CMD→ZC / VITAL",
+            orange,
+            label_segment=0,
+            label_offset=-self._scale(14),
+            dash=(6, 4),
         )
+
+        # ---------- ATS command to ZC : DCS -> ZC ----------
         self._lane_arrow(
-            [(sgd["left"], self._scale(632)), (self._scale(1080), self._scale(632)), (self._scale(1080), self._scale(520)), (dcs["right"], self._scale(520))],
-            "WAYSIDE_STATUS +\nSTATION_STATUS",
+            [
+                (dcs["right"], ats_cmd_zc_y),
+                (zc["left"] + self._scale(70), ats_cmd_zc_y),
+                (zc["left"] + self._scale(70), zc["bottom"]),
+            ],
+            "PSR / TSR",
+            orange,
+            label_segment=0,
+            label_offset=-self._scale(14),
+            dash=(6, 4),
+        )
+
+        # ---------- WAYSIDE + STATION : STATION -> DCS ----------
+        # Nhánh nguồn không cần label để giảm rối
+        self._lane_arrow(
+            [
+                (sgd["left"], self._scale(632)),
+                (self._scale(1080), self._scale(632)),
+                (self._scale(1080), wayside_y),
+                (dcs["right"], wayside_y),
+            ],
+            "",
             green,
-            label_segment=1,
-            label_offset=-self._scale(28),
         )
+
+        # ---------- WAYSIDE + STATION : DCS -> ATS ----------
         self._lane_arrow(
-            [(dcs["left"], self._scale(520)), (ats["right"], self._scale(520))],
-            "WAYSIDE_STATUS +\nSTATION_STATUS",
+            [
+                (dcs["left"], wayside_y),
+                (ats["right"], wayside_y),
+            ],
+            "WAYSIDE + STATION",
             green,
-            label_offset=-self._scale(28),
+            label_segment=0,
+            label_offset=-self._scale(14),
         )
+
+        # ---------- STATION_STATUS : STATION -> ZC ----------
+        station_status_x = (
+            max(sgd["left"], zc["left"])
+            + min(sgd["right"], zc["right"])
+        ) / 2
+
         self._lane_arrow(
-            [(sgd["cx"], sgd["top"]), (sgd["cx"], self._scale(318)), (zc["cx"] + self._scale(42), self._scale(318)), (zc["cx"] + self._scale(42), zc["bottom"])],
+            [
+                (station_status_x, sgd["top"]),
+                (station_status_x, zc["bottom"]),
+            ],
             "STATION_STATUS",
             green,
-            label_segment=1,
-            label_offset=-self._scale(18),
+            label_segment=0,
+            label_offset=0,
         )
+
+        # ---------- DCS_STATUS : NMS -> DCS ----------
+        # Nhánh nguồn không cần label để tránh lặp
         self._lane_arrow(
-            [(nms["cx"], nms["top"]), (nms["cx"], dcs["bottom"])],
+            [
+                (nms["cx"], nms["top"]),
+                (nms["cx"], dcs["bottom"]),
+            ],
+            "",
+            gray,
+        )
+
+        # ---------- DCS_STATUS : DCS -> ATS ----------
+        self._lane_arrow(
+            [
+                (dcs["left"], dcs_status_y),
+                (ats["right"], dcs_status_y),
+            ],
             "DCS_STATUS",
             gray,
-            label_offset=-self._scale(16),
+            label_segment=0,
+            label_offset=-self._scale(14),
         )
-        self._lane_arrow(
-            [(dcs["left"], self._scale(548)), (ats["right"], self._scale(548))],
-            "DCS_STATUS",
-            gray,
-            label_offset=-self._scale(16),
+
+        c.create_line(
+            vital["cx"],
+            vital["bottom"],
+            vital["cx"],
+            supervision["top"],
+            fill=gray,
+            width=2,
+            arrow=tk.BOTH,
+            dash=(2, 3),
         )
         c.create_line(vital["cx"], vital["bottom"], vital["cx"], supervision["top"], fill=gray, width=2, arrow=tk.BOTH, dash=(2, 3))
 
@@ -890,6 +1027,7 @@ class DataFlowPanel(ttk.Frame):
         trains = sorted(sim.trains, key=lambda item: item.id)
         transport = getattr(sim, "dcs_transport", None)
         raw_events = list(getattr(transport, "events", []))[-120:] if transport is not None else []
+        self._refresh_flow_options(raw_events)
         events = self._filtered_packet_events(raw_events)[-80:]
         self.summary_var.set(
             f"Logical dataflow view  |  CC={len(trains)}  stations={len(sim.scheduled_stops)}  "
@@ -950,6 +1088,8 @@ class DataFlowPanel(ttk.Frame):
                 f"link={link:<8} result={getattr(train, 'vital_packet_result', ''):<12} "
                 f"reason={getattr(train, 'vital_packet_reason', '')}"
             )
+        yview = self.text.yview()
+        xview = self.text.xview()
         self.text.configure(state="normal")
         self.text.delete("1.0", "end")
         self.text.insert("end", "\n".join(header_lines) + "\n")
@@ -962,6 +1102,8 @@ class DataFlowPanel(ttk.Frame):
                 self.text.insert("end", line + "\n")
             self.text.tag_configure(tag, foreground=APP_THEME["text"], underline=False)
         self.text.insert("end", "\n".join(footer_lines))
+        if yview:
+            self.text.yview_moveto(yview[0])
+        if xview:
+            self.text.xview_moveto(xview[0])
         self.text.configure(state="disabled")
-
-
