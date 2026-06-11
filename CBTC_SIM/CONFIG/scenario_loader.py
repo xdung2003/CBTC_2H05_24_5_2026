@@ -183,11 +183,6 @@ def _normalize_scheduled_stops(raw_stops: List[Dict[str, Any]]) -> List[Dict[str
             "length_m": float(stop.get("length_m", 160.0)),
             "capacity": int(stop.get("capacity", 3)),
         }
-        if "dwell_s" in stop:
-            dwell_s = float(stop["dwell_s"])
-            if dwell_s < 0.0:
-                raise ValueError(f"Scheduled stop {idx} must have dwell_s >= 0.")
-            normalized["dwell_s"] = dwell_s
         stops.append(normalized)
     stops.sort(key=lambda item: item["pos_m"])
     return stops

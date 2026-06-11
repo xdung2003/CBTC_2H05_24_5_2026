@@ -56,7 +56,7 @@ class ControlPanel(ttk.Frame):
 class SpeedLimitsPanel(ttk.Frame):
     def __init__(self, master: tk.Widget, scale_factor: float):
         super().__init__(master, padding=int(4 * scale_factor), borderwidth=1, relief="solid", width=int(240 * scale_factor), height=int(260 * scale_factor))
-        ttk.Label(self, text="Simulator Speed Limits", font=("Segoe UI", int(12 * scale_factor), "bold")).pack(anchor="w")
+        ttk.Label(self, text="Speed Limits", font=("Segoe UI", int(12 * scale_factor), "bold")).pack(anchor="w")
         content = ttk.Frame(self)
         content.pack(fill="both", expand=True, pady=(int(4 * scale_factor), 0))
         self.text = tk.Text(

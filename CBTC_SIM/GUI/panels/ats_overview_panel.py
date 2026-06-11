@@ -622,6 +622,9 @@ class ATSOverviewPanel(ttk.Frame):
         ]
         display_trains.sort(key=lambda item: float(item[1].get("position_m", track_min_m)))
         for idx, (train_id, ats_state) in enumerate(display_trains):
+            train_tag = f"element:train:{train_id}"
+            self._element_lookup[f"train:{train_id}"] = ("train", idx)
+            train_selected = self.selected_element == f"train:{train_id}"
             ats_freshness = str(getattr(sim, "ats_train_freshness", {}).get(train_id, "LOST"))
             display_pos = float(ats_state["position_m"])
             display_speed = float(ats_state.get("speed_mps", 0.0))
@@ -693,13 +696,13 @@ class ATSOverviewPanel(ttk.Frame):
                 gap_px = 5
                 rear_x2 = max(x1 + 3, break_x - gap_px)
                 front_x1 = min(x2 - 3, break_x + gap_px)
-                c.create_rectangle(x1 - 2, y - train_half_height - 1, rear_x2 + 2, y + train_half_height + 1, fill="#000000", outline="#000000", width=2)
-                c.create_rectangle(front_x1 - 2, y - train_half_height - 1, x2 + 2, y + train_half_height + 1, fill="#000000", outline="#000000", width=2)
-                c.create_rectangle(x1, y - train_half_height, rear_x2, y + train_half_height, fill="#7a1028", outline="#000000", width=1)
-                c.create_rectangle(front_x1, y - train_half_height, x2, y + train_half_height, fill="#f05a5a", outline="#000000", width=1)
-                c.create_line(break_x - 5, y - 9, break_x + 5, y + 9, fill=APP_THEME["danger"], width=3)
-                c.create_line(break_x - 5, y + 9, break_x + 5, y - 9, fill=APP_THEME["danger"], width=3)
-                c.create_text((x1 + x2) / 2, y + 22, text="BROKEN CONSIST", fill=APP_THEME["danger"], font=("Consolas", 7, "bold"))
+                c.create_rectangle(x1 - 2, y - train_half_height - 1, rear_x2 + 2, y + train_half_height + 1, fill="#000000", outline="#000000", width=2, tags=(train_tag,))
+                c.create_rectangle(front_x1 - 2, y - train_half_height - 1, x2 + 2, y + train_half_height + 1, fill="#000000", outline="#000000", width=2, tags=(train_tag,))
+                c.create_rectangle(x1, y - train_half_height, rear_x2, y + train_half_height, fill="#7a1028", outline="#000000", width=1, tags=(train_tag,))
+                c.create_rectangle(front_x1, y - train_half_height, x2, y + train_half_height, fill="#f05a5a", outline="#000000", width=1, tags=(train_tag,))
+                c.create_line(break_x - 5, y - 9, break_x + 5, y + 9, fill=APP_THEME["danger"], width=3, tags=(train_tag,))
+                c.create_line(break_x - 5, y + 9, break_x + 5, y - 9, fill=APP_THEME["danger"], width=3, tags=(train_tag,))
+                c.create_text((x1 + x2) / 2, y + 22, text="BROKEN CONSIST", fill=APP_THEME["danger"], font=("Consolas", 7, "bold"), tags=(train_tag,))
             else:
                 c.create_rectangle(
                     x1 - 2,
@@ -709,6 +712,7 @@ class ATSOverviewPanel(ttk.Frame):
                     fill="#000000",
                     outline="#000000",
                     width=2,
+                    tags=(train_tag,),
                 )
                 c.create_rectangle(
                     x1,
@@ -718,6 +722,17 @@ class ATSOverviewPanel(ttk.Frame):
                     fill=train_fill,
                     outline="#000000",
                     width=1,
+                    tags=(train_tag,),
+                )
+            if train_selected:
+                c.create_rectangle(
+                    x1 - 7,
+                    y - train_half_height - 7,
+                    x2 + 7,
+                    y + train_half_height + 7,
+                    outline=APP_THEME["accent"],
+                    width=3,
+                    tags=(train_tag,),
                 )
             if train_alert_outline:
                 c.create_rectangle(
@@ -727,6 +742,7 @@ class ATSOverviewPanel(ttk.Frame):
                     y + train_half_height + 3,
                     outline=train_alert_outline,
                     width=2,
+                    tags=(train_tag,),
                 )
             eoa_m = float(ats_state.get("eoa_m", display_pos))
             eoa_reason = str(ats_state.get("eoa_reason", ""))
@@ -758,6 +774,7 @@ class ATSOverviewPanel(ttk.Frame):
                 text=name_text,
                 fill=APP_THEME["text"],
                 font=("Consolas", 8, "bold"),
+                tags=(train_tag,),
             )
             fault_labels = []
             if atp_fault:

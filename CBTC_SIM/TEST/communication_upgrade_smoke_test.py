@@ -6,9 +6,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+PACKAGE_PARENT = ROOT.parent
+if str(PACKAGE_PARENT) not in sys.path:
+    sys.path.insert(0, str(PACKAGE_PARENT))
 
 from CONFIG.scenario_loader import load_scenario
-from SUBSYSTEMS.communication.messages import MovementAuthorityMessage, PositionReportMessage
+from SUBSYSTEMS.communication.messages import AtsOperationCommandMessage, MovementAuthorityMessage, PositionReportMessage
 from SUBSYSTEMS.communication.opcua import OpcUaSupervisionFrame
 from SUBSYSTEMS.communication.rasta import VitalSafePacket
 from SUBSYSTEMS.runtime import Simulation
@@ -79,6 +82,8 @@ def run_steps(sim: Simulation, count: int):
 
 
 def main():
+    import CBTC_SIM  # noqa: F401
+
     default_scenario = load_scenario()
     assert default_scenario["communication"]["use_vital_position_report_for_zc"], "ZC must default to DCS-delivered POSITION_REPORT"
     sim = Simulation(default_scenario)
@@ -88,6 +93,30 @@ def main():
     run_steps(sim, 20)
     train = sim.trains[0]
     assert train.safe_packet_valid, "normal MA flow should keep vital packet valid"
+
+    sim_bad_ats = Simulation(load_scenario())
+    target = sim_bad_ats.trains[0]
+    payload = AtsOperationCommandMessage(
+        command="EMERGENCY_STOP",
+        train_id=target.id,
+        value=None,
+        reason="bad_hmac_test",
+    ).to_payload()
+    bad_packet = VitalSafePacket.create(
+        source_id="ATS",
+        destination_id="OPERATIONS",
+        session_id="ATS:OPERATIONS",
+        message_type="ATS_OPERATION_COMMAND",
+        sequence_number=1,
+        timestamp_ms=int(sim_bad_ats.sim_time_s * 1000),
+        ttl_ms=1500,
+        payload=payload,
+        key_id="SIM_KEY_01",
+        secret="cbtc-sim-shared-secret",
+    ).with_hmac_corruption()
+    sim_bad_ats.pending_ats_operation_packets.append((sim_bad_ats.sim_time_s, bad_packet))
+    sim_bad_ats._process_ats_operation_frames()
+    assert not target.emergency_stop and not target.trip_mode, "bad HMAC ATS command must not affect train state"
     assert any(
         event.msg_type == "MA_UPDATE" and event.result == "ACCEPTED" and event.destination_id == train.id
         for event in sim.dcs_transport.events
@@ -130,10 +159,13 @@ def main():
     assert train.eoa == accepted_eoa, "HMAC-corrupt packet must not update EOA"
     assert train.vital_packet_result == "HMAC_ERROR", "HMAC-corrupt packet should be rejected"
 
+    failover_count_before = sum(1 for event in sim.dcs_transport.events if event.result == "FAILOVER")
     sim.dcs_transport.set_path_state("RED", "LOST")
     sim._dispatch_safe_packets(with_delay=False)
     assert sim.dcs_transport.active_path == "BLUE", "RED failure should fail over to BLUE"
     assert any(event.result == "FAILOVER" for event in sim.dcs_transport.events), "failover should be logged"
+    failover_count_after = sum(1 for event in sim.dcs_transport.events if event.result == "FAILOVER")
+    assert failover_count_after - failover_count_before == 1, "failover should be logged exactly once per path switch"
 
     sim_ber = Simulation(load_scenario())
     run_steps(sim_ber, 20)
@@ -357,6 +389,15 @@ def main():
         sim_status.ats_received_train_state[status_train.id]["position_m"] == displayed_pos_before_loss
     ), "ATS must not refresh train position by reading Train directly when OPC UA is lost"
     assert status_train.safe_packet_valid == vital_before, "OPC UA loss must not affect ATP vital safety while RaSTA is alive"
+
+    sim_radio_status = Simulation(load_scenario())
+    run_steps(sim_radio_status, 5)
+    radio_status_train = sim_radio_status.trains[0]
+    assert sim_radio_status.ats_train_freshness[radio_status_train.id] == "FRESH", "TRAIN_STATUS should initially be fresh"
+    sim_radio_status.dcs_transport.set_fault("radio_coverage_loss", True)
+    sim_radio_status.pending_ats_status_frames.clear()
+    run_steps(sim_radio_status, 35)
+    assert sim_radio_status.ats_train_freshness[radio_status_train.id] in {"STALE", "LOST"}, "radio loss should stale/lost TRAIN_STATUS at ATS"
 
     sim_lock = Simulation(load_scenario())
     station_idx = 0

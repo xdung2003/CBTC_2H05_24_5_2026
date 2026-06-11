@@ -43,7 +43,7 @@ class TimeDistancePanel(ttk.Frame):
     def __init__(self, master: tk.Widget):
         super().__init__(master, padding=8, style="Panel.TFrame")
         self.columnconfigure(0, weight=1)
-        ttk.Label(self, text="Simulator Time-Distance Graph", style="SectionTitle.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(self, text="Time-Distance Graph", style="SectionTitle.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(
             self,
             text="Internal simulated running graph; not an ATS/OCC telemetry path",
@@ -637,9 +637,9 @@ class DataFlowPanel(ttk.Frame):
 
     def _draw_legend(self, x: float, y: float, compact: bool = False):
         rows = [
-            ("#5b6fd6", "RaSTA vital through DCS", None),
-            ("#1f8a8a", "OPC UA-like supervision through DCS", (6, 4)),
-            ("#8b5cf6", "ATS operation/fault command through RaSTA", (4, 3)),
+            ("#5b6fd6", "Wireless/RAP link through DCS", (6, 4)),
+            ("#1f8a8a", "Wired/backbone link through DCS", None),
+            ("#8b5cf6", "ATS operation/fault command to train", (6, 4)),
             ("#6b7280", "Scenario/internal infrastructure state", None),
         ]
         row_h = self._scale(17 if compact else 20)
@@ -691,9 +691,9 @@ class DataFlowPanel(ttk.Frame):
         brown = "#a54200"
 
         train = self._diagram_box(
-            self._scale(54),
-            self._scale(20),
-            self._scale(264),
+            self._scale(60),
+            self._scale(28),
+            self._scale(280),
             self._scale(150),
             "TÀU / CC ONBOARD",
             ["CC_A / CC_B", "Tạo POSITION_REPORT", "Nhận MA_UPDATE", "Gửi TRAIN_STATUS"],
@@ -701,71 +701,70 @@ class DataFlowPanel(ttk.Frame):
             "#f7fbff",
         )
         ats = self._diagram_box(
-            self._scale(54),
-            self._scale(360),
-            self._scale(246),
-            self._scale(176),
+            self._scale(60),
+            self._scale(384),
+            self._scale(250),
+            self._scale(172),
             "ATS / OCC",
             ["Nhận trạng thái non-vital", "Giám sát", "Gửi ATS_OPERATION_COMMAND", "Không tạo MA/EOA"],
             brown,
             "#fffaf4",
         )
         dcs = self._diagram_box(
-            self._scale(639),
-            self._scale(232),
-            self._scale(270),
-            self._scale(324),
+            self._scale(630),
+            self._scale(252),
+            self._scale(300),
+            self._scale(320),
             "DCS TRANSPORT",
             [],
             purple,
             "#fbf7ff",
             title_color=purple,
         )
-        vital = self._process_box(dcs["left"] + self._scale(20), dcs["top"] + self._scale(94), self._scale(230), self._scale(72), "transport_vital()", red)
-        supervision = self._process_box(dcs["left"] + self._scale(20), dcs["top"] + self._scale(224), self._scale(230), self._scale(72), "transport_supervision()", blue)
+        vital = self._process_box(dcs["left"] + self._scale(26), dcs["top"] + self._scale(92), self._scale(248), self._scale(72), "transport_vital()", red)
+        supervision = self._process_box(dcs["left"] + self._scale(26), dcs["top"] + self._scale(218), self._scale(248), self._scale(72), "transport_supervision()", blue)
         c.create_text(
             dcs["cx"],
-            dcs["bottom"] - self._scale(30),
-            text="Chỉ vận chuyển dữ liệu",
-            fill=purple,
+            dcs["bottom"] + self._scale(300),
+            text="",
+            fill=APP_THEME["canvas"],
             font=("Segoe UI", self._scale(10), "bold"),
         )
         zc = self._diagram_box(
-            self._scale(1144),
-            self._scale(20),
-            self._scale(239),
-            self._scale(152),
-            "ZC_01",
+            self._scale(1180),
+            self._scale(18),
+            self._scale(260),
+            self._scale(260),
+            "ZC",
             ["Nhận POSITION_REPORT", "Tính EOA / SvL / MA", "Build safe packets", "Xuất MA_UPDATE"],
             dark_green,
             "#f5fff5",
         )
-        runtime = self._diagram_box(
-            self._scale(1183),
-            self._scale(303),
-            self._scale(199),
-            self._scale(118),
-            "ZC_01 / RUNTIME STATE",
-            ["APPLY_PSR", "ADD/UPDATE", "REMOVE/CLEAR_TSR"],
-            orange,
-            "#fff8f1",
-            title_color=brown,
-        )
+        c.create_line(zc["left"] + self._scale(16), zc["top"] + self._scale(148), zc["right"] - self._scale(16), zc["top"] + self._scale(148), fill=APP_THEME["border"], width=1)
+        for idx, text in enumerate(("APPLY_PSR", "ADD/UPDATE", "REMOVE/CLEAR_TSR")):
+            c.create_text(
+                zc["left"] + self._scale(32),
+                zc["top"] + self._scale(176 + idx * 26),
+                anchor="w",
+                text=f"• {text}",
+                fill=APP_THEME["text"],
+                font=("Segoe UI", self._scale(10)),
+            )
         sgd = self._diagram_box(
-            self._scale(1169),
-            self._scale(534),
-            self._scale(214),
-            self._scale(120),
-            "SGD / GA / DEPOT / STATION",
+            self._scale(1210),
+            self._scale(605),
+            self._scale(230),
+            self._scale(118),
+            "STATION",
             ["Track profile / balise", "Route / capacity", "Line conditions"],
             brown,
             "#fffaf4",
         )
         nms = self._diagram_box(
             self._scale(620),
-            self._scale(612),
-            self._scale(260),
-            self._scale(84),
+            self._scale(668),
+            self._scale(280),
+            self._scale(86),
             "DCS_NMS / DCS TRANSPORT",
             ["RED/BLUE status", "Counters / faults"],
             gray,
@@ -773,7 +772,7 @@ class DataFlowPanel(ttk.Frame):
         )
         # Vital train-to-ground and ground-to-train paths.
         self._lane_arrow(
-            [(train["right"], self._scale(82)), (self._scale(758), self._scale(82)), (self._scale(758), dcs["top"])],
+            [(train["right"], self._scale(92)), (dcs["cx"] - self._scale(18), self._scale(92)), (dcs["cx"] - self._scale(18), dcs["top"])],
             "POSITION_REPORT / RaSTA_VITAL",
             orange,
             label_segment=0,
@@ -781,19 +780,19 @@ class DataFlowPanel(ttk.Frame):
             dash=(6, 4),
         )
         self._lane_arrow(
-            [(self._scale(802), dcs["top"]), (self._scale(802), self._scale(83)), (zc["left"], self._scale(83))],
+            [(dcs["cx"] + self._scale(22), dcs["top"]), (dcs["cx"] + self._scale(22), self._scale(92)), (zc["left"], self._scale(92))],
             "",
             orange,
             dash=(6, 4),
         )
         self._lane_arrow(
-            [(zc["left"], self._scale(140)), (self._scale(862), self._scale(140)), (self._scale(862), dcs["top"])],
+            [(zc["left"], self._scale(148)), (dcs["cx"] + self._scale(78), self._scale(148)), (dcs["cx"] + self._scale(78), dcs["top"])],
             "",
             blue,
             dash=(6, 4),
         )
         self._lane_arrow(
-            [(self._scale(704), dcs["top"]), (self._scale(704), self._scale(138)), (train["right"], self._scale(138))],
+            [(dcs["left"] + self._scale(70), dcs["top"]), (dcs["left"] + self._scale(70), self._scale(148)), (train["right"], self._scale(148))],
             "MA_UPDATE / RaSTA_VITAL",
             blue,
             label_segment=1,
@@ -803,61 +802,64 @@ class DataFlowPanel(ttk.Frame):
 
         # Non-vital supervision and runtime command paths.
         self._lane_arrow(
-            [(train["cx"], train["bottom"]), (train["cx"], self._scale(265)), (dcs["left"], self._scale(265))],
+            [(train["cx"], train["bottom"]), (train["cx"], self._scale(294)), (dcs["left"], self._scale(294))],
             "TRAIN_STATUS /\nOPCUA_SUPERVISION",
             purple,
             label_segment=1,
             label_offset=-self._scale(28),
+            dash=(6, 4),
         )
         self._lane_arrow(
-            [(train["cx"], train["bottom"]), (train["cx"], self._scale(330)), (ats["left"] + self._scale(150), self._scale(330)), (ats["left"] + self._scale(150), ats["top"])],
+            [(dcs["left"], self._scale(362)), (ats["right"] - self._scale(88), self._scale(362)), (ats["right"] - self._scale(88), ats["top"])],
             "",
             purple,
+            label_offset=-self._scale(22),
+            dash=(6, 4),
         )
         self._lane_arrow(
-            [(ats["right"], self._scale(385)), (dcs["left"], self._scale(385))],
+            [(ats["right"], self._scale(420)), (dcs["left"], self._scale(420))],
             "ATS_OPERATION_COMMAND ->\nRUNTIME STATE",
             red,
             label_segment=0,
             label_offset=-self._scale(38),
-            dash=(6, 4),
         )
         self._lane_arrow(
-            [(dcs["right"], self._scale(393)), (runtime["left"], self._scale(393))],
+            [(dcs["right"], self._scale(420)), (zc["left"] + self._scale(70), self._scale(420)), (zc["left"] + self._scale(70), zc["bottom"])],
             "",
             red,
-            dash=(6, 4),
         )
         self._lane_arrow(
-            [(runtime["cx"], runtime["top"]), (runtime["cx"], zc["bottom"])],
-            "",
-            red,
-            dash=(6, 4),
-        )
-        self._lane_arrow(
-            [(zc["cx"] - self._scale(10), zc["bottom"]), (zc["cx"] - self._scale(10), self._scale(282)), (dcs["right"], self._scale(282))],
+            [(zc["left"], self._scale(342)), (dcs["right"], self._scale(342))],
             "ZC_STATUS",
             teal,
+            label_segment=0,
+            label_offset=-self._scale(16),
+        )
+        self._lane_arrow(
+            [(dcs["left"], self._scale(456)), (ats["right"], self._scale(456))],
+            "ZC_STATUS",
+            teal,
+            label_offset=-self._scale(16),
+        )
+        self._lane_arrow(
+            [(sgd["left"], self._scale(632)), (self._scale(1080), self._scale(632)), (self._scale(1080), self._scale(520)), (dcs["right"], self._scale(520))],
+            "WAYSIDE_STATUS +\nSTATION_STATUS",
+            green,
             label_segment=1,
-            label_offset=-self._scale(16),
+            label_offset=-self._scale(28),
         )
         self._lane_arrow(
-            [(dcs["left"], self._scale(425)), (ats["right"], self._scale(425))],
-            "ZC_STATUS",
-            teal,
-            label_offset=-self._scale(16),
-        )
-        self._lane_arrow(
-            [(sgd["left"], self._scale(560)), (dcs["right"], self._scale(560))],
+            [(dcs["left"], self._scale(520)), (ats["right"], self._scale(520))],
             "WAYSIDE_STATUS +\nSTATION_STATUS",
             green,
             label_offset=-self._scale(28),
         )
         self._lane_arrow(
-            [(dcs["left"], self._scale(465)), (ats["right"], self._scale(465))],
-            "WAYSIDE_STATUS +\nSTATION_STATUS",
+            [(sgd["cx"], sgd["top"]), (sgd["cx"], self._scale(318)), (zc["cx"] + self._scale(42), self._scale(318)), (zc["cx"] + self._scale(42), zc["bottom"])],
+            "STATION_STATUS",
             green,
-            label_offset=-self._scale(28),
+            label_segment=2,
+            label_offset=-self._scale(16),
         )
         self._lane_arrow(
             [(nms["cx"], nms["top"]), (nms["cx"], dcs["bottom"])],
@@ -866,7 +868,7 @@ class DataFlowPanel(ttk.Frame):
             label_offset=-self._scale(16),
         )
         self._lane_arrow(
-            [(dcs["left"], self._scale(540)), (ats["right"], self._scale(540))],
+            [(dcs["left"], self._scale(548)), (ats["right"], self._scale(548))],
             "DCS_STATUS",
             gray,
             label_offset=-self._scale(16),
@@ -884,7 +886,7 @@ class DataFlowPanel(ttk.Frame):
         events = self._filtered_packet_events(raw_events)[-80:]
         self.summary_var.set(
             f"Logical dataflow view  |  CC={len(trains)}  stations={len(sim.scheduled_stops)}  "
-            f"SGD segments={len(sim.track_profile)}  packet log events={len(events)}  DCS details in packet log"
+            f"segments={len(sim.track_profile)}  packet log events={len(events)}  DCS details in packet log"
         )
         self._draw_basic_dataflow_canvas(sim, events)
 

@@ -65,7 +65,6 @@ class InfrastructurePanel(ttk.Frame):
                 f"SEG-{idx:02d} {start:>5.0f}-{end:<5.0f}  {axle:<20} "
                 f"gradient={gradient:+.3f} SSP={psr:.0f} km/h occupied_by={occupied_by or '--'}"
             )
-            lines.append(f"SIG-{idx:02d}             {signal:<20} virtual lineside aspect")
         rap_items = [dict(item) for item in wayside.get("radio_access_points", [])]
         if rap_items:
             lines.append("")
@@ -114,28 +113,6 @@ class InfrastructurePanel(ttk.Frame):
                 f"SVL={float(zone.get('svl_m', 0.0)):>7.1f}m overlap={float(zone.get('overlap_m', 0.0)):>5.1f}m "
                 f"{esa:<10} zone={zone.get('protection_zone_id') or '--'}"
             )
-        lines.append("")
-        lines.append("Wayside Route / Conditions")
-        lines.append("-" * 72)
-        route_states = [dict(item) for item in station_state.get("station_route_states", [])]
-        conditions = [dict(item) for item in wayside.get("line_conditions", [])]
-        if not route_states and not conditions:
-            lines.append("No route or line-condition records in STATION_STATUS/WAYSIDE_STATUS.")
-        for idx, state in enumerate(route_states, 1):
-            lines.append(f"ROUTE-{idx:02d} {state}")
-        for idx, condition in enumerate(conditions, 1):
-            lines.append(f"COND-{idx:02d}  {condition}")
-        point_states = [dict(item) for item in station_state.get("point_states", [])]
-        if point_states:
-            lines.append("")
-            lines.append("Point / Route Lock States")
-            lines.append("-" * 72)
-            for point in point_states:
-                locked = "LOCKED" if point.get("locked") else "FREE"
-                lines.append(
-                    f"{str(point.get('point_id', '--')):<10} pos={point.get('position', '--'):<7} "
-                    f"{locked:<6} route={point.get('route_state', '--'):<16} occupied={point.get('occupied_by_train_id') or '--'}"
-                )
         dcs_transport_state = dict(dcs_state.get("dcs_transport_state", {}) or {})
         if dcs_transport_state:
             lines.append("")

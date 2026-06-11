@@ -199,7 +199,7 @@ class DcsTransport:
         path.sent_count += 1
         path_label = path.name + (f"+{rap.id}" if rap is not None else "")
         if failover:
-            self.events.append(self._event(now_s, source, dest, "RASTA_VITAL", path.name, msg_type, seq, 0.0, "OK", "FAILOVER", "path switched", f"active path -> {path.name}"))
+            self._event(now_s, source, dest, "RASTA_VITAL", path.name, msg_type, seq, 0.0, "OK", "FAILOVER", "path switched", f"active path -> {path.name}")
         if rap is None:
             path.lost_count += 1
             path.timeout_count += 1
@@ -208,7 +208,7 @@ class DcsTransport:
         last_rap = self.last_rap_by_train.get(train_id)
         if last_rap and last_rap != rap.id:
             self.handover_count += 1
-            self.events.append(self._event(now_s, source, dest, "RASTA_VITAL", path_label, "HANDOVER", seq, 0.0, "OK", "ACCEPTED", "handover", f"{last_rap}->{rap.id}", details={"handover": f"{last_rap}->{rap.id}"}))
+            self._event(now_s, source, dest, "RASTA_VITAL", path_label, "HANDOVER", seq, 0.0, "OK", "ACCEPTED", "handover", f"{last_rap}->{rap.id}", details={"handover": f"{last_rap}->{rap.id}"})
             if self.faults["handover_failure"]:
                 path.lost_count += 1
                 path.timeout_count += 1
@@ -266,6 +266,96 @@ class DcsTransport:
         }
         return delivered, now_s + latency / 1000.0, self._event(now_s, source, dest, "RASTA_VITAL", path_label, msg_type, seq, latency, "OK", "DELIVERED", "queued", "transported", details=details)
 
+    def transport_vital_wired(self, packet: Any, now_s: float) -> Tuple[Optional[Any], float, DcsPacketEvent]:
+        path, failover = self._choose_path()
+        seq = int(getattr(packet.header, "sequence_number", -1))
+        msg_type = str(getattr(packet.header, "message_type", ""))
+        source = str(getattr(packet.header, "source_id", ""))
+        dest = str(getattr(packet.header, "destination_id", ""))
+        if path is None:
+            for item in self.paths.values():
+                item.timeout_count += 1
+            return None, now_s, self._event(now_s, source, dest, "RASTA_VITAL", "NONE", msg_type, seq, 0.0, "OK", "TIMEOUT", "ignored", "wired backbone lost")
+        path.sent_count += 1
+        if failover:
+            self._event(now_s, source, dest, "RASTA_VITAL", path.name, msg_type, seq, 0.0, "OK", "FAILOVER", "path switched", f"active path -> {path.name}")
+        if random.random() < path.loss_rate(0.0, self.faults["packet_loss"]) * 0.25:
+            path.lost_count += 1
+            path.timeout_count += 1
+            return None, now_s, self._event(now_s, source, dest, "RASTA_VITAL", path.name, msg_type, seq, 0.0, "OK", "TIMEOUT", "ignored", "wired packet loss")
+        delivered = packet
+        replay_key = (source, dest, msg_type)
+        if self.faults["replay_attack"] and replay_key in self.last_vital_packets:
+            delivered = self.last_vital_packets[replay_key]
+        elif self.faults["out_of_order_packet"] and hasattr(packet, "with_sequence_number"):
+            delivered = packet.with_sequence_number(max(0, seq - 2), "cbtc-sim-shared-secret", new_uuid=True)
+        if self.faults["crc_corruption"] and hasattr(packet, "with_crc_corruption"):
+            delivered = delivered.with_crc_corruption()
+        if self.faults["hmac_corruption"] and hasattr(delivered, "with_hmac_corruption"):
+            delivered = delivered.with_hmac_corruption()
+        if not self.faults["replay_attack"]:
+            self.last_vital_packets[replay_key] = packet
+        latency = path.latency_ms(0.0, self.faults["high_latency"]) * 0.35
+        path.accepted_count += 1
+        return delivered, now_s + latency / 1000.0, self._event(now_s, source, dest, "RASTA_VITAL", path.name, msg_type, seq, latency, "OK", "DELIVERED", "queued", "wired backbone", details={"route": {"source": source, "destination": dest, "protocol": "RASTA_VITAL", "path": path.name, "rap": "wired/backbone"}})
+
+    def transport_train_status_supervision(self, frame: Any, now_s: float, train_id: str, train_pos_m: float) -> Tuple[Optional[Any], float, DcsPacketEvent]:
+        rap, edge_factor, _overlap = self.coverage_for_position(train_pos_m)
+        path, failover = self._choose_path()
+        source = str(getattr(frame, "source_id", ""))
+        dest = str(getattr(frame, "destination_id", ""))
+        method = str(getattr(frame, "method_name", ""))
+        retry = int(getattr(frame, "retry_count", 0))
+        if path is None:
+            for item in self.paths.values():
+                item.timeout_count += 1
+            return None, now_s, self._event(now_s, source, dest, "OPCUA_SUPERVISION", "NONE", method, retry, 0.0, "OK", "TIMEOUT", "ignored", "supervision radio backbone lost")
+        path.sent_count += 1
+        path_label = path.name + (f"+{rap.id}" if rap is not None else "")
+        if failover:
+            self._event(now_s, source, dest, "OPCUA_SUPERVISION", path.name, method, retry, 0.0, "OK", "FAILOVER", "path switched", f"active path -> {path.name}")
+        if self.faults["opcua_loss"]:
+            path.timeout_count += 1
+            return None, now_s, self._event(now_s, source, dest, "OPCUA_SUPERVISION", path_label, method, retry, 0.0, "OK", "TIMEOUT", "ignored", "OPC UA-like supervision loss")
+        modulation = self._modulation_sample(rap, edge_factor)
+        if rap is None:
+            path.lost_count += 1
+            path.timeout_count += 1
+            return None, now_s, self._event(now_s, source, dest, "OPCUA_SUPERVISION", path_label, method, retry, 0.0, "OK", "TIMEOUT", "ignored", "outside radio coverage", details={"radio": modulation})
+        last_rap = self.last_rap_by_train.get(train_id)
+        if last_rap and last_rap != rap.id:
+            self.handover_count += 1
+            self._event(now_s, source, dest, "OPCUA_SUPERVISION", path_label, "HANDOVER", retry, 0.0, "OK", "ACCEPTED", "handover", f"{last_rap}->{rap.id}", details={"handover": f"{last_rap}->{rap.id}"})
+            if self.faults["handover_failure"]:
+                path.lost_count += 1
+                path.timeout_count += 1
+                return None, now_s, self._event(now_s, source, dest, "OPCUA_SUPERVISION", path_label, method, retry, 0.0, "OK", "TIMEOUT", "ignored", "RAP handover failure")
+        self.last_rap_by_train[train_id] = rap.id
+        if random.random() < path.loss_rate(edge_factor, self.faults["packet_loss"]):
+            path.lost_count += 1
+            path.timeout_count += 1
+            return None, now_s, self._event(now_s, source, dest, "OPCUA_SUPERVISION", path_label, method, retry, 0.0, "OK", "TIMEOUT", "ignored", "supervision radio packet loss")
+        latency = path.latency_ms(edge_factor, self.faults["high_latency"])
+        path.accepted_count += 1
+        details = {
+            "route": {"source": source, "destination": dest, "protocol": "OPCUA_SUPERVISION", "path": path.name, "rap": rap.id},
+            "message": {"type": method, "schema": "OpcUaSupervisionFrame", "payload": getattr(frame, "payload", {})},
+            "frame": {
+                "request_id": getattr(frame, "request_id", ""),
+                "response_id": getattr(frame, "response_id", ""),
+                "timestamp_ms": getattr(frame, "timestamp_ms", 0),
+                "timeout_ms": getattr(frame, "timeout_ms", 0),
+                "encryption_enabled": getattr(frame, "encryption_enabled", False),
+                "encryption_algorithm": getattr(frame, "encryption_algorithm", ""),
+                "key_id": getattr(frame, "key_id", ""),
+                "encrypted_payload": getattr(frame, "encrypted_payload", ""),
+                "payload_format": getattr(frame, "payload_format", ""),
+            },
+            "radio": modulation,
+            "chain": ["Message", "Serialized Payload", "Encrypted Payload", "OPC UA-like Frame", "DCS Radio Transport", "Decrypt", "Decoded Message"],
+        }
+        return frame, now_s + latency / 1000.0, self._event(now_s, source, dest, "OPCUA_SUPERVISION", path_label, method, retry, latency, "OK", "ACCEPTED", "radio supervision delivered", "train radio", details=details)
+
     def transport_supervision(self, frame: Any, now_s: float) -> Tuple[Optional[Any], float, DcsPacketEvent]:
         path, failover = self._choose_path()
         source = str(getattr(frame, "source_id", ""))
@@ -281,7 +371,7 @@ class DcsTransport:
             path.timeout_count += 1
             return None, now_s, self._event(now_s, source, dest, "OPCUA_SUPERVISION", path.name, method, int(getattr(frame, "retry_count", 0)), 0.0, "OK", "TIMEOUT", "ignored", "OPC UA-like supervision loss")
         if failover:
-            self.events.append(self._event(now_s, source, dest, "OPCUA_SUPERVISION", path.name, method, 0, 0.0, "OK", "FAILOVER", "path switched", f"active path -> {path.name}"))
+            self._event(now_s, source, dest, "OPCUA_SUPERVISION", path.name, method, 0, 0.0, "OK", "FAILOVER", "path switched", f"active path -> {path.name}")
         loss_rate = path.loss_rate(0.0, self.faults["packet_loss"]) * 0.5
         if random.random() < loss_rate:
             path.lost_count += 1

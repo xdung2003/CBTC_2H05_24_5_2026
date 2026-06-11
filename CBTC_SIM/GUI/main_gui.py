@@ -156,6 +156,7 @@ class App(tk.Tk):
         self.sim = Simulation(self.scenario)
         self.time_scale = 1
         self.sim_paused = False
+        self.selected_train_id: str | None = None
         self.operation_mechanism_var = tk.StringVar(value="")
         self.operation_selected_status_var = tk.StringVar(value="")
         self.headway_target_var = tk.StringVar(value=str(self.scenario.get("headway", {}).get("target_headway_s", 180.0)))
@@ -213,7 +214,7 @@ class App(tk.Tk):
         sim_group = self._make_button_group(btns, "Simulation Control", 0)
         scenario_group = self._make_button_group(btns, "Line Config I/O", 2)
         headway_group = self._make_button_group(btns, "Headway Target", 3)
-        tools_group = self._make_button_group(btns, "Simulator Tools", 4)
+        tools_group = self._make_button_group(btns, "Tools", 4)
 
         self.start_btn = ttk.Button(sim_group, text="Start", command=self.on_start, style="Accent.TButton")
         self.start_btn.grid(row=1, column=0, padx=3, pady=(2, 4), sticky="ew")
@@ -263,7 +264,7 @@ class App(tk.Tk):
         ttk.Button(tools_group, text="Dataflow", command=self.open_dataflow_window).grid(
             row=1, column=0, padx=2, pady=(2, 4), sticky="ew"
         )
-        ttk.Button(tools_group, text="Issue TSR", command=self.open_add_tsr_dialog).grid(
+        ttk.Button(tools_group, text="Speed Restriction", command=self.open_speed_restriction_dialog).grid(
             row=1, column=1, padx=2, pady=(2, 4), sticky="ew"
         )
         tools_group.columnconfigure(0, weight=1)
@@ -306,31 +307,20 @@ class App(tk.Tk):
         side_toolbar.columnconfigure(0, weight=1)
         self._bind_side_toolbar_scroll(self.side_toolbar_canvas)
 
-        ttk.Label(
-            side_toolbar,
-            text="ATS operation commands\nvia RaSTA vital packets",
-            style="Muted.TLabel",
-            justify="left",
-        ).grid(row=0, column=0, sticky="ew", pady=(0, 5))
-
         faults_side = ttk.LabelFrame(side_toolbar, text="Train Commands / Fault Scenarios", padding=4)
-        faults_side.grid(row=1, column=0, sticky="ew", pady=(0, 5))
+        faults_side.grid(row=0, column=0, sticky="ew", pady=(0, 5))
         faults_side.columnconfigure(0, weight=1)
         ttk.Button(faults_side, text="Clear", command=self.clear_all_faults, style="Inactive.TButton").grid(row=0, column=0, sticky="ew", padx=1, pady=1)
         self.emergency_fault_frame = ttk.LabelFrame(faults_side, text="EBI", padding=3)
         self.emergency_fault_frame.grid(row=1, column=0, sticky="ew", padx=1, pady=(4, 1))
-        self.atp_fault_frame = ttk.LabelFrame(faults_side, text="ATP", padding=3)
-        self.atp_fault_frame.grid(row=2, column=0, sticky="ew", padx=1, pady=1)
-        self.ato_fault_frame = ttk.LabelFrame(faults_side, text="ATO", padding=3)
-        self.ato_fault_frame.grid(row=3, column=0, sticky="ew", padx=1, pady=1)
-        self.integrity_fault_frame = ttk.LabelFrame(faults_side, text="Integrity", padding=3)
-        self.integrity_fault_frame.grid(row=4, column=0, sticky="ew", padx=1, pady=1)
-        for frame in (self.emergency_fault_frame, self.atp_fault_frame, self.ato_fault_frame, self.integrity_fault_frame):
+        self.train_fault_frame = ttk.LabelFrame(faults_side, text="Train Fault", padding=3)
+        self.train_fault_frame.grid(row=2, column=0, sticky="ew", padx=1, pady=1)
+        for frame in (self.emergency_fault_frame, self.train_fault_frame):
             frame.columnconfigure(0, weight=1)
         self.train_fault_buttons: Dict[str, Dict[str, ttk.Button]] = {}
 
         comm_faults_side = ttk.LabelFrame(side_toolbar, text="DCS Fault Commands", padding=4)
-        comm_faults_side.grid(row=2, column=0, sticky="ew", pady=(0, 5))
+        comm_faults_side.grid(row=1, column=0, sticky="ew", pady=(0, 5))
         comm_faults_side.columnconfigure(0, weight=1)
         comm_fault_buttons = [
             ("RED Lost", lambda: self.toggle_communication_path_loss("RED")),
@@ -346,11 +336,9 @@ class App(tk.Tk):
             ("Replay", lambda: self.toggle_communication_fault("replay_attack", "Replay attack")),
             ("Out-of-order", lambda: self.toggle_communication_fault("out_of_order_packet", "Out-of-order packet")),
             ("OPC UA Loss", lambda: self.toggle_communication_fault("opcua_loss", "OPC UA supervision loss")),
-            ("Clear Comms", self.clear_communication_faults),
         ]
         for row, (label, command) in enumerate(comm_fault_buttons):
-            style = "Inactive.TButton" if label == "Clear Comms" else "Danger.TButton"
-            ttk.Button(comm_faults_side, text=label, command=command, style=style).grid(row=row, column=0, sticky="ew", padx=1, pady=1)
+            ttk.Button(comm_faults_side, text=label, command=command, style="Danger.TButton").grid(row=row, column=0, sticky="ew", padx=1, pady=1)
         self.comm_faults_side = comm_faults_side
         self._bind_side_toolbar_tree(side_toolbar)
 
@@ -399,9 +387,9 @@ class App(tk.Tk):
         self.analytics_panel = AnalyticsPanel(analytics_tab, self.scale_factor)
         self.analytics_panel.grid(row=0, column=0, sticky="nsew", padx=int(6 * self.scale_factor), pady=int(6 * self.scale_factor))
         self.limits_panel = SpeedLimitsPanel(infra_tab, self.scale_factor)
-        dock_tabs.add(trains_tab, text="Simulator Train Debug")
-        dock_tabs.add(infra_tab, text="Simulator Infrastructure")
-        dock_tabs.add(analytics_tab, text="Simulator Analytics")
+        dock_tabs.add(trains_tab, text="Train")
+        dock_tabs.add(infra_tab, text="Infrastructure")
+        dock_tabs.add(analytics_tab, text="Analytics")
 
         button_row = ttk.Frame(self.content, padding=(0, 8, 0, 0), style="Shell.TFrame")
         button_row.grid(row=6, column=0, sticky="ew")
@@ -1048,45 +1036,29 @@ class App(tk.Tk):
     def _rebuild_train_fault_buttons(self):
         if not hasattr(self, "emergency_fault_frame"):
             return
-        for frame in (self.emergency_fault_frame, self.atp_fault_frame, self.ato_fault_frame, self.integrity_fault_frame):
+        for frame in (self.emergency_fault_frame, self.train_fault_frame):
             for child in frame.winfo_children():
                 child.destroy()
         self.train_fault_buttons = {}
-        for row, train in enumerate(self.sim.trains):
-            emergency_btn = ttk.Button(
-                self.emergency_fault_frame,
-                text=train.id,
-                command=lambda train_id=train.id: self.instant_stop_train(train_id),
-                style="Danger.TButton",
-            )
-            emergency_btn.grid(row=row, column=0, sticky="ew", padx=1, pady=1)
-            self._bind_side_toolbar_scroll(emergency_btn)
-            atp_btn = ttk.Button(
-                self.atp_fault_frame,
-                text=train.id,
-                command=lambda train_id=train.id: self.toggle_train_fault(train_id, "ATP"),
-            )
-            atp_btn.grid(row=row, column=0, sticky="ew", padx=1, pady=1)
-            self._bind_side_toolbar_scroll(atp_btn)
-            ato_btn = ttk.Button(
-                self.ato_fault_frame,
-                text=train.id,
-                command=lambda train_id=train.id: self.toggle_train_fault(train_id, "ATO"),
-            )
-            ato_btn.grid(row=row, column=0, sticky="ew", padx=1, pady=1)
-            self._bind_side_toolbar_scroll(ato_btn)
-            integrity_btn = ttk.Button(
-                self.integrity_fault_frame,
-                text=train.id,
-                command=lambda train_id=train.id: self.toggle_train_fault(train_id, "INTEGRITY"),
-            )
-            integrity_btn.grid(row=row, column=0, sticky="ew", padx=1, pady=1)
-            self._bind_side_toolbar_scroll(integrity_btn)
-            self.train_fault_buttons[train.id] = {"emergency": emergency_btn, "atp": atp_btn, "ato": ato_btn, "integrity": integrity_btn}
+        emergency_btn = ttk.Button(
+            self.emergency_fault_frame,
+            text="Apply EBI",
+            command=self.instant_stop_selected_trains,
+            style="Danger.TButton",
+        )
+        emergency_btn.grid(row=0, column=0, sticky="ew", padx=1, pady=1)
+        fault_buttons = (
+            ("ATO", lambda: self.toggle_selected_train_fault("ATO")),
+            ("ATP", lambda: self.toggle_selected_train_fault("ATP")),
+            ("INTEGRITY", lambda: self.toggle_selected_train_fault("INTEGRITY")),
+        )
+        for row, (label, command) in enumerate(fault_buttons):
+            btn = ttk.Button(self.train_fault_frame, text=label, command=command)
+            btn.grid(row=row, column=0, sticky="ew", padx=1, pady=1)
+            self._bind_side_toolbar_scroll(btn)
+        self._bind_side_toolbar_scroll(emergency_btn)
         self._bind_side_toolbar_tree(self.emergency_fault_frame)
-        self._bind_side_toolbar_tree(self.atp_fault_frame)
-        self._bind_side_toolbar_tree(self.ato_fault_frame)
-        self._bind_side_toolbar_tree(self.integrity_fault_frame)
+        self._bind_side_toolbar_tree(self.train_fault_frame)
 
     def _hide_all_child_windows(self):
         for window in self.child_windows.values():
@@ -1141,8 +1113,7 @@ class App(tk.Tk):
         )
         wayside = getattr(self.sim, "ats_wayside_freshness", "LOST")
         self.summary_var.set(
-            f"ATS/OCC monitor uses TRAIN/ZC/STATION/DCS/WAYSIDE status packets only."
-            f"  ATS trains={total_trains}  moving={moving}  DCS healthy={dcs_ok}/{total_trains}  "
+            f"ATS trains={total_trains}  moving={moving}  DCS healthy={dcs_ok}/{total_trains}  "
             f"EBI active={emergency}  WAYSIDE_STATUS={wayside}  ZC_STATUS={getattr(self.sim, 'ats_zc_freshness', 'LOST')}"
         )
 
@@ -1253,6 +1224,24 @@ class App(tk.Tk):
     def instant_stop_train(self, train_id: str):
         self.sim.dispatch_ats_operation_command("EMERGENCY_STOP", train_id, reason="ats_panel")
 
+    def _selected_train_target(self) -> str:
+        selected = self.selected_train_id or ""
+        if selected and any(train.id == selected for train in self.sim.trains):
+            return selected
+        return ""
+
+    def _target_label(self, train_id: str) -> str:
+        return train_id if train_id else "all trains"
+
+    def instant_stop_selected_trains(self):
+        train_id = self._selected_train_target()
+        ok = self.sim.dispatch_ats_operation_command("EMERGENCY_STOP", train_id, reason="ats_panel")
+        self.status_var.set(
+            f"Status: queued ATS EBI command for {self._target_label(train_id)}"
+            if ok
+            else f"Status: failed to send ATS EBI command for {self._target_label(train_id)}"
+        )
+
     def precise_jog_train(self, train_id: str):
         if self.sim.dispatch_ats_operation_command("PRECISE_JOG", train_id, reason="ats_panel"):
             self.status_var.set(f"Status: queued ATS precise jog command for {train_id}")
@@ -1273,12 +1262,29 @@ class App(tk.Tk):
             else f"Status: failed to send RaSTA {subsystem} fault command for {train_id}"
         )
 
-    def clear_all_faults(self):
-        ok = self.sim.dispatch_ats_operation_command("CLEAR_TRAIN_FAULTS", "", reason="ats_panel")
+    def toggle_selected_train_fault(self, subsystem: str):
+        train_id = self._selected_train_target()
+        subsystem = subsystem.upper()
+        ok = self.sim.dispatch_ats_operation_command(
+            "TOGGLE_TRAIN_FAULT",
+            train_id,
+            {"subsystem": subsystem},
+            reason="ats_panel",
+        )
         self.status_var.set(
-            "Status: queued RaSTA clear train fault command"
+            f"Status: queued RaSTA {subsystem} fault command for {self._target_label(train_id)}"
             if ok
-            else "Status: failed to send RaSTA clear train fault command"
+            else f"Status: failed to send RaSTA {subsystem} fault command for {self._target_label(train_id)}"
+        )
+
+    def clear_all_faults(self):
+        train_id = self._selected_train_target()
+        ok = self.sim.dispatch_ats_operation_command("CLEAR_TRAIN_FAULTS", train_id, reason="ats_panel")
+        comm_ok = self.sim.dispatch_ats_operation_command("CLEAR_COMM_FAULTS", "", reason="ats_panel")
+        self.status_var.set(
+            f"Status: queued RaSTA clear command for {self._target_label(train_id)} and DCS"
+            if ok and comm_ok
+            else "Status: failed to send one or more RaSTA clear commands"
         )
 
     def toggle_communication_path_loss(self, path_name: str):
@@ -1348,8 +1354,13 @@ class App(tk.Tk):
         )
 
     def on_ats_element_selected(self, element_key: str):
+        if element_key.startswith("train:"):
+            self.selected_train_id = element_key.split(":", 1)[1]
+            self.status_var.set(f"Status: selected train {self.selected_train_id}; fault buttons target this train")
+            return
+        self.selected_train_id = None
         self.status_var.set(
-            f"Status: selected ATS/OCC element {element_key}; edits use Simulator Tools, not ATS canvas"
+            f"Status: selected ATS/OCC element {element_key}"
         )
 
     def open_canvas_speed_limit_editor(self, kind: str, index: int):
@@ -1376,6 +1387,58 @@ class App(tk.Tk):
         if value is None:
             return
         self.apply_psr(str(segment_index), str(value))
+
+    def open_speed_restriction_dialog(self):
+        choice = simpledialog.askstring(
+            "Speed Restriction",
+            "Choose restriction type: PSR or TSR",
+            initialvalue="PSR",
+            parent=self,
+        )
+        if choice is None:
+            return
+        normalized = choice.strip().upper()
+        if normalized == "PSR":
+            self.open_psr_dialog()
+        elif normalized == "TSR":
+            self.open_add_tsr_dialog()
+        else:
+            self.status_var.set("Status: choose PSR or TSR")
+
+    def open_psr_dialog(self):
+        track_profile = self._ats_track_profile()
+        default_segment = "SEG-01"
+        if self.ats_overview_panel.selected_element:
+            kind, index = self.ats_overview_panel._element_lookup.get(self.ats_overview_panel.selected_element, ("", -1))
+            if kind == "track_segment" and 0 <= index < len(track_profile):
+                default_segment = f"SEG-{index + 1:02d}"
+        segment = simpledialog.askstring(
+            "Apply PSR",
+            "Track segment (SEG-xx or index):",
+            initialvalue=default_segment,
+            parent=self,
+        )
+        if segment is None:
+            return
+        try:
+            idx = self._parse_segment_index(segment)
+        except ValueError:
+            self.status_var.set("Status: invalid PSR segment")
+            return
+        if idx < 0 or idx >= len(track_profile):
+            self.status_var.set("Status: invalid PSR segment")
+            return
+        start, end, _gradient, current_psr = track_profile[idx]
+        psr = simpledialog.askfloat(
+            "Apply PSR",
+            f"SEG-{idx + 1:02d}: {start:.0f}-{end:.0f} m\nPSR km/h:",
+            initialvalue=float(current_psr),
+            minvalue=1.0,
+            parent=self,
+        )
+        if psr is None:
+            return
+        self.apply_psr(str(idx), str(psr))
 
     def open_add_tsr_dialog(self):
         default_start = 0.0
@@ -1443,9 +1506,17 @@ class App(tk.Tk):
         self.ats_overview_panel.update_data(self.sim)
         self.infrastructure_panel.update_data(self.sim)
 
+    def _parse_segment_index(self, segment_str: str) -> int:
+        text = str(segment_str).strip().upper()
+        if text.startswith("SEG-"):
+            return int(text.split("-", 1)[1]) - 1
+        if text.startswith("SEG"):
+            return int(text[3:]) - 1
+        return int(text)
+
     def apply_psr(self, segment_str: str, psr_str: str):
         try:
-            idx = int(segment_str)
+            idx = self._parse_segment_index(segment_str)
             psr = float(psr_str)
             if idx < 0 or idx >= len(self._ats_track_profile()):
                 self.status_var.set("Status: invalid PSR segment")

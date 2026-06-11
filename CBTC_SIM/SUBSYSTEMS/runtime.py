@@ -4,7 +4,7 @@ import random
 import time
 from copy import deepcopy
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 from CONFIG.config import (
     BRAKE_FORCE_N,
@@ -184,6 +184,7 @@ class Simulation:
         self.dcs_transport = DcsTransport(scenario.get("radio_access_points", []), scenario.get("radio_physical", {}))
         self._vital_sequence_numbers: Dict[Tuple[str, str], int] = {}
         self.zc_vital_sessions: Dict[str, VitalSession] = {}
+        self.ats_operation_sessions: Dict[str, VitalSession] = {}
         self.pending_zc_position_packets: List[Tuple[float, VitalSafePacket]] = []
         self.pending_ats_status_frames: List[Tuple[float, OpcUaSupervisionFrame]] = []
         self.pending_ats_operation_packets: List[Tuple[float, VitalSafePacket]] = []
@@ -206,6 +207,7 @@ class Simulation:
         self.ats_station_received_time_s = -999.0
         self.ats_dcs_received_time_s = -999.0
         self._opcua_sequence_number = 0
+        self._opcua_seen_request_ids: Set[str] = set()
         for train in self.trains:
             self._attach_train_communication(train)
         self._stage_initial_source_trains()
@@ -256,6 +258,16 @@ class Simulation:
                     session_id=f"{train.id}:ZC_01",
                 ),
             )
+        if hasattr(self, "ats_operation_sessions"):
+            for destination_id in ("OPERATIONS", "ZC_01"):
+                self.ats_operation_sessions.setdefault(
+                    destination_id,
+                    VitalSession(
+                        local_id=destination_id,
+                        remote_id="ATS",
+                        session_id=f"ATS:{destination_id}",
+                    ),
+                )
 
     def _sync_station_route_states(self):
         while len(self.station_route_states) < len(self.scheduled_stops):
@@ -2268,14 +2280,17 @@ class Simulation:
             secret="cbtc-sim-shared-secret",
         )
         target_train = next((train for train in self.trains if train.id == train_id), None)
-        route_train_id = train_id if target_train is not None else "ATS"
-        route_pos_m = float(target_train.reported_pos) if target_train is not None else 0.0
-        delivered, arrival_time_s, _event = self.dcs_transport.transport_vital(
-            packet,
-            self.sim_time_s,
-            route_train_id,
-            route_pos_m,
-        )
+        if destination_id == "ZC_01":
+            delivered, arrival_time_s, _event = self.dcs_transport.transport_vital_wired(packet, self.sim_time_s)
+        else:
+            route_train_id = train_id if target_train is not None else "ATS"
+            route_pos_m = float(target_train.reported_pos) if target_train is not None else 0.0
+            delivered, arrival_time_s, _event = self.dcs_transport.transport_vital(
+                packet,
+                self.sim_time_s,
+                route_train_id,
+                route_pos_m,
+            )
         if delivered is None:
             return False
         self.pending_ats_operation_packets.append((arrival_time_s, delivered))
@@ -2294,7 +2309,12 @@ class Simulation:
             if delivered is not None:
                 self.pending_zc_position_packets.append((arrival_time_s, delivered))
             status_frame = self._train_status_frame(train)
-            delivered_status, status_arrival_s, _status_event = self.dcs_transport.transport_supervision(status_frame, self.sim_time_s)
+            delivered_status, status_arrival_s, _status_event = self.dcs_transport.transport_train_status_supervision(
+                status_frame,
+                self.sim_time_s,
+                train.id,
+                train.reported_pos,
+            )
             if delivered_status is not None:
                 self.pending_ats_status_frames.append((status_arrival_s, delivered_status))
         for status_frame in (
@@ -2312,7 +2332,12 @@ class Simulation:
     def _bootstrap_ats_status_snapshot(self):
         for train in self.trains:
             status_frame = self._train_status_frame(train)
-            delivered_status, _status_arrival_s, _status_event = self.dcs_transport.transport_supervision(status_frame, self.sim_time_s)
+            delivered_status, _status_arrival_s, _status_event = self.dcs_transport.transport_train_status_supervision(
+                status_frame,
+                self.sim_time_s,
+                train.id,
+                train.reported_pos,
+            )
             if delivered_status is not None:
                 self.pending_ats_status_frames.append((self.sim_time_s, delivered_status))
         for status_frame in (
@@ -2354,6 +2379,45 @@ class Simulation:
                 self.zc.mark_position_report_freshness(train_id, "LOST")
         self.pending_zc_position_packets = remaining
 
+    def _reject_opcua_frame(self, frame: OpcUaSupervisionFrame, result: str, reason: str) -> None:
+        self.dcs_transport._event(
+            self.sim_time_s,
+            frame.source_id,
+            frame.destination_id,
+            "OPCUA_SUPERVISION",
+            "ATS",
+            frame.method_name,
+            frame.retry_count,
+            0.0,
+            "OK",
+            result,
+            "rejected",
+            reason,
+        )
+
+    def _validate_opcua_supervision_frame(self, frame: OpcUaSupervisionFrame) -> bool:
+        now_ms = int(self.sim_time_s * 1000)
+        if frame.destination_id != "ATS":
+            self._reject_opcua_frame(frame, "REJECTED", "wrong destination")
+            return False
+        if frame.timeout_ms <= 0:
+            self._reject_opcua_frame(frame, "REJECTED", "invalid timeout_ms")
+            return False
+        if now_ms - int(frame.timestamp_ms) > int(frame.timeout_ms):
+            self._reject_opcua_frame(frame, "TIMEOUT", "expired supervision timestamp")
+            return False
+        if frame.certificate_id != "SIM_CERT_01":
+            self._reject_opcua_frame(frame, "REJECTED", "invalid certificate_id")
+            return False
+        request_id = str(frame.request_id)
+        if not request_id:
+            self._reject_opcua_frame(frame, "REJECTED", "missing request_id")
+            return False
+        if request_id in self._opcua_seen_request_ids:
+            self._reject_opcua_frame(frame, "REPLAY", "duplicate request_id")
+            return False
+        return True
+
     def _process_ats_status_frames(self):
         remaining: List[Tuple[float, OpcUaSupervisionFrame]] = []
         for arrival_time_s, frame in self.pending_ats_status_frames:
@@ -2361,24 +2425,14 @@ class Simulation:
                 remaining.append((arrival_time_s, frame))
                 continue
             if frame.method_name in {"TRAIN_STATUS", "WAYSIDE_STATUS", "ZC_STATUS", "STATION_STATUS", "DCS_STATUS"}:
+                if not self._validate_opcua_supervision_frame(frame):
+                    continue
                 try:
                     payload = frame.decoded_payload()
                 except Exception as exc:
-                    self.dcs_transport._event(
-                        self.sim_time_s,
-                        frame.source_id,
-                        frame.destination_id,
-                        "OPCUA_SUPERVISION",
-                        "ATS",
-                        frame.method_name,
-                        frame.retry_count,
-                        0.0,
-                        "OK",
-                        "DECRYPT_ERROR",
-                        "rejected",
-                        str(exc),
-                    )
+                    self._reject_opcua_frame(frame, "DECRYPT_ERROR", str(exc))
                     continue
+                self._opcua_seen_request_ids.add(str(frame.request_id))
             else:
                 continue
             if frame.method_name == "TRAIN_STATUS":
@@ -2412,8 +2466,20 @@ class Simulation:
                 continue
             if packet.header.message_type != "ATS_OPERATION_COMMAND":
                 continue
+            session = self.ats_operation_sessions.get(packet.header.destination_id)
+            if session is None:
+                session = VitalSession(
+                    local_id=packet.header.destination_id,
+                    remote_id="ATS",
+                    session_id=f"ATS:{packet.header.destination_id}",
+                )
+                self.ats_operation_sessions[packet.header.destination_id] = session
+            result = session.validate(packet, int(self.sim_time_s * 1000))
+            self.dcs_transport.log_validation(self.sim_time_s, packet, result.result, result.action, result.reason, path=packet.header.destination_id)
+            if not result.accepted:
+                continue
             try:
-                payload = packet.decoded_payload("cbtc-sim-shared-secret")
+                payload = packet.decoded_payload(session.secret)
             except Exception as exc:
                 self.dcs_transport._event(
                     self.sim_time_s,
@@ -2470,7 +2536,11 @@ class Simulation:
         elif command == "TOGGLE_TRAIN_FAULT":
             subsystem = str((value or {}).get("subsystem", "")).upper() if isinstance(value, dict) else str(value).upper()
             for train in selected_trains():
-                if subsystem in {"ATP", "ATO", "DCS", "INTEGRITY"}:
+                if subsystem == "TRAIN_FAULT":
+                    active = not (train.atp_fault_active or train.ato_fault_active or train.integrity_fault_active)
+                    for item in ("ATP", "ATO", "INTEGRITY"):
+                        train.set_fault(item, active, self.sim_time_s)
+                elif subsystem in {"ATP", "ATO", "DCS", "INTEGRITY"}:
                     active_attr = f"{subsystem.lower()}_fault_active"
                     train.set_fault(subsystem, not bool(getattr(train, active_attr, False)), self.sim_time_s)
         elif command == "SET_DCS_LOSS_ALL":

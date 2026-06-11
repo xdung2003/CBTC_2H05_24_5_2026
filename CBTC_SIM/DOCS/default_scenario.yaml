@@ -87,12 +87,10 @@ scheduled_stops:
   pos_m: 1000.0
   length_m: 160.0
   capacity: 3
-  dwell_s: 30.0
 - name: STATION_2000
   pos_m: 2000.0
   length_m: 160.0
   capacity: 4
-  dwell_s: 30.0
 trains: []
 source_trains:
 - name: DEPOT

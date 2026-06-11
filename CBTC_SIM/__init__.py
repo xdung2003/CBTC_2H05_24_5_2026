@@ -12,7 +12,6 @@ from GUI.panels.ats_overview_panel import ATSOverviewPanel
 from GUI.panels.train_panel import TrainPanel
 from GUI.panels.infrastructure_panel import InfrastructurePanel
 from GUI.panels.engineering_panel import DataFlowPanel, EngineeringPanel, TimeDistancePanel
-from GUI.panels.diagnostics_panel import DiagnosticsPanel
 from GUI.panels.analytics_panel import AnalyticsPanel
 from GUI.panels.control_panel import ControlPanel, SpeedLimitsPanel
 from GUI.widgets.status_card import StatusCard
@@ -28,7 +27,6 @@ __all__ = [
     "ControlPanel",
     "CurvePlot",
     "DataFlowPanel",
-    "DiagnosticsPanel",
     "EngineeringPanel",
     "HeadwayDecision",
     "HeadwayManager",
