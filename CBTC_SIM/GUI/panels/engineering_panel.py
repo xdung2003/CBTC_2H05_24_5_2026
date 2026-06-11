@@ -828,11 +828,18 @@ class DataFlowPanel(ttk.Frame):
             "",
             red,
         )
+        # ZC_STATUS: cho mũi tên đi ra thật từ đáy khối ZC rồi mới rẽ sang DCS.
+        # Lỗi cũ: điểm đầu dùng (zc["left"], y=342), nhưng y=342 nằm ngoài khối ZC,
+        # nên gốc mũi tên nhìn như đang lơ lửng.
         self._lane_arrow(
-            [(zc["left"], self._scale(342)), (dcs["right"], self._scale(342))],
+            [
+                (zc["left"] + self._scale(28), zc["bottom"]),
+                (zc["left"] + self._scale(28), self._scale(342)),
+                (dcs["right"], self._scale(342)),
+            ],
             "ZC_STATUS",
             teal,
-            label_segment=0,
+            label_segment=1,
             label_offset=-self._scale(16),
         )
         self._lane_arrow(
@@ -858,8 +865,8 @@ class DataFlowPanel(ttk.Frame):
             [(sgd["cx"], sgd["top"]), (sgd["cx"], self._scale(318)), (zc["cx"] + self._scale(42), self._scale(318)), (zc["cx"] + self._scale(42), zc["bottom"])],
             "STATION_STATUS",
             green,
-            label_segment=2,
-            label_offset=-self._scale(16),
+            label_segment=1,
+            label_offset=-self._scale(18),
         )
         self._lane_arrow(
             [(nms["cx"], nms["top"]), (nms["cx"], dcs["bottom"])],
